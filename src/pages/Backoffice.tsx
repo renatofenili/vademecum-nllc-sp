@@ -10,10 +10,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft } from 'lucide-react';
+import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft, X, Check, ChevronsUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
@@ -30,9 +35,16 @@ interface Norma {
   status: string | null;
   observacoes: string | null;
   orgao_emissor: string | null;
-  tema: string | null;
+  tema: unknown;
   created_at: string;
 }
+
+// Helper para converter o tema do banco para array de strings
+const parseTemas = (tema: unknown): string[] => {
+  if (!tema) return [];
+  if (Array.isArray(tema)) return tema.filter((t): t is string => typeof t === 'string');
+  return [];
+};
 
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
@@ -144,8 +156,10 @@ const Backoffice = () => {
     status: 'publicada' as NormStatus,
     observacoes: '',
     orgao_emissor: '',
-    tema: '',
+    temas: [] as string[],
   });
+  
+  const [temaPopoverOpen, setTemaPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -197,9 +211,25 @@ const Backoffice = () => {
       status: 'publicada',
       observacoes: '',
       orgao_emissor: '',
-      tema: '',
+      temas: [],
     });
     setEditingNorma(null);
+  };
+
+  const handleTemaToggle = (tema: string) => {
+    setFormData(prev => ({
+      ...prev,
+      temas: prev.temas.includes(tema)
+        ? prev.temas.filter(t => t !== tema)
+        : [...prev.temas, tema]
+    }));
+  };
+
+  const removeTema = (tema: string) => {
+    setFormData(prev => ({
+      ...prev,
+      temas: prev.temas.filter(t => t !== tema)
+    }));
   };
 
   const handleOpenDialog = (norma?: Norma) => {
@@ -216,7 +246,7 @@ const Backoffice = () => {
         status: (norma.status as NormStatus) || 'publicada',
         observacoes: norma.observacoes || '',
         orgao_emissor: norma.orgao_emissor || '',
-        tema: norma.tema || '',
+        temas: parseTemas(norma.tema),
       });
     } else {
       resetForm();
@@ -253,7 +283,7 @@ const Backoffice = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.tema || null,
+            tema: formData.temas.length > 0 ? formData.temas : null,
           })
           .eq('id', editingNorma.id);
 
@@ -277,7 +307,7 @@ const Backoffice = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.tema || null,
+            tema: formData.temas.length > 0 ? formData.temas : null,
           });
 
         if (error) throw error;
@@ -433,21 +463,58 @@ const Backoffice = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="tema">Tema</Label>
-                      <Select
-                        value={formData.tema}
-                        onValueChange={(value) => setFormData({ ...formData, tema: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tema" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {temaOptions.map((tema) => (
-                            <SelectItem key={tema} value={tema}>
+                      <Popover open={temaPopoverOpen} onOpenChange={setTemaPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={temaPopoverOpen}
+                            className="w-full justify-between h-auto min-h-10"
+                          >
+                            <span className="text-left truncate">
+                              {formData.temas.length > 0
+                                ? `${formData.temas.length} tema(s) selecionado(s)`
+                                : "Selecione os temas"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <ScrollArea className="h-[300px]">
+                            <div className="p-2 space-y-1">
+                              {temaOptions.map((tema) => (
+                                <div
+                                  key={tema}
+                                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
+                                  onClick={() => handleTemaToggle(tema)}
+                                >
+                                  <Checkbox
+                                    checked={formData.temas.includes(tema)}
+                                    onCheckedChange={() => handleTemaToggle(tema)}
+                                  />
+                                  <span className="text-sm">{tema}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </PopoverContent>
+                      </Popover>
+                      {formData.temas.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {formData.temas.map((tema) => (
+                            <Badge key={tema} variant="secondary" className="text-xs">
                               {tema}
-                            </SelectItem>
+                              <button
+                                type="button"
+                                onClick={() => removeTema(tema)}
+                                className="ml-1 hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      )}
                     </div>
                   </div>
 

@@ -23,6 +23,7 @@ export type Database = {
           link_externo: string | null
           numero: string
           observacoes: string | null
+          orgao_emissor: string | null
           status: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
@@ -35,6 +36,7 @@ export type Database = {
           link_externo?: string | null
           numero: string
           observacoes?: string | null
+          orgao_emissor?: string | null
           status?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
@@ -47,6 +49,7 @@ export type Database = {
           link_externo?: string | null
           numero?: string
           observacoes?: string | null
+          orgao_emissor?: string | null
           status?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string

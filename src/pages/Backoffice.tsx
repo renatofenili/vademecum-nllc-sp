@@ -27,6 +27,7 @@ interface Norma {
   link_externo: string | null;
   status: string | null;
   observacoes: string | null;
+  orgao_emissor: string | null;
   created_at: string;
 }
 
@@ -55,6 +56,16 @@ const statusColors: Record<NormStatus, string> = {
   revogada: 'bg-destructive/10 text-destructive',
   suspensa: 'bg-yellow-500/10 text-yellow-600',
 };
+
+// Lista de órgãos emissores
+const orgaoEmissorOptions = [
+  'Governo do Estado de São Paulo',
+  'Casa Civil',
+  'Procuradoria Geral do Estado',
+  'Controladoria Geral do Estado',
+  'Secretaria de Gestão e Governo Digital',
+  'Governo Federal',
+];
 // Máscara para número de norma: apenas separador de milhar (ponto)
 const formatNumeroNorma = (value: string): string => {
   // Permite números, pontos e barras
@@ -96,6 +107,7 @@ const Backoffice = () => {
     link_externo: '',
     status: 'publicada' as NormStatus,
     observacoes: '',
+    orgao_emissor: '',
   });
 
   useEffect(() => {
@@ -145,6 +157,7 @@ const Backoffice = () => {
       link_externo: '',
       status: 'publicada',
       observacoes: '',
+      orgao_emissor: '',
     });
     setEditingNorma(null);
   };
@@ -160,6 +173,7 @@ const Backoffice = () => {
         link_externo: norma.link_externo || '',
         status: (norma.status as NormStatus) || 'publicada',
         observacoes: norma.observacoes || '',
+        orgao_emissor: norma.orgao_emissor || '',
       });
     } else {
       resetForm();
@@ -193,6 +207,7 @@ const Backoffice = () => {
             link_externo: formData.link_externo.trim() || null,
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
+            orgao_emissor: formData.orgao_emissor || null,
           })
           .eq('id', editingNorma.id);
 
@@ -213,6 +228,7 @@ const Backoffice = () => {
             link_externo: formData.link_externo.trim() || null,
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
+            orgao_emissor: formData.orgao_emissor || null,
           });
 
         if (error) throw error;
@@ -347,15 +363,35 @@ const Backoffice = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="data_publicacao">Data de Publicação *</Label>
-                    <Input
-                      id="data_publicacao"
-                      type="date"
-                      value={formData.data_publicacao}
-                      onChange={(e) => setFormData({ ...formData, data_publicacao: e.target.value })}
-                      required
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="data_publicacao">Data de Publicação *</Label>
+                      <Input
+                        id="data_publicacao"
+                        type="date"
+                        value={formData.data_publicacao}
+                        onChange={(e) => setFormData({ ...formData, data_publicacao: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
+                      <Select
+                        value={formData.orgao_emissor}
+                        onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o órgão" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orgaoEmissorOptions.map((orgao) => (
+                            <SelectItem key={orgao} value={orgao}>
+                              {orgao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

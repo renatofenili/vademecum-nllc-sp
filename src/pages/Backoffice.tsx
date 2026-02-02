@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
+type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
 
 interface Norma {
   id: string;
@@ -24,6 +25,8 @@ interface Norma {
   data_publicacao: string;
   ementa: string;
   link_externo: string | null;
+  status: string | null;
+  observacoes: string | null;
   created_at: string;
 }
 
@@ -34,6 +37,20 @@ const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
   instrucao_normativa: 'Instrução Normativa',
   outro: 'Outro',
+};
+
+const statusLabels: Record<NormStatus, string> = {
+  rascunho: 'Rascunho',
+  publicada: 'Publicada',
+  revogada: 'Revogada',
+  suspensa: 'Suspensa',
+};
+
+const statusColors: Record<NormStatus, string> = {
+  rascunho: 'bg-muted text-muted-foreground',
+  publicada: 'bg-primary/10 text-primary',
+  revogada: 'bg-destructive/10 text-destructive',
+  suspensa: 'bg-yellow-500/10 text-yellow-600',
 };
 
 const Backoffice = () => {
@@ -53,6 +70,8 @@ const Backoffice = () => {
     data_publicacao: '',
     ementa: '',
     link_externo: '',
+    status: 'publicada' as NormStatus,
+    observacoes: '',
   });
 
   useEffect(() => {
@@ -100,6 +119,8 @@ const Backoffice = () => {
       data_publicacao: '',
       ementa: '',
       link_externo: '',
+      status: 'publicada',
+      observacoes: '',
     });
     setEditingNorma(null);
   };
@@ -113,6 +134,8 @@ const Backoffice = () => {
         data_publicacao: norma.data_publicacao,
         ementa: norma.ementa,
         link_externo: norma.link_externo || '',
+        status: (norma.status as NormStatus) || 'publicada',
+        observacoes: norma.observacoes || '',
       });
     } else {
       resetForm();
@@ -144,6 +167,8 @@ const Backoffice = () => {
             data_publicacao: formData.data_publicacao,
             ementa: formData.ementa.trim(),
             link_externo: formData.link_externo.trim() || null,
+            status: formData.status,
+            observacoes: formData.observacoes.trim() || null,
           })
           .eq('id', editingNorma.id);
 
@@ -162,6 +187,8 @@ const Backoffice = () => {
             data_publicacao: formData.data_publicacao,
             ementa: formData.ementa.trim(),
             link_externo: formData.link_externo.trim() || null,
+            status: formData.status,
+            observacoes: formData.observacoes.trim() || null,
           });
 
         if (error) throw error;
@@ -318,14 +345,45 @@ const Backoffice = () => {
                     />
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="link_externo">Link Externo</Label>
+                      <Input
+                        id="link_externo"
+                        type="url"
+                        placeholder="https://..."
+                        value={formData.link_externo}
+                        onChange={(e) => setFormData({ ...formData, link_externo: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(value) => setFormData({ ...formData, status: value as NormStatus })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(statusLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="link_externo">Link Externo</Label>
-                    <Input
-                      id="link_externo"
-                      type="url"
-                      placeholder="https://..."
-                      value={formData.link_externo}
-                      onChange={(e) => setFormData({ ...formData, link_externo: e.target.value })}
+                    <Label htmlFor="observacoes">Observações</Label>
+                    <Textarea
+                      id="observacoes"
+                      placeholder="Notas internas sobre a norma..."
+                      value={formData.observacoes}
+                      onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                      rows={3}
                     />
                   </div>
 
@@ -367,6 +425,7 @@ const Backoffice = () => {
                       <TableHead>Número</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Data</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="max-w-md">Ementa</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -378,6 +437,13 @@ const Backoffice = () => {
                         <TableCell>{normTypeLabels[norma.tipo]}</TableCell>
                         <TableCell>
                           {format(new Date(norma.data_publicacao), 'dd/MM/yyyy', { locale: ptBR })}
+                        </TableCell>
+                        <TableCell>
+                          {norma.status && statusLabels[norma.status as NormStatus] && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColors[norma.status as NormStatus]}`}>
+                              {statusLabels[norma.status as NormStatus]}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="max-w-md truncate">{norma.ementa}</TableCell>
                         <TableCell className="text-right">

@@ -6,7 +6,7 @@ const Hero = () => {
     <section className="bg-hero py-20 md:py-32">
       <div className="container text-center">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-4">
-          Licitações e Contratos
+          Normas de Licitações e Contratos
           <br />
           <span className="text-primary">do Estado de São Paulo</span>
         </h1>

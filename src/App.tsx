@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Backoffice from "./pages/Backoffice";
+import BackofficeNormaForm from "./pages/BackofficeNormaForm";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/backoffice" element={<Backoffice />} />
+            <Route path="/backoffice/norma/nova" element={<BackofficeNormaForm />} />
+            <Route path="/backoffice/norma/:id" element={<BackofficeNormaForm />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -19,7 +19,9 @@ export type Database = {
           created_at: string
           data_publicacao: string
           ementa: string
+          fim_vigencia: string | null
           id: string
+          inicio_vigencia: string | null
           link_externo: string | null
           numero: string
           observacoes: string | null
@@ -32,7 +34,9 @@ export type Database = {
           created_at?: string
           data_publicacao: string
           ementa: string
+          fim_vigencia?: string | null
           id?: string
+          inicio_vigencia?: string | null
           link_externo?: string | null
           numero: string
           observacoes?: string | null
@@ -45,7 +49,9 @@ export type Database = {
           created_at?: string
           data_publicacao?: string
           ementa?: string
+          fim_vigencia?: string | null
           id?: string
+          inicio_vigencia?: string | null
           link_externo?: string | null
           numero?: string
           observacoes?: string | null

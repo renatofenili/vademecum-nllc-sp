@@ -52,6 +52,24 @@ const statusColors: Record<NormStatus, string> = {
   revogada: 'bg-destructive/10 text-destructive',
   suspensa: 'bg-yellow-500/10 text-yellow-600',
 };
+// Máscara para número de norma: XX.XXX/AAAA
+const formatNumeroNorma = (value: string): string => {
+  // Remove tudo que não é número
+  const digits = value.replace(/\D/g, '');
+  
+  // Limita a 9 dígitos (5 para número + 4 para ano)
+  const limited = digits.slice(0, 9);
+  
+  if (limited.length <= 2) {
+    return limited;
+  } else if (limited.length <= 5) {
+    // Formato: XX.XXX
+    return `${limited.slice(0, 2)}.${limited.slice(2)}`;
+  } else {
+    // Formato: XX.XXX/AAAA
+    return `${limited.slice(0, 2)}.${limited.slice(2, 5)}/${limited.slice(5)}`;
+  }
+};
 
 const Backoffice = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
@@ -298,7 +316,8 @@ const Backoffice = () => {
                         id="numero"
                         placeholder="Ex: 67.608/2023"
                         value={formData.numero}
-                        onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                        onChange={(e) => setFormData({ ...formData, numero: formatNumeroNorma(e.target.value) })}
+                        maxLength={12}
                         required
                       />
                     </div>

@@ -3,22 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft, X, Check, ChevronsUpDown } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
@@ -39,13 +29,6 @@ interface Norma {
   created_at: string;
 }
 
-// Helper para converter o tema do banco para array de strings
-const parseTemas = (tema: unknown): string[] => {
-  if (!tema) return [];
-  if (Array.isArray(tema)) return tema.filter((t): t is string => typeof t === 'string');
-  return [];
-};
-
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
   decreto: 'Decreto',
@@ -54,9 +37,6 @@ const normTypeLabels: Record<NormType, string> = {
   instrucao_normativa: 'Instrução Normativa',
   outro: 'Outro',
 };
-
-// Ordem de exibição na combobox
-const normTypeOrder: NormType[] = ['lei', 'decreto', 'resolucao', 'portaria', 'instrucao_normativa', 'outro'];
 
 const statusLabels: Record<NormStatus, string> = {
   rascunho: 'Rascunho',
@@ -72,68 +52,6 @@ const statusColors: Record<NormStatus, string> = {
   suspensa: 'bg-yellow-500/10 text-yellow-600',
 };
 
-// Lista de órgãos emissores
-const orgaoEmissorOptions = [
-  'Governo do Estado de São Paulo',
-  'Casa Civil',
-  'Procuradoria Geral do Estado',
-  'Controladoria Geral do Estado',
-  'Secretaria de Gestão e Governo Digital',
-  'Governo Federal',
-];
-
-// Lista de temas (ordem alfabética)
-const temaOptions = [
-  'Aditivos e apostilamentos',
-  'Análise jurídica',
-  'Assinatura de contrato / ata de registro de preços',
-  'Aviso de contratação direta',
-  'Contrato de eficiência',
-  'Contratações sustentáveis',
-  'Credenciamento',
-  'Critério de julgamento',
-  'Dispensa e inexigibilidade de licitação',
-  'ETP',
-  'Fiscalização contratual',
-  'Fase preparatória',
-  'Gestão do contrato',
-  'Governança',
-  'Impugnação / pedido de esclarecimento',
-  'Inovação',
-  'Minuta de edital',
-  'Modalidades',
-  'PCA',
-  'Pesquisa de Preços',
-  'PNCP',
-  'Publicação do edital',
-  'Reequilíbrio / reajuste / repactuação',
-  'Regime de execução',
-  'Sanções',
-  'Seleção do fornecedor',
-  'TR / Projeto Básico',
-];
-// Máscara para número de norma: apenas separador de milhar (ponto)
-const formatNumeroNorma = (value: string): string => {
-  // Permite números, pontos e barras
-  const cleaned = value.replace(/[^\d./]/g, '');
-  
-  // Separa a parte antes da barra e depois (se houver)
-  const parts = cleaned.split('/');
-  let numero = parts[0].replace(/\./g, ''); // remove pontos existentes para reformatar
-  const ano = parts[1] || '';
-  
-  // Adiciona ponto como separador de milhar na parte do número
-  if (numero.length > 3) {
-    numero = numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  }
-  
-  // Reconstrói o valor
-  if (parts.length > 1) {
-    return `${numero}/${ano}`;
-  }
-  return numero;
-};
-
 const Backoffice = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -141,25 +59,6 @@ const Backoffice = () => {
   
   const [normas, setNormas] = useState<Norma[]>([]);
   const [isLoadingNormas, setIsLoadingNormas] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingNorma, setEditingNorma] = useState<Norma | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    numero: '',
-    tipo: '' as NormType | '',
-    data_publicacao: '',
-    inicio_vigencia: '',
-    fim_vigencia: '',
-    ementa: '',
-    link_externo: '',
-    status: 'publicada' as NormStatus,
-    observacoes: '',
-    orgao_emissor: '',
-    temas: [] as string[],
-  });
-  
-  const [temaPopoverOpen, setTemaPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -197,139 +96,6 @@ const Backoffice = () => {
       setNormas(data || []);
     }
     setIsLoadingNormas(false);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      numero: '',
-      tipo: '',
-      data_publicacao: '',
-      inicio_vigencia: '',
-      fim_vigencia: '',
-      ementa: '',
-      link_externo: '',
-      status: 'publicada',
-      observacoes: '',
-      orgao_emissor: '',
-      temas: [],
-    });
-    setEditingNorma(null);
-  };
-
-  const handleTemaToggle = (tema: string) => {
-    setFormData(prev => ({
-      ...prev,
-      temas: prev.temas.includes(tema)
-        ? prev.temas.filter(t => t !== tema)
-        : [...prev.temas, tema]
-    }));
-  };
-
-  const removeTema = (tema: string) => {
-    setFormData(prev => ({
-      ...prev,
-      temas: prev.temas.filter(t => t !== tema)
-    }));
-  };
-
-  const handleOpenDialog = (norma?: Norma) => {
-    if (norma) {
-      setEditingNorma(norma);
-      setFormData({
-        numero: norma.numero,
-        tipo: norma.tipo,
-        data_publicacao: norma.data_publicacao,
-        inicio_vigencia: norma.inicio_vigencia || '',
-        fim_vigencia: norma.fim_vigencia || '',
-        ementa: norma.ementa,
-        link_externo: norma.link_externo || '',
-        status: (norma.status as NormStatus) || 'publicada',
-        observacoes: norma.observacoes || '',
-        orgao_emissor: norma.orgao_emissor || '',
-        temas: parseTemas(norma.tema),
-      });
-    } else {
-      resetForm();
-    }
-    setIsDialogOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.numero || !formData.tipo || !formData.data_publicacao || !formData.ementa) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha todos os campos obrigatórios.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      if (editingNorma) {
-        const { error } = await supabase
-          .from('normas')
-          .update({
-            numero: formData.numero.trim(),
-            tipo: formData.tipo as NormType,
-            data_publicacao: formData.data_publicacao,
-            inicio_vigencia: formData.inicio_vigencia || null,
-            fim_vigencia: formData.fim_vigencia || null,
-            ementa: formData.ementa.trim(),
-            link_externo: formData.link_externo.trim() || null,
-            status: formData.status,
-            observacoes: formData.observacoes.trim() || null,
-            orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.temas.length > 0 ? formData.temas : null,
-          })
-          .eq('id', editingNorma.id);
-
-        if (error) throw error;
-        
-        toast({
-          title: 'Norma atualizada!',
-          description: 'A norma foi atualizada com sucesso.',
-        });
-      } else {
-        const { error } = await supabase
-          .from('normas')
-          .insert({
-            numero: formData.numero.trim(),
-            tipo: formData.tipo as NormType,
-            data_publicacao: formData.data_publicacao,
-            inicio_vigencia: formData.inicio_vigencia || null,
-            fim_vigencia: formData.fim_vigencia || null,
-            ementa: formData.ementa.trim(),
-            link_externo: formData.link_externo.trim() || null,
-            status: formData.status,
-            observacoes: formData.observacoes.trim() || null,
-            orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.temas.length > 0 ? formData.temas : null,
-          });
-
-        if (error) throw error;
-        
-        toast({
-          title: 'Norma cadastrada!',
-          description: 'A norma foi cadastrada com sucesso.',
-        });
-      }
-
-      setIsDialogOpen(false);
-      resetForm();
-      fetchNormas();
-    } catch (error: any) {
-      toast({
-        title: 'Erro ao salvar',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleDelete = async (id: string) => {
@@ -396,238 +162,10 @@ const Backoffice = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-2xl">Gerenciar Normas</CardTitle>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => handleOpenDialog()}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Norma
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingNorma ? 'Editar Norma' : 'Cadastrar Nova Norma'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="numero">Número *</Label>
-                      <Input
-                        id="numero"
-                        placeholder="Ex: 67.608/2023"
-                        value={formData.numero}
-                        onChange={(e) => setFormData({ ...formData, numero: formatNumeroNorma(e.target.value) })}
-                        maxLength={12}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tipo">Tipo *</Label>
-                      <Select
-                        value={formData.tipo}
-                        onValueChange={(value) => setFormData({ ...formData, tipo: value as NormType })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {normTypeOrder.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {normTypeLabels[value]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
-                      <Select
-                        value={formData.orgao_emissor}
-                        onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o órgão" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {orgaoEmissorOptions.map((orgao) => (
-                            <SelectItem key={orgao} value={orgao}>
-                              {orgao}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tema">Tema</Label>
-                      <Popover open={temaPopoverOpen} onOpenChange={setTemaPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={temaPopoverOpen}
-                            className="w-full justify-between h-auto min-h-10"
-                          >
-                            <span className="text-left truncate">
-                              {formData.temas.length > 0
-                                ? `${formData.temas.length} tema(s) selecionado(s)`
-                                : "Selecione os temas"}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-0" align="start">
-                          <ScrollArea className="h-[300px]">
-                            <div className="p-2 space-y-1">
-                              {temaOptions.map((tema) => (
-                                <div
-                                  key={tema}
-                                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
-                                  onClick={() => handleTemaToggle(tema)}
-                                >
-                                  <Checkbox
-                                    checked={formData.temas.includes(tema)}
-                                    onCheckedChange={() => handleTemaToggle(tema)}
-                                  />
-                                  <span className="text-sm">{tema}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-                      {formData.temas.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {formData.temas.map((tema) => (
-                            <Badge key={tema} variant="secondary" className="text-xs">
-                              {tema}
-                              <button
-                                type="button"
-                                onClick={() => removeTema(tema)}
-                                className="ml-1 hover:text-destructive"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bloco: Publicação e Vigência */}
-                  <div className="space-y-4 rounded-lg border border-border p-4">
-                    <h3 className="text-sm font-medium text-foreground">Publicação e Vigência</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="data_publicacao">Data de Publicação *</Label>
-                        <Input
-                          id="data_publicacao"
-                          type="date"
-                          value={formData.data_publicacao}
-                          onChange={(e) => setFormData({ ...formData, data_publicacao: e.target.value })}
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">Data do DOU / DOE / Diário oficial</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="inicio_vigencia">Início da Vigência</Label>
-                        <Input
-                          id="inicio_vigencia"
-                          type="date"
-                          value={formData.inicio_vigencia}
-                          onChange={(e) => setFormData({ ...formData, inicio_vigencia: e.target.value })}
-                        />
-                        <p className="text-xs text-muted-foreground">Ex.: "entra em vigor na data de sua publicação" ou data futura</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fim_vigencia">Fim da Vigência</Label>
-                        <Input
-                          id="fim_vigencia"
-                          type="date"
-                          value={formData.fim_vigencia}
-                          onChange={(e) => setFormData({ ...formData, fim_vigencia: e.target.value })}
-                        />
-                        <p className="text-xs text-muted-foreground">Ex.: normas temporárias</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ementa">Ementa *</Label>
-                    <Textarea
-                      id="ementa"
-                      placeholder="Resumo do conteúdo da norma..."
-                      value={formData.ementa}
-                      onChange={(e) => setFormData({ ...formData, ementa: e.target.value })}
-                      rows={4}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="link_externo">Link da Publicação Oficial</Label>
-                      <Input
-                        id="link_externo"
-                        type="url"
-                        placeholder="https://..."
-                        value={formData.link_externo}
-                        onChange={(e) => setFormData({ ...formData, link_externo: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(value) => setFormData({ ...formData, status: value as NormStatus })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(statusLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="observacoes">Observações</Label>
-                    <Textarea
-                      id="observacoes"
-                      placeholder="Notas internas sobre a norma..."
-                      value={formData.observacoes}
-                      onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Salvando...
-                        </>
-                      ) : (
-                        editingNorma ? 'Atualizar' : 'Cadastrar'
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => navigate('/backoffice/norma/nova')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Norma
+            </Button>
           </CardHeader>
           <CardContent>
             {isLoadingNormas ? (
@@ -674,7 +212,7 @@ const Backoffice = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleOpenDialog(norma)}
+                              onClick={() => navigate(`/backoffice/norma/${norma.id}`)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>

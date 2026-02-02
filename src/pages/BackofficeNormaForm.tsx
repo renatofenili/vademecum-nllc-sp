@@ -20,6 +20,11 @@ interface TemaComIntensidade {
   intensidade: Intensidade;
 }
 
+interface FaseComIntensidade {
+  fase: string;
+  intensidade: Intensidade;
+}
+
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
   decreto: 'Decreto',
@@ -83,6 +88,23 @@ const intensidadeOptions: { value: Intensidade; label: string }[] = [
   { value: 'forte', label: 'Forte' },
 ];
 
+const faseOptions = [
+  'Planejamento',
+  'Fase preparatória',
+  'Pesquisa de preços',
+  'Seleção do fornecedor',
+  'Contratação',
+  'Assinatura de contrato / ata de registro de preços',
+  'Execução contratual',
+  'Fiscalização contratual',
+  'Gestão do contrato',
+  'Reequilíbrio / reajuste / repactuação',
+  'Aditivos e apostilamentos',
+  'Sanções',
+  'Prestação de contas',
+  'Transparência e controle',
+];
+
 const formatNumeroNorma = (value: string): string => {
   const cleaned = value.replace(/[^\d./]/g, '');
   const parts = cleaned.split('/');
@@ -123,6 +145,7 @@ const BackofficeNormaForm = () => {
   });
   
   const [temasComIntensidade, setTemasComIntensidade] = useState<TemaComIntensidade[]>([]);
+  const [fasesComIntensidade, setFasesComIntensidade] = useState<FaseComIntensidade[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -174,6 +197,16 @@ const BackofficeNormaForm = () => {
       console.error('Erro ao carregar temas:', temasError.message);
     }
 
+    // Fetch fases from relational table
+    const { data: fasesData, error: fasesError } = await supabase
+      .from('normas_fases')
+      .select('fase, intensidade')
+      .eq('norma_id', id);
+
+    if (fasesError) {
+      console.error('Erro ao carregar fases:', fasesError.message);
+    }
+
     if (normaData) {
       setFormData({
         numero: normaData.numero,
@@ -193,6 +226,15 @@ const BackofficeNormaForm = () => {
           temasData.map((t) => ({
             tema: t.tema,
             intensidade: t.intensidade as Intensidade,
+          }))
+        );
+      }
+
+      if (fasesData && fasesData.length > 0) {
+        setFasesComIntensidade(
+          fasesData.map((f) => ({
+            fase: f.fase,
+            intensidade: f.intensidade as Intensidade,
           }))
         );
       }
@@ -226,6 +268,32 @@ const BackofficeNormaForm = () => {
     return temaOptions.filter((tema) => !selectedTemas.includes(tema));
   };
 
+  const handleAddFase = () => {
+    setFasesComIntensidade((prev) => [
+      ...prev,
+      { fase: '', intensidade: 'media' },
+    ]);
+  };
+
+  const handleRemoveFase = (index: number) => {
+    setFasesComIntensidade((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFaseChange = (index: number, field: keyof FaseComIntensidade, value: string) => {
+    setFasesComIntensidade((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const getAvailableFases = (currentIndex: number) => {
+    const selectedFases = fasesComIntensidade
+      .filter((_, i) => i !== currentIndex)
+      .map((f) => f.fase);
+    return faseOptions.filter((fase) => !selectedFases.includes(fase));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -244,6 +312,17 @@ const BackofficeNormaForm = () => {
       toast({
         title: 'Temas incompletos',
         description: 'Selecione um tema para cada linha ou remova as linhas vazias.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate fases - all must have fase selected
+    const invalidFases = fasesComIntensidade.filter((f) => !f.fase);
+    if (invalidFases.length > 0) {
+      toast({
+        title: 'Fases incompletas',
+        description: 'Selecione uma fase para cada linha ou remova as linhas vazias.',
         variant: 'destructive',
       });
       return;
@@ -322,6 +401,35 @@ const BackofficeNormaForm = () => {
               .insert(temasToInsert);
 
             if (insertError) throw insertError;
+          }
+        }
+
+        // Handle fases - delete existing and insert new ones
+        const { error: deleteFasesError } = await supabase
+          .from('normas_fases')
+          .delete()
+          .eq('norma_id', normaId);
+
+        if (deleteFasesError) {
+          console.error('Erro ao deletar fases existentes:', deleteFasesError.message);
+        }
+
+        // Insert new fases
+        if (fasesComIntensidade.length > 0) {
+          const fasesToInsert = fasesComIntensidade
+            .filter((f) => f.fase)
+            .map((f) => ({
+              norma_id: normaId,
+              fase: f.fase,
+              intensidade: f.intensidade,
+            }));
+
+          if (fasesToInsert.length > 0) {
+            const { error: insertFasesError } = await supabase
+              .from('normas_fases')
+              .insert(fasesToInsert);
+
+            if (insertFasesError) throw insertFasesError;
           }
         }
       }
@@ -524,6 +632,85 @@ const BackofficeNormaForm = () => {
                           size="icon"
                           className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleRemoveTema(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bloco: Fases do Processo */}
+              <div className="space-y-4 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">Fases do Processo</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddFase}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar fase
+                  </Button>
+                </div>
+
+                {fasesComIntensidade.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhuma fase adicionada. Clique em "Adicionar fase" para começar.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {fasesComIntensidade.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-3 p-3 rounded-md bg-muted/50"
+                      >
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Fase do Processo</Label>
+                            <Select
+                              value={item.fase}
+                              onValueChange={(value) => handleFaseChange(index, 'fase', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a fase" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getAvailableFases(index).map((fase) => (
+                                  <SelectItem key={fase} value={fase}>
+                                    {fase}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Intensidade</Label>
+                            <Select
+                              value={item.intensidade}
+                              onValueChange={(value) => handleFaseChange(index, 'intensidade', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {intensidadeOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveFase(index)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

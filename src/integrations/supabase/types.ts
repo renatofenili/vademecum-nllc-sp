@@ -65,6 +65,38 @@ export type Database = {
         }
         Relationships: []
       }
+      normas_temas: {
+        Row: {
+          criado_em: string
+          id: number
+          intensidade: string
+          norma_id: string
+          tema: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: number
+          intensidade: string
+          norma_id: string
+          tema: string
+        }
+        Update: {
+          criado_em?: string
+          id?: number
+          intensidade?: string
+          norma_id?: string
+          tema?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normas_temas_norma_fk"
+            columns: ["norma_id"]
+            isOneToOne: false
+            referencedRelation: "normas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

@@ -31,13 +31,16 @@ interface Norma {
 }
 
 const normTypeLabels: Record<NormType, string> = {
+  lei: 'Lei',
   decreto: 'Decreto',
   resolucao: 'Resolução',
   portaria: 'Portaria',
-  lei: 'Lei',
   instrucao_normativa: 'Instrução Normativa',
   outro: 'Outro',
 };
+
+// Ordem de exibição na combobox
+const normTypeOrder: NormType[] = ['lei', 'decreto', 'resolucao', 'portaria', 'instrucao_normativa', 'outro'];
 
 const statusLabels: Record<NormStatus, string> = {
   rascunho: 'Rascunho',
@@ -334,9 +337,9 @@ const Backoffice = () => {
                           <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(normTypeLabels).map(([value, label]) => (
+                          {normTypeOrder.map((value) => (
                             <SelectItem key={value} value={value}>
-                              {label}
+                              {normTypeLabels[value]}
                             </SelectItem>
                           ))}
                         </SelectContent>

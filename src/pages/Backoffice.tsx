@@ -52,23 +52,26 @@ const statusColors: Record<NormStatus, string> = {
   revogada: 'bg-destructive/10 text-destructive',
   suspensa: 'bg-yellow-500/10 text-yellow-600',
 };
-// Máscara para número de norma: XX.XXX/AAAA
+// Máscara para número de norma: apenas separador de milhar (ponto)
 const formatNumeroNorma = (value: string): string => {
-  // Remove tudo que não é número
-  const digits = value.replace(/\D/g, '');
+  // Permite números, pontos e barras
+  const cleaned = value.replace(/[^\d./]/g, '');
   
-  // Limita a 9 dígitos (5 para número + 4 para ano)
-  const limited = digits.slice(0, 9);
+  // Separa a parte antes da barra e depois (se houver)
+  const parts = cleaned.split('/');
+  let numero = parts[0].replace(/\./g, ''); // remove pontos existentes para reformatar
+  const ano = parts[1] || '';
   
-  if (limited.length <= 2) {
-    return limited;
-  } else if (limited.length <= 5) {
-    // Formato: XX.XXX
-    return `${limited.slice(0, 2)}.${limited.slice(2)}`;
-  } else {
-    // Formato: XX.XXX/AAAA
-    return `${limited.slice(0, 2)}.${limited.slice(2, 5)}/${limited.slice(5)}`;
+  // Adiciona ponto como separador de milhar na parte do número
+  if (numero.length > 3) {
+    numero = numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
+  
+  // Reconstrói o valor
+  if (parts.length > 1) {
+    return `${numero}/${ano}`;
+  }
+  return numero;
 };
 
 const Backoffice = () => {

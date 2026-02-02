@@ -22,6 +22,8 @@ export type Database = {
           id: string
           link_externo: string | null
           numero: string
+          observacoes: string | null
+          status: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
         }
@@ -32,6 +34,8 @@ export type Database = {
           id?: string
           link_externo?: string | null
           numero: string
+          observacoes?: string | null
+          status?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }
@@ -42,6 +46,8 @@ export type Database = {
           id?: string
           link_externo?: string | null
           numero?: string
+          observacoes?: string | null
+          status?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }

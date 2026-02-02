@@ -23,6 +23,8 @@ interface Norma {
   numero: string;
   tipo: NormType;
   data_publicacao: string;
+  inicio_vigencia: string | null;
+  fim_vigencia: string | null;
   ementa: string;
   link_externo: string | null;
   status: string | null;
@@ -103,6 +105,8 @@ const Backoffice = () => {
     numero: '',
     tipo: '' as NormType | '',
     data_publicacao: '',
+    inicio_vigencia: '',
+    fim_vigencia: '',
     ementa: '',
     link_externo: '',
     status: 'publicada' as NormStatus,
@@ -153,6 +157,8 @@ const Backoffice = () => {
       numero: '',
       tipo: '',
       data_publicacao: '',
+      inicio_vigencia: '',
+      fim_vigencia: '',
       ementa: '',
       link_externo: '',
       status: 'publicada',
@@ -169,6 +175,8 @@ const Backoffice = () => {
         numero: norma.numero,
         tipo: norma.tipo,
         data_publicacao: norma.data_publicacao,
+        inicio_vigencia: norma.inicio_vigencia || '',
+        fim_vigencia: norma.fim_vigencia || '',
         ementa: norma.ementa,
         link_externo: norma.link_externo || '',
         status: (norma.status as NormStatus) || 'publicada',
@@ -203,6 +211,8 @@ const Backoffice = () => {
             numero: formData.numero.trim(),
             tipo: formData.tipo as NormType,
             data_publicacao: formData.data_publicacao,
+            inicio_vigencia: formData.inicio_vigencia || null,
+            fim_vigencia: formData.fim_vigencia || null,
             ementa: formData.ementa.trim(),
             link_externo: formData.link_externo.trim() || null,
             status: formData.status,
@@ -224,6 +234,8 @@ const Backoffice = () => {
             numero: formData.numero.trim(),
             tipo: formData.tipo as NormType,
             data_publicacao: formData.data_publicacao,
+            inicio_vigencia: formData.inicio_vigencia || null,
+            fim_vigencia: formData.fim_vigencia || null,
             ementa: formData.ementa.trim(),
             link_externo: formData.link_externo.trim() || null,
             status: formData.status,
@@ -363,34 +375,60 @@ const Backoffice = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="data_publicacao">Data de Publicação *</Label>
-                      <Input
-                        id="data_publicacao"
-                        type="date"
-                        value={formData.data_publicacao}
-                        onChange={(e) => setFormData({ ...formData, data_publicacao: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
-                      <Select
-                        value={formData.orgao_emissor}
-                        onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o órgão" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {orgaoEmissorOptions.map((orgao) => (
-                            <SelectItem key={orgao} value={orgao}>
-                              {orgao}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  <div className="space-y-2">
+                    <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
+                    <Select
+                      value={formData.orgao_emissor}
+                      onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o órgão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {orgaoEmissorOptions.map((orgao) => (
+                          <SelectItem key={orgao} value={orgao}>
+                            {orgao}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Bloco: Publicação e Vigência */}
+                  <div className="space-y-4 rounded-lg border border-border p-4">
+                    <h3 className="text-sm font-medium text-foreground">Publicação e Vigência</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="data_publicacao">Data de Publicação *</Label>
+                        <Input
+                          id="data_publicacao"
+                          type="date"
+                          value={formData.data_publicacao}
+                          onChange={(e) => setFormData({ ...formData, data_publicacao: e.target.value })}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">Data do DOU / DOE / Diário oficial</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="inicio_vigencia">Início da Vigência</Label>
+                        <Input
+                          id="inicio_vigencia"
+                          type="date"
+                          value={formData.inicio_vigencia}
+                          onChange={(e) => setFormData({ ...formData, inicio_vigencia: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">Ex.: "entra em vigor na data de sua publicação" ou data futura</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="fim_vigencia">Fim da Vigência</Label>
+                        <Input
+                          id="fim_vigencia"
+                          type="date"
+                          value={formData.fim_vigencia}
+                          onChange={(e) => setFormData({ ...formData, fim_vigencia: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">Ex.: normas temporárias</p>
+                      </div>
                     </div>
                   </div>
 

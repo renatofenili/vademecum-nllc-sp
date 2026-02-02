@@ -446,7 +446,7 @@ const Backoffice = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="link_externo">Link Externo</Label>
+                      <Label htmlFor="link_externo">Link da Publicação Oficial</Label>
                       <Input
                         id="link_externo"
                         type="url"

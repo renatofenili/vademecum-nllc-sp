@@ -9,14 +9,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Loader2, ArrowLeft, X, ChevronsUpDown, LogOut } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2 } from 'lucide-react';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
+type Intensidade = 'fraca' | 'media' | 'forte';
+
+interface TemaComIntensidade {
+  tema: string;
+  intensidade: Intensidade;
+}
 
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
@@ -75,6 +77,12 @@ const temaOptions = [
   'TR / Projeto Básico',
 ];
 
+const intensidadeOptions: { value: Intensidade; label: string }[] = [
+  { value: 'fraca', label: 'Fraca' },
+  { value: 'media', label: 'Média' },
+  { value: 'forte', label: 'Forte' },
+];
+
 const formatNumeroNorma = (value: string): string => {
   const cleaned = value.replace(/[^\d./]/g, '');
   const parts = cleaned.split('/');
@@ -89,12 +97,6 @@ const formatNumeroNorma = (value: string): string => {
     return `${numero}/${ano}`;
   }
   return numero;
-};
-
-const parseTemas = (tema: unknown): string[] => {
-  if (!tema) return [];
-  if (Array.isArray(tema)) return tema.filter((t): t is string => typeof t === 'string');
-  return [];
 };
 
 const BackofficeNormaForm = () => {
@@ -118,10 +120,9 @@ const BackofficeNormaForm = () => {
     status: 'publicada' as NormStatus,
     observacoes: '',
     orgao_emissor: '',
-    temas: [] as string[],
   });
   
-  const [temaPopoverOpen, setTemaPopoverOpen] = useState(false);
+  const [temasComIntensidade, setTemasComIntensidade] = useState<TemaComIntensidade[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -144,51 +145,85 @@ const BackofficeNormaForm = () => {
 
   const fetchNorma = async () => {
     setIsLoadingNorma(true);
-    const { data, error } = await supabase
+    
+    // Fetch norma data
+    const { data: normaData, error: normaError } = await supabase
       .from('normas')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error) {
+    if (normaError) {
       toast({
         title: 'Erro ao carregar norma',
-        description: error.message,
+        description: normaError.message,
         variant: 'destructive',
       });
       navigate('/backoffice');
-    } else if (data) {
+      setIsLoadingNorma(false);
+      return;
+    }
+
+    // Fetch temas from relational table
+    const { data: temasData, error: temasError } = await supabase
+      .from('normas_temas')
+      .select('tema, intensidade')
+      .eq('norma_id', id);
+
+    if (temasError) {
+      console.error('Erro ao carregar temas:', temasError.message);
+    }
+
+    if (normaData) {
       setFormData({
-        numero: data.numero,
-        tipo: data.tipo,
-        data_publicacao: data.data_publicacao,
-        inicio_vigencia: data.inicio_vigencia || '',
-        fim_vigencia: data.fim_vigencia || '',
-        ementa: data.ementa,
-        link_externo: data.link_externo || '',
-        status: (data.status as NormStatus) || 'publicada',
-        observacoes: data.observacoes || '',
-        orgao_emissor: data.orgao_emissor || '',
-        temas: parseTemas(data.tema),
+        numero: normaData.numero,
+        tipo: normaData.tipo,
+        data_publicacao: normaData.data_publicacao,
+        inicio_vigencia: normaData.inicio_vigencia || '',
+        fim_vigencia: normaData.fim_vigencia || '',
+        ementa: normaData.ementa,
+        link_externo: normaData.link_externo || '',
+        status: (normaData.status as NormStatus) || 'publicada',
+        observacoes: normaData.observacoes || '',
+        orgao_emissor: normaData.orgao_emissor || '',
       });
+
+      if (temasData && temasData.length > 0) {
+        setTemasComIntensidade(
+          temasData.map((t) => ({
+            tema: t.tema,
+            intensidade: t.intensidade as Intensidade,
+          }))
+        );
+      }
     }
     setIsLoadingNorma(false);
   };
 
-  const handleTemaToggle = (tema: string) => {
-    setFormData(prev => ({
+  const handleAddTema = () => {
+    setTemasComIntensidade((prev) => [
       ...prev,
-      temas: prev.temas.includes(tema)
-        ? prev.temas.filter(t => t !== tema)
-        : [...prev.temas, tema]
-    }));
+      { tema: '', intensidade: 'media' },
+    ]);
   };
 
-  const removeTema = (tema: string) => {
-    setFormData(prev => ({
-      ...prev,
-      temas: prev.temas.filter(t => t !== tema)
-    }));
+  const handleRemoveTema = (index: number) => {
+    setTemasComIntensidade((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleTemaChange = (index: number, field: keyof TemaComIntensidade, value: string) => {
+    setTemasComIntensidade((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const getAvailableTemas = (currentIndex: number) => {
+    const selectedTemas = temasComIntensidade
+      .filter((_, i) => i !== currentIndex)
+      .map((t) => t.tema);
+    return temaOptions.filter((tema) => !selectedTemas.includes(tema));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -203,9 +238,22 @@ const BackofficeNormaForm = () => {
       return;
     }
 
+    // Validate temas - all must have tema selected
+    const invalidTemas = temasComIntensidade.filter((t) => !t.tema);
+    if (invalidTemas.length > 0) {
+      toast({
+        title: 'Temas incompletos',
+        description: 'Selecione um tema para cada linha ou remova as linhas vazias.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      let normaId = id;
+
       if (isEditing && id) {
         const { error } = await supabase
           .from('normas')
@@ -220,18 +268,12 @@ const BackofficeNormaForm = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.temas.length > 0 ? formData.temas : null,
           })
           .eq('id', id);
 
         if (error) throw error;
-        
-        toast({
-          title: 'Norma atualizada!',
-          description: 'A norma foi atualizada com sucesso.',
-        });
       } else {
-        const { error } = await supabase
+        const { data: newNorma, error } = await supabase
           .from('normas')
           .insert({
             numero: formData.numero.trim(),
@@ -244,16 +286,52 @@ const BackofficeNormaForm = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
-            tema: formData.temas.length > 0 ? formData.temas : null,
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) throw error;
-        
-        toast({
-          title: 'Norma cadastrada!',
-          description: 'A norma foi cadastrada com sucesso.',
-        });
+        normaId = newNorma.id;
       }
+
+      // Handle temas - delete existing and insert new ones
+      if (normaId) {
+        // Delete existing temas for this norma
+        const { error: deleteError } = await supabase
+          .from('normas_temas')
+          .delete()
+          .eq('norma_id', normaId);
+
+        if (deleteError) {
+          console.error('Erro ao deletar temas existentes:', deleteError.message);
+        }
+
+        // Insert new temas
+        if (temasComIntensidade.length > 0) {
+          const temasToInsert = temasComIntensidade
+            .filter((t) => t.tema)
+            .map((t) => ({
+              norma_id: normaId,
+              tema: t.tema,
+              intensidade: t.intensidade,
+            }));
+
+          if (temasToInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from('normas_temas')
+              .insert(temasToInsert);
+
+            if (insertError) throw insertError;
+          }
+        }
+      }
+
+      toast({
+        title: isEditing ? 'Norma atualizada!' : 'Norma cadastrada!',
+        description: isEditing
+          ? 'A norma foi atualizada com sucesso.'
+          : 'A norma foi cadastrada com sucesso.',
+      });
 
       navigate('/backoffice');
     } catch (error: any) {
@@ -357,80 +435,102 @@ const BackofficeNormaForm = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
-                  <Select
-                    value={formData.orgao_emissor}
-                    onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
+              <div className="space-y-2">
+                <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
+                <Select
+                  value={formData.orgao_emissor}
+                  onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o órgão" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orgaoEmissorOptions.map((orgao) => (
+                      <SelectItem key={orgao} value={orgao}>
+                        {orgao}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Bloco: Temas e Intensidade */}
+              <div className="space-y-4 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">Temas e Intensidade</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddTema}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o órgão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {orgaoEmissorOptions.map((orgao) => (
-                        <SelectItem key={orgao} value={orgao}>
-                          {orgao}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar tema
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tema">Tema</Label>
-                  <Popover open={temaPopoverOpen} onOpenChange={setTemaPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={temaPopoverOpen}
-                        className="w-full justify-between h-auto min-h-10"
+
+                {temasComIntensidade.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum tema adicionado. Clique em "Adicionar tema" para começar.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {temasComIntensidade.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-3 p-3 rounded-md bg-muted/50"
                       >
-                        <span className="text-left truncate">
-                          {formData.temas.length > 0
-                            ? `${formData.temas.length} tema(s) selecionado(s)`
-                            : "Selecione os temas"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="start">
-                      <ScrollArea className="h-[300px]">
-                        <div className="p-2 space-y-1">
-                          {temaOptions.map((tema) => (
-                            <div
-                              key={tema}
-                              className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
-                              onClick={() => handleTemaToggle(tema)}
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Tema</Label>
+                            <Select
+                              value={item.tema}
+                              onValueChange={(value) => handleTemaChange(index, 'tema', value)}
                             >
-                              <Checkbox
-                                checked={formData.temas.includes(tema)}
-                                onCheckedChange={() => handleTemaToggle(tema)}
-                              />
-                              <span className="text-sm">{tema}</span>
-                            </div>
-                          ))}
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tema" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getAvailableTemas(index).map((tema) => (
+                                  <SelectItem key={tema} value={tema}>
+                                    {tema}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Intensidade</Label>
+                            <Select
+                              value={item.intensidade}
+                              onValueChange={(value) => handleTemaChange(index, 'intensidade', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {intensidadeOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                      </ScrollArea>
-                    </PopoverContent>
-                  </Popover>
-                  {formData.temas.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {formData.temas.map((tema) => (
-                        <Badge key={tema} variant="secondary" className="text-xs">
-                          {tema}
-                          <button
-                            type="button"
-                            onClick={() => removeTema(tema)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveTema(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Bloco: Publicação e Vigência */}

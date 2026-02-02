@@ -30,6 +30,7 @@ interface Norma {
   status: string | null;
   observacoes: string | null;
   orgao_emissor: string | null;
+  tema: string | null;
   created_at: string;
 }
 
@@ -67,6 +68,37 @@ const orgaoEmissorOptions = [
   'Controladoria Geral do Estado',
   'Secretaria de Gestão e Governo Digital',
   'Governo Federal',
+];
+
+// Lista de temas (ordem alfabética)
+const temaOptions = [
+  'Aditivos e apostilamentos',
+  'Análise jurídica',
+  'Assinatura de contrato / ata de registro de preços',
+  'Aviso de contratação direta',
+  'Contrato de eficiência',
+  'Contratações sustentáveis',
+  'Credenciamento',
+  'Critério de julgamento',
+  'Dispensa e inexigibilidade de licitação',
+  'ETP',
+  'Fiscalização contratual',
+  'Fase preparatória',
+  'Gestão do contrato',
+  'Governança',
+  'Impugnação / pedido de esclarecimento',
+  'Inovação',
+  'Minuta de edital',
+  'Modalidades',
+  'PCA',
+  'Pesquisa de Preços',
+  'PNCP',
+  'Publicação do edital',
+  'Reequilíbrio / reajuste / repactuação',
+  'Regime de execução',
+  'Sanções',
+  'Seleção do fornecedor',
+  'TR / Projeto Básico',
 ];
 // Máscara para número de norma: apenas separador de milhar (ponto)
 const formatNumeroNorma = (value: string): string => {
@@ -112,6 +144,7 @@ const Backoffice = () => {
     status: 'publicada' as NormStatus,
     observacoes: '',
     orgao_emissor: '',
+    tema: '',
   });
 
   useEffect(() => {
@@ -164,6 +197,7 @@ const Backoffice = () => {
       status: 'publicada',
       observacoes: '',
       orgao_emissor: '',
+      tema: '',
     });
     setEditingNorma(null);
   };
@@ -182,6 +216,7 @@ const Backoffice = () => {
         status: (norma.status as NormStatus) || 'publicada',
         observacoes: norma.observacoes || '',
         orgao_emissor: norma.orgao_emissor || '',
+        tema: norma.tema || '',
       });
     } else {
       resetForm();
@@ -218,6 +253,7 @@ const Backoffice = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
+            tema: formData.tema || null,
           })
           .eq('id', editingNorma.id);
 
@@ -241,6 +277,7 @@ const Backoffice = () => {
             status: formData.status,
             observacoes: formData.observacoes.trim() || null,
             orgao_emissor: formData.orgao_emissor || null,
+            tema: formData.tema || null,
           });
 
         if (error) throw error;
@@ -375,23 +412,43 @@ const Backoffice = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
-                    <Select
-                      value={formData.orgao_emissor}
-                      onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o órgão" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {orgaoEmissorOptions.map((orgao) => (
-                          <SelectItem key={orgao} value={orgao}>
-                            {orgao}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="orgao_emissor">Órgão Emissor</Label>
+                      <Select
+                        value={formData.orgao_emissor}
+                        onValueChange={(value) => setFormData({ ...formData, orgao_emissor: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o órgão" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orgaoEmissorOptions.map((orgao) => (
+                            <SelectItem key={orgao} value={orgao}>
+                              {orgao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tema">Tema</Label>
+                      <Select
+                        value={formData.tema}
+                        onValueChange={(value) => setFormData({ ...formData, tema: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tema" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {temaOptions.map((tema) => (
+                            <SelectItem key={tema} value={tema}>
+                              {tema}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   {/* Bloco: Publicação e Vigência */}

@@ -27,6 +27,7 @@ export type Database = {
           observacoes: string | null
           orgao_emissor: string | null
           status: string | null
+          tema: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
         }
@@ -42,6 +43,7 @@ export type Database = {
           observacoes?: string | null
           orgao_emissor?: string | null
           status?: string | null
+          tema?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }
@@ -57,6 +59,7 @@ export type Database = {
           observacoes?: string | null
           orgao_emissor?: string | null
           status?: string | null
+          tema?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }

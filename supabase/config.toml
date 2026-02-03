@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.extract-references]
 verify_jwt = false
+
+[functions.build-chain]
+verify_jwt = false

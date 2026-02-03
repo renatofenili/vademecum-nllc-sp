@@ -26,8 +26,15 @@ export type Database = {
           numero: string
           observacoes: string | null
           orgao_emissor: string | null
+          pdf_hash: string | null
+          pdf_upload_em: string | null
+          pdf_url: string | null
           status: string | null
           tema: Json | null
+          texto_extraido: string | null
+          texto_extraido_em: string | null
+          texto_extraido_origem: string | null
+          texto_extraido_status: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
         }
@@ -42,8 +49,15 @@ export type Database = {
           numero: string
           observacoes?: string | null
           orgao_emissor?: string | null
+          pdf_hash?: string | null
+          pdf_upload_em?: string | null
+          pdf_url?: string | null
           status?: string | null
           tema?: Json | null
+          texto_extraido?: string | null
+          texto_extraido_em?: string | null
+          texto_extraido_origem?: string | null
+          texto_extraido_status?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }
@@ -58,8 +72,15 @@ export type Database = {
           numero?: string
           observacoes?: string | null
           orgao_emissor?: string | null
+          pdf_hash?: string | null
+          pdf_upload_em?: string | null
+          pdf_url?: string | null
           status?: string | null
           tema?: Json | null
+          texto_extraido?: string | null
+          texto_extraido_em?: string | null
+          texto_extraido_origem?: string | null
+          texto_extraido_status?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
         }

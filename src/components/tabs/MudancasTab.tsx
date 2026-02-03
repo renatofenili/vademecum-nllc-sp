@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { formatDateBR } from "@/lib/date";
 
 const MudancasTab = () => {
   const [periodoFilter, setPeriodoFilter] = useState("30");
@@ -113,7 +114,7 @@ const MudancasTab = () => {
                             {formatTipo(norma.tipo)}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(norma.data_publicacao).toLocaleDateString("pt-BR")}
+                            {formatDateBR(norma.data_publicacao)}
                           </span>
                           {norma.status === "revogada" && (
                             <Badge variant="destructive" className="text-xs">

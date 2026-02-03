@@ -1,75 +1,77 @@
-import { useState } from "react";
-import { Network, GitBranch, Target, Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Network, Scale, Gavel } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
-
-interface GraphNode {
-  document_id: string;
-  anchor: string;
-}
-
-interface GraphEdge {
-  from: GraphNode;
-  to: GraphNode;
-}
-
-interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
+import { ActsGraphView } from "@/components/graph/ActsGraphView";
+import { DispositivosGraph } from "@/components/graph/DispositivosGraph";
+import {
+  GraphLevel,
+  RootOption,
+  ActsGraphData,
+  DispositivosGraphData,
+} from "@/components/graph/types";
 
 const MapasTab = () => {
-  const [selectedNorma, setSelectedNorma] = useState<string>("");
-  const [selectedAnchor, setSelectedAnchor] = useState("");
-  const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [rootOption, setRootOption] = useState<RootOption>("lei14133");
+  const [graphLevel, setGraphLevel] = useState<GraphLevel>("ato");
+  const [selectedActId, setSelectedActId] = useState<string | null>(null);
 
-  const { data: normas } = useQuery({
-    queryKey: ["normas-select"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("normas")
-        .select("id, numero, tipo, remissoes_extraidas")
-        .not("remissoes_extraidas", "is", null)
-        .order("numero");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const [actsData, setActsData] = useState<ActsGraphData | null>(null);
+  const [dispositivosData, setDispositivosData] = useState<DispositivosGraphData | null>(null);
+  const [isLoadingActs, setIsLoadingActs] = useState(false);
+  const [isLoadingDispositivos, setIsLoadingDispositivos] = useState(false);
 
-  const handleBuildChain = async () => {
-    if (!selectedNorma || !selectedAnchor) return;
+  // Load acts graph on mount and when root changes
+  useEffect(() => {
+    const loadActsGraph = async () => {
+      setIsLoadingActs(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("graph-acts", {
+          body: { root: rootOption, depth: 2 },
+        });
 
-    setIsLoading(true);
+        if (error) throw error;
+        setActsData(data);
+      } catch (err) {
+        console.error("Erro ao carregar grafo de atos:", err);
+      } finally {
+        setIsLoadingActs(false);
+      }
+    };
+
+    loadActsGraph();
+  }, [rootOption]);
+
+  // Load dispositivos graph when drilling down
+  const handleDrillDown = async (actId: string) => {
+    // Skip drill-down for virtual root nodes
+    if (actId === "cf88" || actId === "lei14133") {
+      return;
+    }
+
+    setSelectedActId(actId);
+    setGraphLevel("dispositivo");
+    setIsLoadingDispositivos(true);
+
     try {
-      const { data, error } = await supabase.functions.invoke("build-chain", {
-        body: { document_id: selectedNorma, anchor: selectedAnchor },
+      const { data, error } = await supabase.functions.invoke("graph-dispositivos", {
+        body: { act_id: actId },
       });
 
       if (error) throw error;
-      setGraphData(data);
+      setDispositivosData(data);
     } catch (err) {
-      console.error("Erro ao construir cadeia:", err);
+      console.error("Erro ao carregar grafo de dispositivos:", err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingDispositivos(false);
     }
   };
 
-  const formatTipo = (tipo: string) => {
-    const tipos: Record<string, string> = {
-      decreto: "Decreto",
-      resolucao: "Resolução",
-      portaria: "Portaria",
-      lei: "Lei",
-      instrucao_normativa: "IN",
-    };
-    return tipos[tipo] || tipo;
+  const handleBackToActs = () => {
+    setGraphLevel("ato");
+    setSelectedActId(null);
+    setDispositivosData(null);
   };
 
   return (
@@ -81,193 +83,61 @@ const MapasTab = () => {
             Mapas Normativos
           </h1>
           <p className="text-muted-foreground text-lg">
-            Visualize grafos de dependências e conexões entre dispositivos
+            Visualize o grafo global de atos normativos e suas dependências
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="dependencias" className="space-y-6">
-        <TabsList className="grid w-full max-w-lg mx-auto grid-cols-3">
-          <TabsTrigger value="dependencias">Dependências</TabsTrigger>
-          <TabsTrigger value="hubs">Dispositivos Centrais</TabsTrigger>
-          <TabsTrigger value="caminhos">Caminhos</TabsTrigger>
-        </TabsList>
+      {/* Root selector */}
+      <div className="flex justify-center gap-4">
+        <Button
+          variant={rootOption === "cf88" ? "default" : "outline"}
+          onClick={() => setRootOption("cf88")}
+          className="gap-2"
+        >
+          <Scale className="h-4 w-4" />
+          CF/88
+        </Button>
+        <Button
+          variant={rootOption === "lei14133" ? "default" : "outline"}
+          onClick={() => setRootOption("lei14133")}
+          className="gap-2"
+        >
+          <Gavel className="h-4 w-4" />
+          Lei nº 14.133/2021
+        </Button>
+      </div>
 
-        <TabsContent value="dependencias" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Network className="h-5 w-5" />
-                Grafo de Dependências Normativas
-              </CardTitle>
-              <CardDescription>
-                Selecione uma norma e um dispositivo para visualizar suas conexões e dependências.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <Select value={selectedNorma} onValueChange={setSelectedNorma}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma norma" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {normas?.map((norma) => (
-                      <SelectItem key={norma.id} value={norma.id}>
-                        {formatTipo(norma.tipo)} {norma.numero}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      {/* Graph container */}
+      <Card className="min-h-[600px] flex flex-col">
+        <CardContent className="flex-1 flex flex-col p-0">
+          {graphLevel === "ato" ? (
+            <ActsGraphView
+              data={actsData}
+              isLoading={isLoadingActs}
+              onDrillDown={handleDrillDown}
+            />
+          ) : (
+            <DispositivosGraph
+              data={dispositivosData}
+              isLoading={isLoadingDispositivos}
+              onBack={handleBackToActs}
+            />
+          )}
+        </CardContent>
+      </Card>
 
-                <Input
-                  placeholder="Dispositivo (ex: art.1)"
-                  value={selectedAnchor}
-                  onChange={(e) => setSelectedAnchor(e.target.value)}
-                />
-
-                <Button onClick={handleBuildChain} disabled={!selectedNorma || !selectedAnchor || isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Construindo...
-                    </>
-                  ) : (
-                    <>
-                      <GitBranch className="h-4 w-4 mr-2" />
-                      Construir Cadeia
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Visualização do Grafo */}
-          <Card className="min-h-[500px]">
-            <CardHeader className="border-b border-border flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Visualização do Grafo</CardTitle>
-                {graphData && (
-                  <CardDescription>
-                    {graphData.nodes.length} nós • {graphData.edges.length} conexões
-                  </CardDescription>
-                )}
-              </div>
-              {graphData && (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="icon">
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon">
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon">
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-6">
-              {graphData ? (
-                <div className="space-y-6">
-                  {/* Representação simplificada do grafo */}
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Target className="h-4 w-4" />
-                        Nós (Dispositivos)
-                      </h4>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {graphData.nodes.map((node, index) => (
-                          <div
-                            key={`${node.document_id}-${node.anchor}-${index}`}
-                            className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg"
-                          >
-                            <div className="h-3 w-3 rounded-full bg-primary" />
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {node.anchor}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground truncate">
-                              {node.document_id.substring(0, 8)}...
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <GitBranch className="h-4 w-4" />
-                        Arestas (Remissões)
-                      </h4>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {graphData.edges.map((edge, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg text-sm"
-                          >
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {edge.from.anchor}
-                            </Badge>
-                            <span className="text-muted-foreground">→</span>
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              {edge.to.anchor}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-center text-sm text-muted-foreground bg-muted/30 rounded-lg p-4">
-                    <Network className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>Visualização gráfica interativa em desenvolvimento.</p>
-                    <p className="text-xs mt-1">Os dados acima representam a estrutura do grafo retornado pelo backend.</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Network className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                  <p className="text-lg">Selecione uma norma e dispositivo</p>
-                  <p className="text-sm mt-1">
-                    O grafo será renderizado após o processamento pelo backend
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="hubs" className="space-y-6">
-          <Card className="py-16">
-            <CardContent className="text-center text-muted-foreground">
-              <Target className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Dispositivos Centrais (Hubs)
-              </h3>
-              <p className="max-w-md mx-auto">
-                Identifique os dispositivos mais referenciados no sistema normativo.
-                Funcionalidade em desenvolvimento.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="caminhos" className="space-y-6">
-          <Card className="py-16">
-            <CardContent className="text-center text-muted-foreground">
-              <GitBranch className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Caminhos Normativos
-              </h3>
-              <p className="max-w-md mx-auto">
-                Trace caminhos entre dois dispositivos através da rede de remissões.
-                Funcionalidade em desenvolvimento.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Legend */}
+      {graphLevel === "ato" && !isLoadingActs && actsData && (
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-6 text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
+            <div className="flex items-center gap-2">
+              <Network className="h-4 w-4" />
+              <span>Clique em um ato para ver detalhes</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

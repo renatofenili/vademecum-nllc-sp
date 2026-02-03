@@ -36,19 +36,36 @@ const tipoLabels: Record<string, string> = {
   instrucao_normativa: "IN",
 };
 
-// Using direct hex colors for SVG compatibility
-const tipoColors: Record<string, { bg: string; border: string; text: string }> = {
-  constituicao: { bg: "#ef4444", border: "#dc2626", text: "#ffffff" },
-  lei: { bg: "#dc2626", border: "#b91c1c", text: "#ffffff" },
-  decreto: { bg: "#2563eb", border: "#1d4ed8", text: "#ffffff" },
-  resolucao: { bg: "#7c3aed", border: "#6d28d9", text: "#ffffff" },
-  portaria: { bg: "#059669", border: "#047857", text: "#ffffff" },
-  instrucao_normativa: { bg: "#6b7280", border: "#4b5563", text: "#ffffff" },
+const tipoLegendFill: Record<string, string> = {
+  constituicao: "hsl(var(--chart-1))",
+  lei: "hsl(var(--chart-2))",
+  decreto: "hsl(var(--chart-3))",
+  resolucao: "hsl(var(--chart-4))",
+  portaria: "hsl(var(--chart-5))",
+  instrucao_normativa: "hsl(var(--muted))",
 };
 
-const getNodeColor = (tipo: string) => {
-  return tipoColors[tipo] || tipoColors.instrucao_normativa;
-};
+// SVG colors: always use semantic tokens (CSS variables) via `style` for maximum compatibility
+const nodeTheme = {
+  root: {
+    fill: "hsl(var(--primary))",
+    stroke: "hsl(var(--primary))",
+    text: "hsl(var(--primary-foreground))",
+  },
+  act: {
+    fill: "hsl(var(--secondary))",
+    stroke: "hsl(var(--border))",
+    text: "hsl(var(--secondary-foreground))",
+  },
+  badge: {
+    fill: "hsl(var(--background))",
+    stroke: "hsl(var(--border))",
+    text: "hsl(var(--foreground))",
+  },
+  emphasis: {
+    stroke: "hsl(var(--ring))",
+  },
+} as const;
 
 export const HierarchicalMapView = ({
   data,
@@ -61,25 +78,21 @@ export const HierarchicalMapView = ({
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const { offsetWidth, offsetHeight } = containerRef.current;
-        if (offsetWidth > 0 && offsetHeight > 0) {
-          setDimensions({ width: offsetWidth, height: offsetHeight });
-        }
-      }
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      if (w > 0 && h > 0) setDimensions({ width: w, height: h });
     };
-    
-    // Initial measurement after a brief delay to ensure DOM is ready
-    const timer = setTimeout(updateDimensions, 100);
-    
-    // Also update on resize
-    window.addEventListener('resize', updateDimensions);
-    
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', updateDimensions);
-    };
+
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+
+    return () => ro.disconnect();
   }, []);
 
   // Build tree structure from graph data
@@ -178,10 +191,21 @@ export const HierarchicalMapView = ({
     ({ nodeDatum, toggleNode }: CustomNodeElementProps) => {
       const node = nodeDatum as TreeNode;
       const nodeData = node.nodeData;
-      const tipo = nodeData?.act?.tipo || "lei";
-      const colors = getNodeColor(tipo);
       const isRoot = nodeData?.type === "root";
       const isExpanded = nodeData?.id ? expandedNodes.has(nodeData.id) : false;
+
+      const tipo = (nodeData?.act?.tipo || (isRoot ? "lei" : "outro"))
+        .toString()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "");
+      const nodeClass = [
+        "map-node",
+        isRoot ? "map-node-root" : "map-node-act",
+        `map-node-${tipo}`,
+        isExpanded ? "map-node-expanded" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
       
       // Larger nodes for better readability
       const nodeSize = isRoot ? 120 : 90;
@@ -222,25 +246,22 @@ export const HierarchicalMapView = ({
       }
 
       return (
-        <g onClick={handleClick} style={{ cursor: "pointer" }}>
+        <g className={nodeClass} onClick={handleClick} style={{ cursor: "pointer" }}>
           {/* Node circle - simple solid fill */}
           <circle
+            className="map-node-circle"
             r={nodeSize / 2}
-            fill={colors.bg}
-            stroke={isExpanded ? "#dc2626" : colors.border}
             strokeWidth={isExpanded ? 4 : 2}
-            style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))" }}
           />
           {/* Node label - multiple lines */}
           {lines.map((line, idx) => (
             <text
+              className="map-node-text"
               key={idx}
-              fill={colors.text}
-              fontSize={fontSize}
-              fontWeight={isRoot ? 700 : 500}
               textAnchor="middle"
               y={(idx - (lines.length - 1) / 2) * (fontSize + 3)}
               dominantBaseline="middle"
+              fontSize={fontSize}
               style={{ pointerEvents: "none", userSelect: "none" }}
             >
               {line}
@@ -250,19 +271,17 @@ export const HierarchicalMapView = ({
           {node.children && node.children.length > 0 && (
             <>
               <circle
+                className="map-node-badge"
                 r={10}
                 cx={nodeSize / 2 - 8}
                 cy={-nodeSize / 2 + 8}
-                fill="#ffffff"
-                stroke="#e5e7eb"
                 strokeWidth={1}
               />
               <text
+                className="map-node-badge-text"
                 x={nodeSize / 2 - 8}
                 y={-nodeSize / 2 + 8}
                 fontSize={9}
-                fontWeight={600}
-                fill="#374151"
                 textAnchor="middle"
                 dominantBaseline="middle"
                 style={{ pointerEvents: "none" }}
@@ -363,18 +382,54 @@ export const HierarchicalMapView = ({
           </defs>
         </svg>
         <style>{`
+          /* Map nodes */
+          .map-node-circle {
+            fill: hsl(var(--card));
+            stroke: hsl(var(--border));
+          }
+          .map-node-root .map-node-circle {
+            fill: hsl(var(--primary));
+            stroke: hsl(var(--primary));
+          }
+          .map-node-expanded .map-node-circle {
+            stroke: hsl(var(--ring));
+          }
+          .map-node-text {
+            fill: hsl(var(--primary-foreground));
+            font-weight: 500;
+          }
+          .map-node-act .map-node-text {
+            fill: hsl(var(--primary-foreground));
+          }
+          .map-node-badge {
+            fill: hsl(var(--background));
+            stroke: hsl(var(--border));
+          }
+          .map-node-badge-text {
+            fill: hsl(var(--foreground));
+            font-weight: 600;
+          }
+
+          /* Color by tipo using chart tokens */
+          .map-node-constituicao .map-node-circle { fill: hsl(var(--chart-1)); stroke: hsl(var(--chart-1)); }
+          .map-node-lei .map-node-circle { fill: hsl(var(--chart-2)); stroke: hsl(var(--chart-2)); }
+          .map-node-decreto .map-node-circle { fill: hsl(var(--chart-3)); stroke: hsl(var(--chart-3)); }
+          .map-node-resolucao .map-node-circle { fill: hsl(var(--chart-4)); stroke: hsl(var(--chart-4)); }
+          .map-node-portaria .map-node-circle { fill: hsl(var(--chart-5)); stroke: hsl(var(--chart-5)); }
+          .map-node-instrucao_normativa .map-node-circle { fill: hsl(var(--muted)); stroke: hsl(var(--muted)); }
+
           .link-hierarchy {
-            stroke: #374151;
+            stroke: hsl(var(--foreground));
             stroke-width: 2;
             fill: none;
           }
           .link-structure {
-            stroke: #9ca3af;
+            stroke: hsl(var(--muted-foreground));
             stroke-width: 1.5;
             fill: none;
           }
           .link-reference {
-            stroke: #9ca3af;
+            stroke: hsl(var(--muted-foreground));
             stroke-width: 1;
             stroke-dasharray: 4,4;
             fill: none;
@@ -395,8 +450,11 @@ export const HierarchicalMapView = ({
           data={treeData}
           orientation="horizontal"
           pathFunc="diagonal"
-          dimensions={{ width: dimensions.width, height: 500 }}
-          translate={{ x: 120, y: 250 }}
+          dimensions={{ width: dimensions.width, height: dimensions.height }}
+          translate={{
+            x: Math.max(80, Math.floor(dimensions.width * 0.18)),
+            y: Math.floor(dimensions.height / 2),
+          }}
           nodeSize={{ x: 200, y: 70 }}
           separation={{ siblings: 1.2, nonSiblings: 1.5 }}
           renderCustomNodeElement={renderCustomNode}
@@ -418,7 +476,10 @@ export const HierarchicalMapView = ({
             <div key={tipo} className="flex items-center gap-2">
               <div
                 className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: getNodeColor(tipo).bg }}
+                style={{
+                  backgroundColor: tipoLegendFill[tipo] || "hsl(var(--muted))",
+                  border: "1px solid hsl(var(--border))",
+                }}
               />
               <span className="text-muted-foreground">{label}</span>
             </div>

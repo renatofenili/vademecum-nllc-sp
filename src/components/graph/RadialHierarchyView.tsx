@@ -19,6 +19,25 @@ interface RingNode {
   y: number;
 }
 
+// Link types for normative connections
+type LinkType = "hierarquia" | "regulamenta" | "remete";
+
+interface GraphLink {
+  fromId: string;
+  toId: string;
+  type: LinkType;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+}
+
+const linkStyles: Record<LinkType, { stroke: string; strokeWidth: number; dashArray: string; label: string }> = {
+  hierarquia: { stroke: "hsl(221, 83%, 53%)", strokeWidth: 2, dashArray: "", label: "Hierarquia" },
+  regulamenta: { stroke: "hsl(142, 71%, 45%)", strokeWidth: 1.5, dashArray: "8 4", label: "Regulamenta" },
+  remete: { stroke: "hsl(262, 83%, 58%)", strokeWidth: 1, dashArray: "3 3", label: "Remete" },
+};
+
 // Ring assignments by normative type
 const tipoToRing: Record<string, number> = {
   constituicao: 0,
@@ -113,10 +132,10 @@ export const RadialHierarchyView = ({
     };
   }, []);
 
-  // Build radial nodes
-  const { nodes, ringRadii, center } = useMemo(() => {
+  // Build radial nodes and links
+  const { nodes, links, ringRadii, center } = useMemo(() => {
     if (!data || !data.nodes.length) {
-      return { nodes: [], ringRadii: [], center: { x: 0, y: 0 } };
+      return { nodes: [], links: [], ringRadii: [], center: { x: 0, y: 0 } };
     }
 
     const cx = dimensions.width / 2;
@@ -141,6 +160,7 @@ export const RadialHierarchyView = ({
 
     // Calculate positions
     const result: RingNode[] = [];
+    const nodePositions = new Map<string, { x: number; y: number; ring: number }>();
 
     nodesByRing.forEach((nodesInRing, ring) => {
       const radius = radii[ring];
@@ -163,6 +183,8 @@ export const RadialHierarchyView = ({
           y = cy + radius * Math.sin(angle);
         }
 
+        nodePositions.set(act.id, { x, y, ring });
+
         result.push({
           id: act.id,
           label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
@@ -176,7 +198,70 @@ export const RadialHierarchyView = ({
       });
     });
 
-    return { nodes: result, ringRadii: radii, center: { x: cx, y: cy } };
+    // Build links with explicit types
+    const graphLinks: GraphLink[] = [];
+    
+    // 1. Hierarchy links (from ring differences)
+    result.forEach((node) => {
+      if (node.ring === 0) return;
+      
+      // Find parent in previous ring
+      const parentRing = node.ring - 1;
+      const parentsInRing = result.filter((n) => n.ring === parentRing);
+      
+      if (parentsInRing.length > 0) {
+        // Connect to nearest parent by angle
+        const nearest = parentsInRing.reduce((a, b) => {
+          const distA = Math.abs(a.angle - node.angle);
+          const distB = Math.abs(b.angle - node.angle);
+          return distA < distB ? a : b;
+        });
+        
+        graphLinks.push({
+          fromId: nearest.id,
+          toId: node.id,
+          type: "hierarquia",
+          fromX: nearest.x,
+          fromY: nearest.y,
+          toX: node.x,
+          toY: node.y,
+        });
+      }
+    });
+
+    // 2. Links from edges data (regulamenta / remete)
+    if (data.edges) {
+      data.edges.forEach((edge) => {
+        const fromPos = nodePositions.get(edge.from_act);
+        const toPos = nodePositions.get(edge.to_act);
+        
+        if (fromPos && toPos) {
+          // Map backend relation types to our link types
+          let linkType: LinkType = "remete";
+          if (edge.relation_type === "regulates" || edge.relation_type === "implements") {
+            linkType = "regulamenta";
+          } else if (edge.relation_type === "refers_to" || edge.relation_type === "amends") {
+            linkType = "remete";
+          }
+          
+          // Avoid duplicate hierarchy links
+          const isHierarchyLink = Math.abs(fromPos.ring - toPos.ring) === 1;
+          if (!isHierarchyLink) {
+            graphLinks.push({
+              fromId: edge.from_act,
+              toId: edge.to_act,
+              type: linkType,
+              fromX: fromPos.x,
+              fromY: fromPos.y,
+              toX: toPos.x,
+              toY: toPos.y,
+            });
+          }
+        }
+      });
+    }
+
+    return { nodes: result, links: graphLinks, ringRadii: radii, center: { x: cx, y: cy } };
   }, [data, dimensions]);
 
   // Mouse handlers for panning
@@ -353,47 +438,24 @@ export const RadialHierarchyView = ({
                 </text>
               ))}
 
-              {/* Connection lines from center to ring 1 */}
-              {nodes
-                .filter((n) => n.ring === 1)
-                .map((node) => (
+              {/* Connection links with types */}
+              {links.map((link, index) => {
+                const style = linkStyles[link.type];
+                return (
                   <line
-                    key={`line-${node.id}`}
-                    x1={center.x}
-                    y1={center.y}
-                    x2={node.x}
-                    y2={node.y}
-                    stroke="hsl(var(--border))"
-                    strokeWidth={1}
-                    opacity={0.3}
+                    key={`link-${link.fromId}-${link.toId}-${index}`}
+                    x1={link.fromX}
+                    y1={link.fromY}
+                    x2={link.toX}
+                    y2={link.toY}
+                    stroke={style.stroke}
+                    strokeWidth={style.strokeWidth}
+                    strokeDasharray={style.dashArray}
+                    opacity={0.6}
+                    className="transition-opacity duration-200"
                   />
-                ))}
-
-              {/* Connection lines from ring 1 to ring 2 */}
-              {nodes
-                .filter((n) => n.ring === 2)
-                .map((node) => {
-                  // Find nearest ring 1 node
-                  const ring1Nodes = nodes.filter((n) => n.ring === 1);
-                  if (ring1Nodes.length === 0) return null;
-                  const nearest = ring1Nodes.reduce((a, b) => {
-                    const distA = Math.abs(a.angle - node.angle);
-                    const distB = Math.abs(b.angle - node.angle);
-                    return distA < distB ? a : b;
-                  });
-                  return (
-                    <line
-                      key={`line-${node.id}`}
-                      x1={nearest.x}
-                      y1={nearest.y}
-                      x2={node.x}
-                      y2={node.y}
-                      stroke="hsl(var(--border))"
-                      strokeWidth={1}
-                      opacity={0.2}
-                    />
-                  );
-                })}
+                );
+              })}
 
               {/* Nodes */}
               {nodes.map((node) => {
@@ -442,18 +504,41 @@ export const RadialHierarchyView = ({
 
       {/* Legend */}
       <div className="p-4 border-t border-border">
-        <div className="flex flex-wrap justify-center gap-6 text-xs">
-          {Object.entries(ringLabels).map(([ring, label]) => (
-            <div key={ring} className="flex items-center gap-2">
-              <div
-                className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: ringColors[Number(ring)] }}
-              />
-              <span className="text-muted-foreground">
-                Anel {ring}: {label}
-              </span>
-            </div>
-          ))}
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-xs">
+          {/* Node types legend */}
+          <div className="flex items-center gap-4">
+            <span className="font-medium text-muted-foreground">Nós:</span>
+            {Object.entries(ringLabels).map(([ring, label]) => (
+              <div key={ring} className="flex items-center gap-1.5">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: ringColors[Number(ring)] }}
+                />
+                <span className="text-muted-foreground">{label}</span>
+              </div>
+            ))}
+          </div>
+          
+          {/* Link types legend */}
+          <div className="flex items-center gap-4">
+            <span className="font-medium text-muted-foreground">Ligações:</span>
+            {Object.entries(linkStyles).map(([type, style]) => (
+              <div key={type} className="flex items-center gap-1.5">
+                <svg width="24" height="12" className="overflow-visible">
+                  <line
+                    x1="0"
+                    y1="6"
+                    x2="24"
+                    y2="6"
+                    stroke={style.stroke}
+                    strokeWidth={style.strokeWidth}
+                    strokeDasharray={style.dashArray}
+                  />
+                </svg>
+                <span className="text-muted-foreground">{style.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

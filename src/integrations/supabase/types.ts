@@ -27,6 +27,10 @@ export type Database = {
           observacoes: string | null
           orgao_emissor: string | null
           pdf_hash: string | null
+          pdf_mime_type: string | null
+          pdf_nome_arquivo: string | null
+          pdf_storage_path: string | null
+          pdf_tamanho: number | null
           pdf_upload_em: string | null
           pdf_url: string | null
           status: string | null
@@ -50,6 +54,10 @@ export type Database = {
           observacoes?: string | null
           orgao_emissor?: string | null
           pdf_hash?: string | null
+          pdf_mime_type?: string | null
+          pdf_nome_arquivo?: string | null
+          pdf_storage_path?: string | null
+          pdf_tamanho?: number | null
           pdf_upload_em?: string | null
           pdf_url?: string | null
           status?: string | null
@@ -73,6 +81,10 @@ export type Database = {
           observacoes?: string | null
           orgao_emissor?: string | null
           pdf_hash?: string | null
+          pdf_mime_type?: string | null
+          pdf_nome_arquivo?: string | null
+          pdf_storage_path?: string | null
+          pdf_tamanho?: number | null
           pdf_upload_em?: string | null
           pdf_url?: string | null
           status?: string | null

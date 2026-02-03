@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, FileText, ChevronRight, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,20 @@ const tiposNorma = [
   { value: "instrucao_normativa", label: "Instrução Normativa" },
 ];
 
-const NormasTab = () => {
-  const [searchTerm, setSearchTerm] = useState("");
+interface NormasTabProps {
+  initialSearch?: string;
+}
+
+const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [tipoFilter, setTipoFilter] = useState("all");
   const [selectedNorma, setSelectedNorma] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearchTerm(initialSearch);
+    }
+  }, [initialSearch]);
 
   const { data: normas, isLoading } = useQuery({
     queryKey: ["normas", searchTerm, tipoFilter],

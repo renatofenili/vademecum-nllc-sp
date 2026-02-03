@@ -7,6 +7,7 @@ interface FooterProps {
 
 const Footer = ({ onTabChange }: FooterProps) => {
   const navItems: { label: string; tab: TabType }[] = [
+    { label: "Início", tab: "home" },
     { label: "Normas", tab: "normas" },
     { label: "Relatórios", tab: "relatorios" },
     { label: "Consultas", tab: "consultas" },

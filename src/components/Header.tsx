@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { FileText, FileBarChart, Search, Network, RefreshCw } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, RefreshCw, Home } from "lucide-react";
 
-export type TabType = "normas" | "relatorios" | "consultas" | "mapas" | "mudancas";
+export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mudancas";
 
 interface HeaderProps {
   activeTab?: TabType;
@@ -9,6 +9,7 @@ interface HeaderProps {
 }
 
 const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
+  { label: "Início", tab: "home", icon: Home },
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Relatórios", tab: "relatorios", icon: FileBarChart },
   { label: "Consultas", tab: "consultas", icon: Search },
@@ -16,25 +17,28 @@ const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
   { label: "O que mudou", tab: "mudancas", icon: RefreshCw },
 ];
 
-const Header = ({ activeTab = "normas", onTabChange }: HeaderProps) => {
+const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-3">
+        <button 
+          onClick={() => onTabChange?.("home")}
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
           <div className="flex h-10 w-10 items-center justify-center rounded bg-primary">
             <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-lg font-semibold text-foreground">
             Vade-Mécum SGGD SP
           </span>
-        </Link>
+        </button>
 
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => (
             <button
               key={item.tab}
               onClick={() => onTabChange?.(item.tab)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 activeTab === item.tab
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -53,7 +57,7 @@ const Header = ({ activeTab = "normas", onTabChange }: HeaderProps) => {
           <button
             key={item.tab}
             onClick={() => onTabChange?.(item.tab)}
-            className={`flex-1 min-w-fit flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors ${
+            className={`flex-1 min-w-fit flex items-center justify-center gap-1.5 px-3 py-3 text-xs font-medium transition-colors ${
               activeTab === item.tab
                 ? "text-primary border-b-2 border-primary"
                 : "text-muted-foreground"

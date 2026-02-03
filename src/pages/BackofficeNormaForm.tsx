@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File } from 'lucide-react';
+import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
@@ -131,6 +131,8 @@ const BackofficeNormaForm = () => {
   const [isLoadingNorma, setIsLoadingNorma] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [isExtractingText, setIsExtractingText] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
@@ -248,6 +250,9 @@ const BackofficeNormaForm = () => {
         pdf_mime_type: (normaData as any).pdf_mime_type || null,
         pdf_upload_em: (normaData as any).pdf_upload_em || null,
       });
+
+      // Load extraction status
+      setExtractionStatus((normaData as any).texto_extraido_status || null);
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -401,11 +406,54 @@ const BackofficeNormaForm = () => {
       pdf_mime_type: null,
       pdf_upload_em: null,
     });
+    setExtractionStatus(null);
 
     toast({
       title: 'PDF removido',
       description: 'O arquivo foi removido.',
     });
+  };
+
+  const triggerTextExtraction = async (storagePath: string, normaId: string) => {
+    setIsExtractingText(true);
+    setExtractionStatus('pendente');
+    
+    try {
+      console.log('Triggering text extraction for:', normaId, storagePath);
+      
+      const { error } = await supabase.functions.invoke('extract-pdf-text', {
+        body: { 
+          pdf_storage_path: storagePath, 
+          norma_id: normaId 
+        },
+      });
+
+      if (error) {
+        console.error('Extraction error:', error);
+        setExtractionStatus('erro');
+        toast({
+          title: 'Erro na extração',
+          description: 'Não foi possível extrair o texto do PDF.',
+          variant: 'destructive',
+        });
+      } else {
+        setExtractionStatus('extraido');
+        toast({
+          title: 'Texto extraído!',
+          description: 'O texto do PDF foi extraído e estruturado com sucesso.',
+        });
+      }
+    } catch (error: any) {
+      console.error('Extraction failed:', error);
+      setExtractionStatus('erro');
+      toast({
+        title: 'Erro na extração',
+        description: error.message || 'Falha ao extrair texto do PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExtractingText(false);
+    }
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -550,6 +598,12 @@ const BackofficeNormaForm = () => {
             if (insertFasesError) throw insertFasesError;
           }
         }
+      }
+
+      // Trigger text extraction if PDF was uploaded
+      if (pdfData.pdf_storage_path && normaId && !extractionStatus) {
+        // Don't wait for extraction, run in background
+        triggerTextExtraction(pdfData.pdf_storage_path, normaId);
       }
 
       toast({
@@ -932,38 +986,139 @@ const BackofficeNormaForm = () => {
                 />
 
                 {pdfData.pdf_url ? (
-                  <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
-                    <File className="h-8 w-8 text-primary shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{pdfData.pdf_nome_arquivo}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatFileSize(pdfData.pdf_tamanho)}
-                        {pdfData.pdf_upload_em && (
-                          <> • Enviado em {new Date(pdfData.pdf_upload_em).toLocaleDateString('pt-BR')}</>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
+                      <File className="h-8 w-8 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{pdfData.pdf_nome_arquivo}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(pdfData.pdf_tamanho)}
+                          {pdfData.pdf_upload_em && (
+                            <> • Enviado em {new Date(pdfData.pdf_upload_em).toLocaleDateString('pt-BR')}</>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          asChild
+                        >
+                          <a href={pdfData.pdf_url} target="_blank" rel="noopener noreferrer">
+                            Visualizar
+                          </a>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={handleRemovePdf}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Extraction Status */}
+                    {isEditing && (
+                      <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30 border border-border">
+                        {isExtractingText ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">Extraindo texto...</p>
+                              <p className="text-xs text-muted-foreground">
+                                A IA está analisando e estruturando o conteúdo do PDF
+                              </p>
+                            </div>
+                          </>
+                        ) : extractionStatus === 'extraido' ? (
+                          <>
+                            <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-primary">Texto extraído</p>
+                              <p className="text-xs text-muted-foreground">
+                                O conteúdo foi estruturado em artigos, incisos e parágrafos
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (pdfData.pdf_storage_path && id) {
+                                  triggerTextExtraction(pdfData.pdf_storage_path, id);
+                                }
+                              }}
+                              className="shrink-0"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Re-extrair
+                            </Button>
+                          </>
+                        ) : extractionStatus === 'erro' ? (
+                          <>
+                            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-destructive">Erro na extração</p>
+                              <p className="text-xs text-muted-foreground">
+                                Não foi possível extrair o texto do PDF
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (pdfData.pdf_storage_path && id) {
+                                  triggerTextExtraction(pdfData.pdf_storage_path, id);
+                                }
+                              }}
+                              className="shrink-0"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Tentar novamente
+                            </Button>
+                          </>
+                        ) : extractionStatus === 'pendente' ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">Extração pendente</p>
+                              <p className="text-xs text-muted-foreground">
+                                O texto será extraído automaticamente
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">Extração de texto</p>
+                              <p className="text-xs text-muted-foreground">
+                                O texto será extraído automaticamente ao salvar
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (pdfData.pdf_storage_path && id) {
+                                  triggerTextExtraction(pdfData.pdf_storage_path, id);
+                                }
+                              }}
+                              className="shrink-0"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Extrair agora
+                            </Button>
+                          </>
                         )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        asChild
-                      >
-                        <a href={pdfData.pdf_url} target="_blank" rel="noopener noreferrer">
-                          Visualizar
-                        </a>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={handleRemovePdf}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div

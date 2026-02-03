@@ -1,14 +1,22 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText, Palette, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActsGraphData, ActNode, DispositivosGraphData, DispositivoNode } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+interface NormaTema {
+  norma_id: string;
+  tema: string;
+  intensidade: string;
+}
 
 interface RadialHierarchyViewProps {
   data: ActsGraphData | null;
@@ -117,6 +125,67 @@ export const RadialHierarchyView = ({
   const [hoveredArtigo, setHoveredArtigo] = useState<{ artigo: ArtigoGroup; x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
+  
+  // Theme mode state
+  const [themeModeEnabled, setThemeModeEnabled] = useState(false);
+  const [availableThemes, setAvailableThemes] = useState<string[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+  const [normasByTheme, setNormasByTheme] = useState<Map<string, Set<string>>>(new Map());
+  const [isLoadingThemes, setIsLoadingThemes] = useState(false);
+
+  // Load themes when mode is enabled
+  useEffect(() => {
+    if (!themeModeEnabled) {
+      setSelectedTheme(null);
+      return;
+    }
+
+    const loadThemes = async () => {
+      setIsLoadingThemes(true);
+      try {
+        // Get all unique themes
+        const { data: themes, error: themesError } = await supabase
+          .from("normas_temas")
+          .select("tema, norma_id, intensidade");
+
+        if (themesError) throw themesError;
+
+        if (themes && themes.length > 0) {
+          // Extract unique themes
+          const uniqueThemes = [...new Set(themes.map((t) => t.tema))].sort();
+          setAvailableThemes(uniqueThemes);
+
+          // Build map of theme -> norma_ids
+          const themeMap = new Map<string, Set<string>>();
+          themes.forEach((t) => {
+            if (!themeMap.has(t.tema)) {
+              themeMap.set(t.tema, new Set());
+            }
+            themeMap.get(t.tema)!.add(t.norma_id);
+          });
+          setNormasByTheme(themeMap);
+        } else {
+          setAvailableThemes([]);
+          setNormasByTheme(new Map());
+        }
+      } catch (err) {
+        console.error("Error loading themes:", err);
+        toast.error("Erro ao carregar temas");
+      } finally {
+        setIsLoadingThemes(false);
+      }
+    };
+
+    loadThemes();
+  }, [themeModeEnabled]);
+
+  // Get set of highlighted norma IDs based on selected theme
+  const highlightedNormaIds = useMemo(() => {
+    if (!themeModeEnabled || !selectedTheme) {
+      return null; // null means no filtering
+    }
+    return normasByTheme.get(selectedTheme) || new Set<string>();
+  }, [themeModeEnabled, selectedTheme, normasByTheme]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.2, 3));
@@ -439,11 +508,68 @@ export const RadialHierarchyView = ({
   return (
     <div className="flex-1 flex flex-col">
       {/* Info bar */}
-      <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex gap-4">
+      <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex flex-wrap items-center gap-4">
         <span>📊 Normas: {data.nodes.length}</span>
         <span>🔗 Relações: {data.edges.length}</span>
         <span>🎯 Raiz: CF/1988</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
+        
+        <Separator orientation="vertical" className="h-4" />
+        
+        {/* Theme Mode Toggle */}
+        <div className="flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          <span className="font-medium">Modo Tema</span>
+          <Switch
+            checked={themeModeEnabled}
+            onCheckedChange={setThemeModeEnabled}
+            className="scale-90"
+          />
+        </div>
+        
+        {/* Theme Selector */}
+        {themeModeEnabled && (
+          <div className="flex items-center gap-2">
+            {isLoadingThemes ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : availableThemes.length > 0 ? (
+              <>
+                <Select
+                  value={selectedTheme || ""}
+                  onValueChange={(value) => setSelectedTheme(value || null)}
+                >
+                  <SelectTrigger className="h-7 w-[180px] text-xs">
+                    <SelectValue placeholder="Selecionar tema..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableThemes.map((theme) => (
+                      <SelectItem key={theme} value={theme} className="text-xs">
+                        {theme}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedTheme && (
+                  <>
+                    <Badge variant="secondary" className="text-xs">
+                      {highlightedNormaIds?.size || 0} normas
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setSelectedTheme(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground italic">Nenhum tema cadastrado</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* SVG container */}
@@ -637,6 +763,11 @@ export const RadialHierarchyView = ({
               {/* Connection links with types */}
               {links.map((link, index) => {
                 const style = linkStyles[link.type];
+                // Dim links if theme mode is active and neither endpoint is highlighted
+                const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromId);
+                const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toId);
+                const linkHighlighted = fromHighlighted || toHighlighted;
+                
                 return (
                   <line
                     key={`link-${link.fromId}-${link.toId}-${index}`}
@@ -647,8 +778,8 @@ export const RadialHierarchyView = ({
                     stroke={style.stroke}
                     strokeWidth={style.strokeWidth}
                     strokeDasharray={style.dashArray}
-                    opacity={0.6}
-                    className="transition-opacity duration-200"
+                    opacity={highlightedNormaIds ? (linkHighlighted ? 0.8 : 0.1) : 0.6}
+                    className="transition-opacity duration-300"
                   />
                 );
               })}
@@ -660,9 +791,13 @@ export const RadialHierarchyView = ({
                 const color = ringColors[node.ring];
                 const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.artigoGroups.length > 0;
                 const artigoGroups = hasExpandedDispositivos ? expandedDispositivos.artigoGroups : [];
+                
+                // Theme mode highlighting
+                const isHighlighted = !highlightedNormaIds || highlightedNormaIds.has(node.id) || isCenter;
+                const nodeOpacity = highlightedNormaIds ? (isHighlighted ? 1 : 0.15) : 1;
 
                 return (
-                  <g key={node.id}>
+                  <g key={node.id} style={{ opacity: nodeOpacity }} className="transition-opacity duration-300">
                     {/* Main node */}
                     <g
                       transform={`translate(${node.x}, ${node.y})`}
@@ -678,11 +813,11 @@ export const RadialHierarchyView = ({
                       <circle
                         r={nodeRadius}
                         fill={color}
-                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : "white"}
-                        strokeWidth={selectedNode?.id === node.id ? 4 : 2}
-                        className="transition-all duration-200 hover:opacity-80"
+                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : isHighlighted && highlightedNormaIds ? "hsl(45, 93%, 47%)" : "white"}
+                        strokeWidth={selectedNode?.id === node.id ? 4 : isHighlighted && highlightedNormaIds ? 3 : 2}
+                        className="transition-all duration-300 hover:opacity-80"
                         style={{
-                          filter: hoveredNode?.id === node.id ? "brightness(1.2)" : "none",
+                          filter: hoveredNode?.id === node.id ? "brightness(1.2)" : isHighlighted && highlightedNormaIds ? "brightness(1.1)" : "none",
                         }}
                       />
                       

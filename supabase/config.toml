@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.build-chain]
 verify_jwt = false
+
+[functions.find-applicable]
+verify_jwt = false

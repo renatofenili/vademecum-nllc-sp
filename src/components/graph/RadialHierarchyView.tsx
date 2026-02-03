@@ -1119,22 +1119,24 @@ export const RadialHierarchyView = ({
                   
                   <Separator />
                   
-                  {/* Botão Expandir Dispositivos */}
-                  <Button
-                    variant={expandedDispositivos?.actId === selectedNode.id ? "default" : "outline"}
-                    className="w-full justify-start gap-2"
-                    disabled={expandedDispositivos?.isLoading}
-                    onClick={() => loadDispositivos(selectedNode.id)}
-                  >
-                    {expandedDispositivos?.actId === selectedNode.id && expandedDispositivos.isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <GitBranch className="h-4 w-4" />
-                    )}
-                    {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading
-                      ? `Recolher dispositivos (${expandedDispositivos.artigoGroups.length} artigos)`
-                      : "Expandir dispositivos"}
-                  </Button>
+                  {/* Botão Expandir Dispositivos - oculto para CF/88 */}
+                  {selectedNode.ring !== 0 && (
+                    <Button
+                      variant={expandedDispositivos?.actId === selectedNode.id ? "default" : "outline"}
+                      className="w-full justify-start gap-2"
+                      disabled={expandedDispositivos?.isLoading}
+                      onClick={() => loadDispositivos(selectedNode.id)}
+                    >
+                      {expandedDispositivos?.actId === selectedNode.id && expandedDispositivos.isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <GitBranch className="h-4 w-4" />
+                      )}
+                      {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading
+                        ? `Recolher dispositivos (${expandedDispositivos.artigoGroups.length} artigos)`
+                        : "Expandir dispositivos"}
+                    </Button>
+                  )}
                   
                   {/* Dispositivos hierarchy view */}
                   {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading && expandedDispositivos.artigoGroups.length > 0 && (() => {

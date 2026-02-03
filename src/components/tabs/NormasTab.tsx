@@ -260,6 +260,16 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
                       {formatTipo(normaDetalhe.tipo)} {normaDetalhe.numero}
                     </CardTitle>
                   </div>
+                  {normaDetalhe.link_externo && (
+                    <a
+                      href={normaDetalhe.link_externo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline underline-offset-2 flex items-center gap-1"
+                    >
+                      Publicação oficial →
+                    </a>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
                   {normaDetalhe.ementa}

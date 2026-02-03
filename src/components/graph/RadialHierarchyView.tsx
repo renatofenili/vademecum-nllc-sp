@@ -1,10 +1,11 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, X, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ActsGraphData, ActNode, DispositivosGraphData, DispositivoNode } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,6 +20,12 @@ interface ExpandedDispositivos {
   actId: string;
   dispositivos: DispositivoNode[];
   isLoading: boolean;
+}
+
+// Hierarchical structure for dispositivos
+interface ArtigoGroup {
+  artigo: DispositivoNode;
+  children: DispositivoNode[];
 }
 
 interface RingNode {
@@ -109,7 +116,6 @@ export const RadialHierarchyView = ({
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
-  const [hoveredDispositivo, setHoveredDispositivo] = useState<DispositivoNode | null>(null);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.2, 3));
@@ -448,7 +454,7 @@ export const RadialHierarchyView = ({
         </div>
 
         {/* Tooltip for act nodes */}
-        {hoveredNode && !hoveredDispositivo && (
+        {hoveredNode && (
           <div
             className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-sm pointer-events-none"
             style={{
@@ -492,31 +498,6 @@ export const RadialHierarchyView = ({
             {/* Ementa */}
             <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
               {hoveredNode.act.ementa}
-            </p>
-          </div>
-        )}
-
-        {/* Tooltip for dispositivo nodes */}
-        {hoveredDispositivo && (
-          <div
-            className="absolute z-30 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-md pointer-events-none"
-            style={{
-              left: Math.min(dimensions.width / 2, dimensions.width - 320),
-              top: 60,
-            }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary" className="text-xs capitalize">
-                {hoveredDispositivo.nivel}
-              </Badge>
-              <span className="font-mono text-xs text-muted-foreground">
-                {hoveredDispositivo.anchor}
-              </span>
-            </div>
-            <p className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
-              {hoveredDispositivo.texto.length > 300 
-                ? hoveredDispositivo.texto.slice(0, 300) + "…" 
-                : hoveredDispositivo.texto}
             </p>
           </div>
         )}
@@ -643,90 +624,26 @@ export const RadialHierarchyView = ({
                       )}
                     </g>
 
-                    {/* Dispositivos as child nodes - organized in concentric rings */}
-                    {hasExpandedDispositivos && (() => {
-                      const dispositivos = expandedDispositivos.dispositivos;
-                      const maxPerRing = 16; // Max dispositivos per ring
-                      const ringCount = Math.ceil(dispositivos.length / maxPerRing);
-                      const baseRadius = 55;
-                      const ringSpacing = 30;
-
-                      return dispositivos.map((disp, idx) => {
-                        // Calculate which ring this dispositivo belongs to
-                        const ringIndex = Math.floor(idx / maxPerRing);
-                        const indexInRing = idx % maxPerRing;
-                        const countInThisRing = Math.min(maxPerRing, dispositivos.length - ringIndex * maxPerRing);
-                        
-                        // Calculate position in a spiral/ring pattern around the parent
-                        const dispRadius = baseRadius + ringIndex * ringSpacing;
-                        const angleSpread = Math.min(Math.PI * 1.5, countInThisRing * 0.2); // Spread angle
-                        const startAngle = node.angle - angleSpread / 2;
-                        const dispAngle = countInThisRing > 1 
-                          ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
-                          : node.angle;
-                        
-                        const dispX = node.x + dispRadius * Math.cos(dispAngle);
-                        const dispY = node.y + dispRadius * Math.sin(dispAngle);
-                        const dispNodeRadius = 10;
-                        
-                        // Get dispositivo level color
-                        const nivelColors: Record<string, string> = {
-                          artigo: "hsl(45, 93%, 47%)",      // Amber
-                          paragrafo: "hsl(200, 98%, 39%)",  // Cyan
-                          inciso: "hsl(330, 81%, 60%)",     // Pink
-                          alinea: "hsl(280, 68%, 60%)",     // Purple
-                        };
-                        const dispColor = nivelColors[disp.nivel] || "hsl(var(--muted-foreground))";
-                        
-                        // Format anchor for display
-                        const shortLabel = disp.anchor.length > 6 
-                          ? disp.anchor.slice(0, 5) + "…" 
-                          : disp.anchor;
-
-                        return (
-                          <g key={`${node.id}-disp-${idx}`}>
-                            {/* Connection line to parent */}
-                            <line
-                              x1={node.x}
-                              y1={node.y}
-                              x2={dispX}
-                              y2={dispY}
-                              stroke={dispColor}
-                              strokeWidth={0.8}
-                              strokeDasharray="2 2"
-                              opacity={0.4}
-                            />
-                            
-                            {/* Dispositivo node */}
-                            <g
-                              transform={`translate(${dispX}, ${dispY})`}
-                              onMouseEnter={() => setHoveredDispositivo(disp)}
-                              onMouseLeave={() => setHoveredDispositivo(null)}
-                              className="cursor-pointer"
-                            >
-                              <circle
-                                r={dispNodeRadius}
-                                fill={dispColor}
-                                stroke="white"
-                                strokeWidth={1}
-                                className="transition-all duration-200 hover:opacity-80"
-                                style={{
-                                  filter: hoveredDispositivo?.anchor === disp.anchor ? "brightness(1.3) drop-shadow(0 0 4px rgba(255,255,255,0.5))" : "none",
-                                }}
-                              />
-                              <text
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                                className="fill-white font-medium pointer-events-none select-none"
-                                style={{ fontSize: 5 }}
-                              >
-                                {shortLabel}
-                              </text>
-                            </g>
-                          </g>
-                        );
-                      });
-                    })()}
+                    {/* Dispositivos indicator - simplified visual on map */}
+                    {hasExpandedDispositivos && (
+                      <g transform={`translate(${node.x + 30}, ${node.y - 30})`}>
+                        <circle
+                          r={16}
+                          fill="hsl(45, 93%, 47%)"
+                          stroke="white"
+                          strokeWidth={2}
+                          className="animate-pulse"
+                        />
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          className="fill-white font-bold pointer-events-none"
+                          style={{ fontSize: 10 }}
+                        >
+                          {expandedDispositivos.dispositivos.length}
+                        </text>
+                      </g>
+                    )}
                   </g>
                 );
               })}
@@ -897,6 +814,114 @@ export const RadialHierarchyView = ({
                       ? `Recolher dispositivos (${expandedDispositivos.dispositivos.length})`
                       : "Expandir dispositivos"}
                   </Button>
+                  
+                  {/* Dispositivos hierarchy view */}
+                  {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading && expandedDispositivos.dispositivos.length > 0 && (() => {
+                    // Group dispositivos by artigo
+                    const artigoGroups: ArtigoGroup[] = [];
+                    let currentArtigo: ArtigoGroup | null = null;
+                    
+                    expandedDispositivos.dispositivos.forEach((disp) => {
+                      if (disp.nivel === "artigo") {
+                        if (currentArtigo) {
+                          artigoGroups.push(currentArtigo);
+                        }
+                        currentArtigo = { artigo: disp, children: [] };
+                      } else if (currentArtigo) {
+                        currentArtigo.children.push(disp);
+                      }
+                    });
+                    
+                    if (currentArtigo) {
+                      artigoGroups.push(currentArtigo);
+                    }
+                    
+                    // Nível colors and labels
+                    const nivelConfig: Record<string, { color: string; label: string; indent: number }> = {
+                      artigo: { color: "bg-amber-500", label: "Art.", indent: 0 },
+                      paragrafo: { color: "bg-cyan-500", label: "§", indent: 1 },
+                      inciso: { color: "bg-pink-500", label: "", indent: 2 },
+                      alinea: { color: "bg-purple-500", label: "", indent: 3 },
+                    };
+
+                    return (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Dispositivos ({expandedDispositivos.dispositivos.length})
+                          </h4>
+                          <div className="flex gap-1">
+                            {Object.entries(nivelConfig).slice(0, 4).map(([nivel, config]) => (
+                              <Badge 
+                                key={nivel} 
+                                variant="outline" 
+                                className="text-[10px] px-1.5 py-0"
+                              >
+                                <span className={`w-2 h-2 rounded-full ${config.color} mr-1`} />
+                                {nivel}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <ScrollArea className="max-h-[300px]">
+                          <div className="space-y-1 pr-3">
+                            {artigoGroups.map((group, groupIdx) => (
+                              <Collapsible key={groupIdx} defaultOpen={groupIdx === 0}>
+                                <CollapsibleTrigger className="w-full">
+                                  <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left group">
+                                    <ChevronRight className="h-4 w-4 mt-0.5 text-amber-600 transition-transform group-data-[state=open]:rotate-90" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                                        <span className="font-mono text-xs text-amber-700 dark:text-amber-400">
+                                          {group.artigo.anchor}
+                                        </span>
+                                        {group.children.length > 0 && (
+                                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                            +{group.children.length}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2" style={{ textAlign: "justify" }}>
+                                        {group.artigo.texto}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </CollapsibleTrigger>
+                                
+                                <CollapsibleContent>
+                                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-muted pl-2">
+                                    {group.children.map((child, childIdx) => {
+                                      const config = nivelConfig[child.nivel] || nivelConfig.inciso;
+                                      return (
+                                        <div
+                                          key={childIdx}
+                                          className="p-1.5 rounded text-xs hover:bg-muted/50 transition-colors"
+                                          style={{ marginLeft: `${config.indent * 8}px` }}
+                                        >
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${config.color} shrink-0`} />
+                                            <span className="font-mono text-[10px] text-muted-foreground">
+                                              {child.anchor}
+                                            </span>
+                                          </div>
+                                          <p className="text-muted-foreground mt-0.5 line-clamp-2" style={{ textAlign: "justify" }}>
+                                            {child.texto}
+                                          </p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    );
+                  })()}
                 </div>
               </ScrollArea>
             </>

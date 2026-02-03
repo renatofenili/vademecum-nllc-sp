@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ActNode, ActEdge } from "./types";
+import { formatDateBR } from "@/lib/date";
 
 interface ActDetailPanelProps {
   node: ActNode;
@@ -72,7 +73,7 @@ export const ActDetailPanel = ({
             <div className="space-y-1.5 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5" />
-                <span>Publicação: {new Date(node.data_publicacao).toLocaleDateString("pt-BR")}</span>
+                <span>Publicação: {formatDateBR(node.data_publicacao)}</span>
               </div>
               {node.orgao_emissor && (
                 <div className="flex items-center gap-2 text-muted-foreground">

@@ -7,10 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDateBR } from '@/lib/date';
 
-type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
+type NormType =
+  | 'decreto'
+  | 'resolucao'
+  | 'portaria'
+  | 'lei'
+  | 'lei_federal'
+  | 'lei_estadual'
+  | 'instrucao_normativa'
+  | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
 
 interface Norma {
@@ -31,6 +38,8 @@ interface Norma {
 
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
+  lei_federal: 'Lei federal',
+  lei_estadual: 'Lei estadual',
   decreto: 'Decreto',
   resolucao: 'Resolução',
   portaria: 'Portaria',
@@ -197,7 +206,7 @@ const Backoffice = () => {
                         <TableCell className="font-medium">{norma.numero}</TableCell>
                         <TableCell>{normTypeLabels[norma.tipo]}</TableCell>
                         <TableCell>
-                          {format(new Date(norma.data_publicacao), 'dd/MM/yyyy', { locale: ptBR })}
+                          {formatDateBR(norma.data_publicacao)}
                         </TableCell>
                         <TableCell>
                           {norma.status && statusLabels[norma.status as NormStatus] && (

@@ -11,7 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 
-type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
+type NormType =
+  | 'decreto'
+  | 'resolucao'
+  | 'portaria'
+  | 'lei'
+  | 'lei_federal'
+  | 'lei_estadual'
+  | 'instrucao_normativa'
+  | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
 type Intensidade = 'fraca' | 'media' | 'forte';
 
@@ -27,6 +35,8 @@ interface FaseComIntensidade {
 
 const normTypeLabels: Record<NormType, string> = {
   lei: 'Lei',
+  lei_federal: 'Lei federal',
+  lei_estadual: 'Lei estadual',
   decreto: 'Decreto',
   resolucao: 'Resolução',
   portaria: 'Portaria',
@@ -34,7 +44,16 @@ const normTypeLabels: Record<NormType, string> = {
   outro: 'Outro',
 };
 
-const normTypeOrder: NormType[] = ['lei', 'decreto', 'resolucao', 'portaria', 'instrucao_normativa', 'outro'];
+const normTypeOrder: NormType[] = [
+  'lei_federal',
+  'lei_estadual',
+  'lei',
+  'decreto',
+  'resolucao',
+  'portaria',
+  'instrucao_normativa',
+  'outro',
+];
 
 const statusLabels: Record<NormStatus, string> = {
   rascunho: 'Rascunho',

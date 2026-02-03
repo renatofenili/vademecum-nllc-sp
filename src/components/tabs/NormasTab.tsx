@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { formatDateBR } from "@/lib/date";
 
 const tiposNorma = [
   { value: "all", label: "Todos os tipos" },
@@ -225,7 +226,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
                             {formatTipo(norma.tipo)}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(norma.data_publicacao).toLocaleDateString("pt-BR")}
+                            {formatDateBR(norma.data_publicacao)}
                           </span>
                         </div>
                         <h3 className="font-semibold text-foreground">

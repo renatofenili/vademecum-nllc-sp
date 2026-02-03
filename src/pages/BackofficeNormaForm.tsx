@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2 } from 'lucide-react';
+import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File } from 'lucide-react';
 
 type NormType = 'decreto' | 'resolucao' | 'portaria' | 'lei' | 'instrucao_normativa' | 'outro';
 type NormStatus = 'rascunho' | 'publicada' | 'revogada' | 'suspensa';
@@ -130,6 +130,8 @@ const BackofficeNormaForm = () => {
   const isEditing = Boolean(id);
   const [isLoadingNorma, setIsLoadingNorma] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     numero: '',
@@ -142,6 +144,22 @@ const BackofficeNormaForm = () => {
     status: 'publicada' as NormStatus,
     observacoes: '',
     orgao_emissor: '',
+  });
+
+  const [pdfData, setPdfData] = useState<{
+    pdf_url: string | null;
+    pdf_storage_path: string | null;
+    pdf_nome_arquivo: string | null;
+    pdf_tamanho: number | null;
+    pdf_mime_type: string | null;
+    pdf_upload_em: string | null;
+  }>({
+    pdf_url: null,
+    pdf_storage_path: null,
+    pdf_nome_arquivo: null,
+    pdf_tamanho: null,
+    pdf_mime_type: null,
+    pdf_upload_em: null,
   });
   
   const [temasComIntensidade, setTemasComIntensidade] = useState<TemaComIntensidade[]>([]);
@@ -221,6 +239,16 @@ const BackofficeNormaForm = () => {
         orgao_emissor: normaData.orgao_emissor || '',
       });
 
+      // Load PDF data
+      setPdfData({
+        pdf_url: (normaData as any).pdf_url || null,
+        pdf_storage_path: (normaData as any).pdf_storage_path || null,
+        pdf_nome_arquivo: (normaData as any).pdf_nome_arquivo || null,
+        pdf_tamanho: (normaData as any).pdf_tamanho || null,
+        pdf_mime_type: (normaData as any).pdf_mime_type || null,
+        pdf_upload_em: (normaData as any).pdf_upload_em || null,
+      });
+
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
           temasData.map((t) => ({
@@ -294,6 +322,99 @@ const BackofficeNormaForm = () => {
     return faseOptions.filter((fase) => !selectedFases.includes(fase));
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Tipo de arquivo inválido',
+        description: 'Apenas arquivos PDF são aceitos.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingPdf(true);
+
+    try {
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `${timestamp}_${sanitizedName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('normas-pdf')
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('normas-pdf')
+        .getPublicUrl(storagePath);
+
+      setPdfData({
+        pdf_url: urlData.publicUrl,
+        pdf_storage_path: storagePath,
+        pdf_nome_arquivo: file.name,
+        pdf_tamanho: file.size,
+        pdf_mime_type: file.type,
+        pdf_upload_em: new Date().toISOString(),
+      });
+
+      toast({
+        title: 'PDF carregado!',
+        description: 'O arquivo foi enviado com sucesso.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erro no upload',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingPdf(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemovePdf = async () => {
+    if (pdfData.pdf_storage_path) {
+      try {
+        await supabase.storage
+          .from('normas-pdf')
+          .remove([pdfData.pdf_storage_path]);
+      } catch (error) {
+        console.error('Erro ao remover PDF do storage:', error);
+      }
+    }
+
+    setPdfData({
+      pdf_url: null,
+      pdf_storage_path: null,
+      pdf_nome_arquivo: null,
+      pdf_tamanho: null,
+      pdf_mime_type: null,
+      pdf_upload_em: null,
+    });
+
+    toast({
+      title: 'PDF removido',
+      description: 'O arquivo foi removido.',
+    });
+  };
+
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -333,39 +454,36 @@ const BackofficeNormaForm = () => {
     try {
       let normaId = id;
 
+      const normaPayload = {
+        numero: formData.numero.trim(),
+        tipo: formData.tipo as NormType,
+        data_publicacao: formData.data_publicacao,
+        inicio_vigencia: formData.inicio_vigencia || null,
+        fim_vigencia: formData.fim_vigencia || null,
+        ementa: formData.ementa.trim(),
+        link_externo: formData.link_externo.trim() || null,
+        status: formData.status,
+        observacoes: formData.observacoes.trim() || null,
+        orgao_emissor: formData.orgao_emissor || null,
+        pdf_url: pdfData.pdf_url,
+        pdf_storage_path: pdfData.pdf_storage_path,
+        pdf_nome_arquivo: pdfData.pdf_nome_arquivo,
+        pdf_tamanho: pdfData.pdf_tamanho,
+        pdf_mime_type: pdfData.pdf_mime_type,
+        pdf_upload_em: pdfData.pdf_upload_em,
+      };
+
       if (isEditing && id) {
         const { error } = await supabase
           .from('normas')
-          .update({
-            numero: formData.numero.trim(),
-            tipo: formData.tipo as NormType,
-            data_publicacao: formData.data_publicacao,
-            inicio_vigencia: formData.inicio_vigencia || null,
-            fim_vigencia: formData.fim_vigencia || null,
-            ementa: formData.ementa.trim(),
-            link_externo: formData.link_externo.trim() || null,
-            status: formData.status,
-            observacoes: formData.observacoes.trim() || null,
-            orgao_emissor: formData.orgao_emissor || null,
-          })
+          .update(normaPayload as any)
           .eq('id', id);
 
         if (error) throw error;
       } else {
         const { data: newNorma, error } = await supabase
           .from('normas')
-          .insert({
-            numero: formData.numero.trim(),
-            tipo: formData.tipo as NormType,
-            data_publicacao: formData.data_publicacao,
-            inicio_vigencia: formData.inicio_vigencia || null,
-            fim_vigencia: formData.fim_vigencia || null,
-            ementa: formData.ementa.trim(),
-            link_externo: formData.link_externo.trim() || null,
-            status: formData.status,
-            observacoes: formData.observacoes.trim() || null,
-            orgao_emissor: formData.orgao_emissor || null,
-          })
+          .insert(normaPayload as any)
           .select('id')
           .single();
 
@@ -799,6 +917,77 @@ const BackofficeNormaForm = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Bloco: Arquivo PDF da Norma */}
+              <div className="space-y-4 rounded-lg border border-border p-4">
+                <h3 className="text-sm font-medium text-foreground">Arquivo PDF da Norma</h3>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={handlePdfUpload}
+                />
+
+                {pdfData.pdf_url ? (
+                  <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
+                    <File className="h-8 w-8 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{pdfData.pdf_nome_arquivo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(pdfData.pdf_tamanho)}
+                        {pdfData.pdf_upload_em && (
+                          <> • Enviado em {new Date(pdfData.pdf_upload_em).toLocaleDateString('pt-BR')}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a href={pdfData.pdf_url} target="_blank" rel="noopener noreferrer">
+                          Visualizar
+                        </a>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={handleRemovePdf}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploadingPdf ? (
+                      <>
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Enviando arquivo...</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          Clique para selecionar um arquivo PDF
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Apenas arquivos PDF são aceitos
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

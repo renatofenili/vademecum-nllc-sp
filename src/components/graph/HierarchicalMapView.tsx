@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Tree, { RawNodeDatum } from "react-d3-tree";
-import { Loader2 } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ActsGraphData, ActNode } from "./types";
-
 interface HierarchicalMapViewProps {
   data: ActsGraphData | null;
   isLoading: boolean;
@@ -35,8 +35,21 @@ export const HierarchicalMapView = ({
   rootOption,
 }: HierarchicalMapViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  const [zoom, setZoom] = useState(0.85);
 
+  const handleZoomIn = useCallback(() => {
+    setZoom((prev) => Math.min(prev + 0.15, 2));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((prev) => Math.max(prev - 0.15, 0.3));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoom(0.85);
+  }, []);
   // Measure container
   useEffect(() => {
     const measure = () => {
@@ -130,35 +143,70 @@ export const HierarchicalMapView = ({
         <span>🔗 Arestas: {data?.edges.length || 0}</span>
         <span>📐 {dimensions.width}×{dimensions.height}px</span>
         <span>🎯 Raiz: {rootOption}</span>
+        <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
       </div>
 
       {/* Tree container */}
-      <div
-        ref={containerRef}
-        style={{
-          width: "100%",
-          height: "500px",
-          minHeight: "500px",
-          background: "#fafafa",
-        }}
-      >
-        {dimensions.width > 0 && dimensions.height > 0 && (
-          <Tree
-            data={treeData}
-            orientation="horizontal"
-            pathFunc="diagonal"
-            translate={translate}
-            nodeSize={{ x: 180, y: 80 }}
-            separation={{ siblings: 1.2, nonSiblings: 1.5 }}
-            zoom={0.85}
-            scaleExtent={{ min: 0.3, max: 2 }}
-            collapsible={true}
-            initialDepth={2}
-            depthFactor={200}
-            enableLegacyTransitions={false}
-            transitionDuration={300}
-          />
-        )}
+      <div className="relative">
+        {/* Zoom controls */}
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 bg-background/90 backdrop-blur-sm"
+            onClick={handleZoomIn}
+            title="Zoom In"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 bg-background/90 backdrop-blur-sm"
+            onClick={handleZoomOut}
+            title="Zoom Out"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 bg-background/90 backdrop-blur-sm"
+            onClick={handleResetZoom}
+            title="Resetar Zoom"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div
+          ref={containerRef}
+          style={{
+            width: "100%",
+            height: "500px",
+            minHeight: "500px",
+            background: "#fafafa",
+          }}
+        >
+          {dimensions.width > 0 && dimensions.height > 0 && (
+            <Tree
+              ref={treeRef}
+              data={treeData}
+              orientation="horizontal"
+              pathFunc="diagonal"
+              translate={translate}
+              nodeSize={{ x: 180, y: 80 }}
+              separation={{ siblings: 1.2, nonSiblings: 1.5 }}
+              zoom={zoom}
+              scaleExtent={{ min: 0.3, max: 2 }}
+              collapsible={true}
+              initialDepth={2}
+              depthFactor={200}
+              enableLegacyTransitions={false}
+              transitionDuration={300}
+            />
+          )}
+        </div>
       </div>
 
       {/* Legend */}

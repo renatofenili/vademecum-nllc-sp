@@ -643,95 +643,90 @@ export const RadialHierarchyView = ({
                       )}
                     </g>
 
-                    {/* Dispositivos as child nodes */}
-                    {hasExpandedDispositivos && expandedDispositivos.dispositivos.slice(0, 12).map((disp, idx) => {
-                      const dispCount = Math.min(expandedDispositivos.dispositivos.length, 12);
-                      const dispAngle = node.angle + ((idx - (dispCount - 1) / 2) * 0.15);
-                      const dispRadius = 50; // Distance from parent node
-                      const dispX = node.x + dispRadius * Math.cos(dispAngle);
-                      const dispY = node.y + dispRadius * Math.sin(dispAngle);
-                      const dispNodeRadius = 12;
-                      
-                      // Get dispositivo level color
-                      const nivelColors: Record<string, string> = {
-                        artigo: "hsl(45, 93%, 47%)",      // Amber
-                        paragrafo: "hsl(200, 98%, 39%)",  // Cyan
-                        inciso: "hsl(330, 81%, 60%)",     // Pink
-                        alinea: "hsl(280, 68%, 60%)",     // Purple
-                      };
-                      const dispColor = nivelColors[disp.nivel] || "hsl(var(--muted-foreground))";
-                      
-                      // Format anchor for display
-                      const shortLabel = disp.anchor.length > 8 
-                        ? disp.anchor.slice(0, 6) + "…" 
-                        : disp.anchor;
+                    {/* Dispositivos as child nodes - organized in concentric rings */}
+                    {hasExpandedDispositivos && (() => {
+                      const dispositivos = expandedDispositivos.dispositivos;
+                      const maxPerRing = 16; // Max dispositivos per ring
+                      const ringCount = Math.ceil(dispositivos.length / maxPerRing);
+                      const baseRadius = 55;
+                      const ringSpacing = 30;
 
-                      return (
-                        <g key={`${node.id}-disp-${idx}`}>
-                          {/* Connection line to parent */}
-                          <line
-                            x1={node.x}
-                            y1={node.y}
-                            x2={dispX}
-                            y2={dispY}
-                            stroke={dispColor}
-                            strokeWidth={1}
-                            strokeDasharray="2 2"
-                            opacity={0.6}
-                          />
-                          
-                          {/* Dispositivo node */}
-                          <g
-                            transform={`translate(${dispX}, ${dispY})`}
-                            onMouseEnter={() => setHoveredDispositivo(disp)}
-                            onMouseLeave={() => setHoveredDispositivo(null)}
-                            className="cursor-pointer"
-                          >
-                            <circle
-                              r={dispNodeRadius}
-                              fill={dispColor}
-                              stroke="white"
-                              strokeWidth={1.5}
-                              className="transition-all duration-200 hover:opacity-80"
-                              style={{
-                                filter: hoveredDispositivo?.anchor === disp.anchor ? "brightness(1.2)" : "none",
-                              }}
+                      return dispositivos.map((disp, idx) => {
+                        // Calculate which ring this dispositivo belongs to
+                        const ringIndex = Math.floor(idx / maxPerRing);
+                        const indexInRing = idx % maxPerRing;
+                        const countInThisRing = Math.min(maxPerRing, dispositivos.length - ringIndex * maxPerRing);
+                        
+                        // Calculate position in a spiral/ring pattern around the parent
+                        const dispRadius = baseRadius + ringIndex * ringSpacing;
+                        const angleSpread = Math.min(Math.PI * 1.5, countInThisRing * 0.2); // Spread angle
+                        const startAngle = node.angle - angleSpread / 2;
+                        const dispAngle = countInThisRing > 1 
+                          ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
+                          : node.angle;
+                        
+                        const dispX = node.x + dispRadius * Math.cos(dispAngle);
+                        const dispY = node.y + dispRadius * Math.sin(dispAngle);
+                        const dispNodeRadius = 10;
+                        
+                        // Get dispositivo level color
+                        const nivelColors: Record<string, string> = {
+                          artigo: "hsl(45, 93%, 47%)",      // Amber
+                          paragrafo: "hsl(200, 98%, 39%)",  // Cyan
+                          inciso: "hsl(330, 81%, 60%)",     // Pink
+                          alinea: "hsl(280, 68%, 60%)",     // Purple
+                        };
+                        const dispColor = nivelColors[disp.nivel] || "hsl(var(--muted-foreground))";
+                        
+                        // Format anchor for display
+                        const shortLabel = disp.anchor.length > 6 
+                          ? disp.anchor.slice(0, 5) + "…" 
+                          : disp.anchor;
+
+                        return (
+                          <g key={`${node.id}-disp-${idx}`}>
+                            {/* Connection line to parent */}
+                            <line
+                              x1={node.x}
+                              y1={node.y}
+                              x2={dispX}
+                              y2={dispY}
+                              stroke={dispColor}
+                              strokeWidth={0.8}
+                              strokeDasharray="2 2"
+                              opacity={0.4}
                             />
-                            <text
-                              textAnchor="middle"
-                              dominantBaseline="central"
-                              className="fill-white font-medium pointer-events-none select-none"
-                              style={{ fontSize: 6 }}
+                            
+                            {/* Dispositivo node */}
+                            <g
+                              transform={`translate(${dispX}, ${dispY})`}
+                              onMouseEnter={() => setHoveredDispositivo(disp)}
+                              onMouseLeave={() => setHoveredDispositivo(null)}
+                              className="cursor-pointer"
                             >
-                              {shortLabel}
-                            </text>
+                              <circle
+                                r={dispNodeRadius}
+                                fill={dispColor}
+                                stroke="white"
+                                strokeWidth={1}
+                                className="transition-all duration-200 hover:opacity-80"
+                                style={{
+                                  filter: hoveredDispositivo?.anchor === disp.anchor ? "brightness(1.3) drop-shadow(0 0 4px rgba(255,255,255,0.5))" : "none",
+                                }}
+                              />
+                              <text
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                className="fill-white font-medium pointer-events-none select-none"
+                                style={{ fontSize: 5 }}
+                              >
+                                {shortLabel}
+                              </text>
+                            </g>
                           </g>
-                        </g>
-                      );
-                    })}
-                    
-                    {/* Indicator for more dispositivos */}
-                    {hasExpandedDispositivos && expandedDispositivos.dispositivos.length > 12 && (
-                      <g transform={`translate(${node.x + 55}, ${node.y + 35})`}>
-                        <rect
-                          x={-15}
-                          y={-8}
-                          width={30}
-                          height={16}
-                          rx={4}
-                          fill="hsl(var(--muted))"
-                          stroke="hsl(var(--border))"
-                        />
-                        <text
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          className="fill-muted-foreground"
-                          style={{ fontSize: 8 }}
-                        >
-                          +{expandedDispositivos.dispositivos.length - 12}
-                        </text>
-                      </g>
-                    )}
+                        );
+                      });
+                    })()}
                   </g>
                 );
               })}

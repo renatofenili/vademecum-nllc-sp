@@ -194,7 +194,6 @@ const Backoffice = () => {
                     <TableRow>
                       <TableHead>Número</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Data</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="max-w-md">Ementa</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
@@ -205,9 +204,6 @@ const Backoffice = () => {
                       <TableRow key={norma.id}>
                         <TableCell className="font-medium">{norma.numero}</TableCell>
                         <TableCell>{normTypeLabels[norma.tipo]}</TableCell>
-                        <TableCell>
-                          {formatDateBR(norma.data_publicacao)}
-                        </TableCell>
                         <TableCell>
                           {norma.status && statusLabels[norma.status as NormStatus] && (
                             <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColors[norma.status as NormStatus]}`}>

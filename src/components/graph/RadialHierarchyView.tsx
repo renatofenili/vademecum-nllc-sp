@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText, Palette, X } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText, Palette, X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -125,6 +125,11 @@ export const RadialHierarchyView = ({
   const [hoveredArtigo, setHoveredArtigo] = useState<{ artigo: ArtigoGroup; x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
+  
+  // Link visibility toggles - hierarchy always visible by default
+  const [showHierarchyLinks, setShowHierarchyLinks] = useState(true);
+  const [showRegulamentaLinks, setShowRegulamentaLinks] = useState(false);
+  const [showRemeteLinks, setShowRemeteLinks] = useState(false);
   
   // Theme mode state
   const [themeModeEnabled, setThemeModeEnabled] = useState(false);
@@ -507,12 +512,60 @@ export const RadialHierarchyView = ({
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* Info bar */}
+      {/* Info bar - Row 1: Stats and Link toggles */}
       <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex flex-wrap items-center gap-4">
         <span>📊 Normas: {data.nodes.length}</span>
-        <span>🔗 Relações: {data.edges.length}</span>
         <span>🎯 Raiz: CF/1988</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
+        
+        <Separator orientation="vertical" className="h-4" />
+        
+        {/* Link visibility toggles */}
+        <div className="flex items-center gap-3">
+          <span className="font-medium">Ligações:</span>
+          
+          {/* Hierarchy - always visible indicator */}
+          <button
+            onClick={() => setShowHierarchyLinks(!showHierarchyLinks)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+              showHierarchyLinks 
+                ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" 
+                : "bg-muted text-muted-foreground opacity-50"
+            }`}
+          >
+            <div className="w-4 h-0.5 bg-blue-500 rounded" />
+            <span>Hierarquia</span>
+            {showHierarchyLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+          
+          {/* Regulamenta */}
+          <button
+            onClick={() => setShowRegulamentaLinks(!showRegulamentaLinks)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+              showRegulamentaLinks 
+                ? "bg-green-500/20 text-green-600 dark:text-green-400" 
+                : "bg-muted text-muted-foreground opacity-50"
+            }`}
+          >
+            <div className="w-4 h-0.5 bg-green-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 2px, currentColor 2px, currentColor 4px)" }} />
+            <span>Regulamenta</span>
+            {showRegulamentaLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+          
+          {/* Remete */}
+          <button
+            onClick={() => setShowRemeteLinks(!showRemeteLinks)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+              showRemeteLinks 
+                ? "bg-purple-500/20 text-purple-600 dark:text-purple-400" 
+                : "bg-muted text-muted-foreground opacity-50"
+            }`}
+          >
+            <div className="w-4 h-0.5 bg-purple-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 1px, currentColor 1px, currentColor 2px)" }} />
+            <span>Remete</span>
+            {showRemeteLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+        </div>
         
         <Separator orientation="vertical" className="h-4" />
         
@@ -760,9 +813,18 @@ export const RadialHierarchyView = ({
                 </text>
               ))}
 
-              {/* Connection links with types */}
+              {/* Connection links with types - filtered by visibility toggles */}
               {links.map((link, index) => {
                 const style = linkStyles[link.type];
+                
+                // Check if this link type should be visible
+                const isVisible = 
+                  (link.type === "hierarquia" && showHierarchyLinks) ||
+                  (link.type === "regulamenta" && showRegulamentaLinks) ||
+                  (link.type === "remete" && showRemeteLinks);
+                
+                if (!isVisible) return null;
+                
                 // Dim links if theme mode is active and neither endpoint is highlighted
                 const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromId);
                 const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toId);
@@ -935,43 +997,19 @@ export const RadialHierarchyView = ({
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="p-4 border-t border-border">
-        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-xs">
-          {/* Node types legend */}
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-muted-foreground">Nós:</span>
-            {Object.entries(ringLabels).map(([ring, label]) => (
-              <div key={ring} className="flex items-center gap-1.5">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: ringColors[Number(ring)] }}
-                />
-                <span className="text-muted-foreground">{label}</span>
-              </div>
-            ))}
-          </div>
-          
-          {/* Link types legend */}
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-muted-foreground">Ligações:</span>
-            {Object.entries(linkStyles).map(([type, style]) => (
-              <div key={type} className="flex items-center gap-1.5">
-                <svg width="24" height="12" className="overflow-visible">
-                  <line
-                    x1="0"
-                    y1="6"
-                    x2="24"
-                    y2="6"
-                    stroke={style.stroke}
-                    strokeWidth={style.strokeWidth}
-                    strokeDasharray={style.dashArray}
-                  />
-                </svg>
-                <span className="text-muted-foreground">{style.label}</span>
-              </div>
-            ))}
-          </div>
+      {/* Legend - only node types (links are controlled in the toolbar) */}
+      <div className="p-3 border-t border-border">
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs">
+          <span className="font-medium text-muted-foreground">Nós por hierarquia:</span>
+          {Object.entries(ringLabels).map(([ring, label]) => (
+            <div key={ring} className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: ringColors[Number(ring)] }}
+              />
+              <span className="text-muted-foreground">{label}</span>
+            </div>
+          ))}
         </div>
       </div>
 

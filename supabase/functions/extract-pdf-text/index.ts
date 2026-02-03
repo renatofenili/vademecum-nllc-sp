@@ -100,7 +100,7 @@ Sua tarefa é extrair e estruturar o texto do PDF em formato JSON com a seguinte
   },
   {
     "document_id": "${norma_id}",
-    "anchor": "art.1.p1",
+    "anchor": "art.1§1",
     "nivel": "paragrafo",
     "texto": "Texto do parágrafo..."
   },

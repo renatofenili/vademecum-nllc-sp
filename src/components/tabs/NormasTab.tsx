@@ -97,10 +97,11 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
       }
 
       return (
-        <div className="space-y-4">
+        <div className="space-y-4 text-justify">
           {dispositivos.map((dispositivo, index) => {
             const nivelStyles: Record<string, string> = {
-              artigo: "font-semibold text-foreground text-base",
+              preambulo: "text-foreground",
+              artigo: "text-foreground",
               paragrafo: "text-foreground ml-4",
               inciso: "text-foreground ml-8",
               alinea: "text-foreground ml-12",

@@ -1,16 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import Tree, { RawNodeDatum, CustomNodeElementProps } from "react-d3-tree";
 import { Loader2, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 import { ActsGraphData, ActNode, ActEdge } from "./types";
-import { cn } from "@/lib/utils";
 
 interface HierarchicalMapViewProps {
   data: ActsGraphData | null;
@@ -43,13 +36,14 @@ const tipoLabels: Record<string, string> = {
   instrucao_normativa: "IN",
 };
 
+// Using direct hex colors for SVG compatibility
 const tipoColors: Record<string, { bg: string; border: string; text: string }> = {
-  constituicao: { bg: "hsl(var(--chart-1))", border: "hsl(var(--chart-1))", text: "#fff" },
-  lei: { bg: "hsl(var(--chart-2))", border: "hsl(var(--chart-2))", text: "#fff" },
-  decreto: { bg: "hsl(var(--chart-3))", border: "hsl(var(--chart-3))", text: "#fff" },
-  resolucao: { bg: "hsl(var(--chart-4))", border: "hsl(var(--chart-4))", text: "#fff" },
-  portaria: { bg: "hsl(var(--chart-5))", border: "hsl(var(--chart-5))", text: "#fff" },
-  instrucao_normativa: { bg: "hsl(var(--muted))", border: "hsl(var(--border))", text: "hsl(var(--foreground))" },
+  constituicao: { bg: "#ef4444", border: "#dc2626", text: "#ffffff" },
+  lei: { bg: "#dc2626", border: "#b91c1c", text: "#ffffff" },
+  decreto: { bg: "#2563eb", border: "#1d4ed8", text: "#ffffff" },
+  resolucao: { bg: "#7c3aed", border: "#6d28d9", text: "#ffffff" },
+  portaria: { bg: "#059669", border: "#047857", text: "#ffffff" },
+  instrucao_normativa: { bg: "#6b7280", border: "#4b5563", text: "#ffffff" },
 };
 
 const getNodeColor = (tipo: string) => {
@@ -67,10 +61,25 @@ export const HierarchicalMapView = ({
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
-    if (containerRef.current) {
-      const { offsetWidth, offsetHeight } = containerRef.current;
-      setDimensions({ width: offsetWidth, height: offsetHeight });
-    }
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { offsetWidth, offsetHeight } = containerRef.current;
+        if (offsetWidth > 0 && offsetHeight > 0) {
+          setDimensions({ width: offsetWidth, height: offsetHeight });
+        }
+      }
+    };
+    
+    // Initial measurement after a brief delay to ensure DOM is ready
+    const timer = setTimeout(updateDimensions, 100);
+    
+    // Also update on resize
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateDimensions);
+    };
   }, []);
 
   // Build tree structure from graph data
@@ -164,7 +173,7 @@ export const HierarchicalMapView = ({
     });
   }, []);
 
-  // Custom node renderer
+  // Custom node renderer - simplified for better SVG compatibility
   const renderCustomNode = useCallback(
     ({ nodeDatum, toggleNode }: CustomNodeElementProps) => {
       const node = nodeDatum as TreeNode;
@@ -174,7 +183,8 @@ export const HierarchicalMapView = ({
       const isRoot = nodeData?.type === "root";
       const isExpanded = nodeData?.id ? expandedNodes.has(nodeData.id) : false;
       
-      const nodeSize = isRoot ? 80 : 60;
+      // Larger nodes for better readability
+      const nodeSize = isRoot ? 120 : 90;
       const fontSize = isRoot ? 12 : 10;
 
       const handleClick = () => {
@@ -182,99 +192,97 @@ export const HierarchicalMapView = ({
         handleNodeClick(nodeDatum);
       };
 
+      // Better text splitting for node labels
+      const displayName = node.name || "Sem nome";
+      const maxChars = isRoot ? 14 : 11;
+      const lines: string[] = [];
+      
+      if (displayName.length <= maxChars) {
+        lines.push(displayName);
+      } else {
+        // Split at word boundaries when possible
+        const words = displayName.split(' ');
+        let currentLine = '';
+        
+        for (const word of words) {
+          if ((currentLine + ' ' + word).trim().length <= maxChars) {
+            currentLine = (currentLine + ' ' + word).trim();
+          } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word.length > maxChars ? word.slice(0, maxChars - 2) + '...' : word;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        
+        // Limit to 3 lines max
+        if (lines.length > 3) {
+          lines.splice(2);
+          lines[1] = lines[1].slice(0, -3) + '...';
+        }
+      }
+
       return (
-        <HoverCard openDelay={200} closeDelay={100}>
-          <HoverCardTrigger asChild>
-            <g onClick={handleClick} style={{ cursor: "pointer" }}>
-              {/* Node circle */}
+        <g onClick={handleClick} style={{ cursor: "pointer" }}>
+          {/* Node circle - simple solid fill */}
+          <circle
+            r={nodeSize / 2}
+            fill={colors.bg}
+            stroke={isExpanded ? "#dc2626" : colors.border}
+            strokeWidth={isExpanded ? 4 : 2}
+            style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))" }}
+          />
+          {/* Node label - multiple lines */}
+          {lines.map((line, idx) => (
+            <text
+              key={idx}
+              fill={colors.text}
+              fontSize={fontSize}
+              fontWeight={isRoot ? 700 : 500}
+              textAnchor="middle"
+              y={(idx - (lines.length - 1) / 2) * (fontSize + 3)}
+              dominantBaseline="middle"
+              style={{ pointerEvents: "none", userSelect: "none" }}
+            >
+              {line}
+            </text>
+          ))}
+          {/* Badge for children count */}
+          {node.children && node.children.length > 0 && (
+            <>
               <circle
-                r={nodeSize / 2}
-                fill={colors.bg}
-                stroke={isExpanded ? "hsl(var(--primary))" : colors.border}
-                strokeWidth={isExpanded ? 4 : 2}
-                style={{
-                  filter: isRoot ? "drop-shadow(0 4px 12px rgba(0,0,0,0.15))" : "drop-shadow(0 2px 6px rgba(0,0,0,0.1))",
-                }}
+                r={10}
+                cx={nodeSize / 2 - 8}
+                cy={-nodeSize / 2 + 8}
+                fill="#ffffff"
+                stroke="#e5e7eb"
+                strokeWidth={1}
               />
-              {/* Node label */}
               <text
-                fill={colors.text}
-                fontSize={fontSize}
-                fontWeight={isRoot ? 700 : 500}
+                x={nodeSize / 2 - 8}
+                y={-nodeSize / 2 + 8}
+                fontSize={9}
+                fontWeight={600}
+                fill="#374151"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                style={{ pointerEvents: "none", userSelect: "none" }}
+                style={{ pointerEvents: "none" }}
               >
-                {node.name.length > 15 ? `${node.name.slice(0, 12)}...` : node.name}
+                {node.children.length}
               </text>
-              {/* Expansion indicator */}
-              {node.children && node.children.length > 0 && (
-                <circle
-                  r={8}
-                  cx={nodeSize / 2 - 5}
-                  cy={-nodeSize / 2 + 5}
-                  fill="hsl(var(--background))"
-                  stroke="hsl(var(--border))"
-                  strokeWidth={1}
-                />
-              )}
-              {node.children && node.children.length > 0 && (
-                <text
-                  x={nodeSize / 2 - 5}
-                  y={-nodeSize / 2 + 5}
-                  fontSize={8}
-                  fill="hsl(var(--foreground))"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{ pointerEvents: "none" }}
-                >
-                  {node.children.length}
-                </text>
-              )}
-            </g>
-          </HoverCardTrigger>
-          <HoverCardContent 
-            side="right" 
-            className="w-72 z-50"
-            sideOffset={10}
-          >
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">{node.name}</h4>
-              {nodeData?.act?.ementa && (
-                <p className="text-xs text-muted-foreground line-clamp-3">
-                  {nodeData.act.ementa}
-                </p>
-              )}
-              {nodeData?.act?.orgao_emissor && (
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium">Órgão:</span> {nodeData.act.orgao_emissor}
-                </p>
-              )}
-              {nodeData?.act?.data_publicacao && (
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium">Data:</span>{" "}
-                  {new Date(nodeData.act.data_publicacao).toLocaleDateString("pt-BR")}
-                </p>
-              )}
-              {nodeData?.references && nodeData.references.length > 0 && showReferences && (
-                <div className="pt-2 border-t border-border">
-                  <p className="text-xs font-medium mb-1">Remissões ({nodeData.references.length})</p>
-                  {nodeData.references.slice(0, 3).map((ref, i) => (
-                    <p key={i} className="text-xs text-muted-foreground">
-                      → {ref.relation_type}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          </HoverCardContent>
-        </HoverCard>
+            </>
+          )}
+          {/* Hover tooltip using title element */}
+          <title>
+            {nodeData?.act?.ementa || node.name}
+            {nodeData?.act?.orgao_emissor ? `\n${nodeData.act.orgao_emissor}` : ''}
+          </title>
+        </g>
       );
     },
-    [expandedNodes, handleNodeClick, showReferences]
+    [expandedNodes, handleNodeClick]
   );
 
-  // Custom path class - simplified to avoid type issues
+  // Custom path class
   const pathClassFunc = useCallback(() => {
     return "link-hierarchy";
   }, []);
@@ -338,49 +346,68 @@ export const HierarchicalMapView = ({
       {/* Tree container */}
       <div 
         ref={containerRef} 
-        className="flex-1 min-h-[500px] relative"
-        style={{ background: "hsl(var(--background))" }}
+        className="flex-1 relative"
+        style={{ 
+          background: "hsl(var(--background))",
+          minHeight: "500px",
+          height: "500px",
+          width: "100%"
+        }}
       >
+        {/* SVG filter for shadow - defined once */}
+        <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.2" />
+            </filter>
+          </defs>
+        </svg>
         <style>{`
           .link-hierarchy {
-            stroke: hsl(var(--foreground));
-            stroke-width: 3;
-            fill: none;
-          }
-          .link-structure {
-            stroke: hsl(var(--muted-foreground));
+            stroke: #374151;
             stroke-width: 2;
             fill: none;
           }
-          .link-reference {
-            stroke: hsl(var(--muted-foreground));
+          .link-structure {
+            stroke: #9ca3af;
             stroke-width: 1.5;
-            stroke-dasharray: 5,5;
+            fill: none;
+          }
+          .link-reference {
+            stroke: #9ca3af;
+            stroke-width: 1;
+            stroke-dasharray: 4,4;
             fill: none;
           }
           .rd3t-tree-container {
-            width: 100%;
-            height: 100%;
+            width: 100% !important;
+            height: 100% !important;
           }
           .rd3t-link {
             fill: none;
+          }
+          .rd3t-svg {
+            width: 100% !important;
+            height: 100% !important;
           }
         `}</style>
         <Tree
           data={treeData}
           orientation="horizontal"
-          pathFunc="step"
-          translate={{ x: 100, y: dimensions.height / 2 }}
-          nodeSize={{ x: 200, y: 100 }}
+          pathFunc="diagonal"
+          dimensions={{ width: dimensions.width, height: 500 }}
+          translate={{ x: 120, y: 250 }}
+          nodeSize={{ x: 200, y: 70 }}
           separation={{ siblings: 1.2, nonSiblings: 1.5 }}
           renderCustomNodeElement={renderCustomNode}
           pathClassFunc={pathClassFunc}
-          zoom={0.8}
+          zoom={0.9}
           scaleExtent={{ min: 0.3, max: 2 }}
           enableLegacyTransitions
           transitionDuration={300}
           collapsible={true}
-          initialDepth={1}
+          initialDepth={2}
+          depthFactor={180}
         />
       </div>
 

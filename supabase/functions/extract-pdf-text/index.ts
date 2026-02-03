@@ -159,19 +159,61 @@ Regras:
     // Parse the JSON from AI response
     let estrutura: ExtractedArticle[];
     try {
-      // Remove markdown code blocks if present
+      // Remove markdown code blocks if present (handles multiple levels)
       let jsonContent = aiContent.trim();
-      if (jsonContent.startsWith("```json")) {
-        jsonContent = jsonContent.slice(7);
-      } else if (jsonContent.startsWith("```")) {
-        jsonContent = jsonContent.slice(3);
-      }
-      if (jsonContent.endsWith("```")) {
-        jsonContent = jsonContent.slice(0, -3);
-      }
-      jsonContent = jsonContent.trim();
       
-      estrutura = JSON.parse(jsonContent);
+      // Remove outer markdown code blocks
+      const codeBlockMatch = jsonContent.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+      if (codeBlockMatch) {
+        jsonContent = codeBlockMatch[1].trim();
+      }
+      
+      // Parse the JSON
+      let parsed = JSON.parse(jsonContent);
+      
+      // Handle case where AI wrapped the array in a code block within the text field
+      if (Array.isArray(parsed) && parsed.length === 1 && parsed[0].anchor === "texto" && typeof parsed[0].texto === "string") {
+        const innerText = parsed[0].texto.trim();
+        // Check if the texto field contains JSON
+        const innerCodeBlockMatch = innerText.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+        if (innerCodeBlockMatch) {
+          try {
+            const innerParsed = JSON.parse(innerCodeBlockMatch[1].trim());
+            if (Array.isArray(innerParsed) && innerParsed.length > 1) {
+              parsed = innerParsed;
+              console.log("Extracted nested JSON from texto field");
+            }
+          } catch {
+            // Keep original parsed if inner parsing fails
+          }
+        } else if (innerText.startsWith("[") && innerText.endsWith("]")) {
+          try {
+            const innerParsed = JSON.parse(innerText);
+            if (Array.isArray(innerParsed) && innerParsed.length > 1) {
+              parsed = innerParsed;
+              console.log("Extracted JSON array from texto field");
+            }
+          } catch {
+            // Keep original parsed if inner parsing fails
+          }
+        }
+      }
+      
+      estrutura = parsed;
+      
+      // Validate structure - ensure all items have required fields
+      if (!Array.isArray(estrutura)) {
+        throw new Error("Parsed content is not an array");
+      }
+      
+      // Ensure document_id is set on all items
+      estrutura = estrutura.map((item: any) => ({
+        document_id: item.document_id || norma_id,
+        anchor: item.anchor || "texto",
+        nivel: item.nivel || "artigo",
+        texto: item.texto || ""
+      }));
+      
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
       // Fallback: save raw text

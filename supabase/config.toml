@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.find-applicable]
 verify_jwt = false
+
+[functions.graph-acts]
+verify_jwt = false
+
+[functions.graph-dispositivos]
+verify_jwt = false

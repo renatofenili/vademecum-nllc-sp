@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 interface ExtractedArticle {
+  document_id: string;
   anchor: string;
   nivel: "artigo" | "inciso" | "paragrafo" | "alinea";
   texto: string;
@@ -86,21 +87,25 @@ Sua tarefa é extrair e estruturar o texto do PDF em formato JSON com a seguinte
 
 [
   {
+    "document_id": "${norma_id}",
     "anchor": "art.1",
     "nivel": "artigo",
     "texto": "Texto completo do artigo..."
   },
   {
+    "document_id": "${norma_id}",
     "anchor": "art.1.I",
     "nivel": "inciso",
     "texto": "Texto do inciso..."
   },
   {
+    "document_id": "${norma_id}",
     "anchor": "art.1.p1",
     "nivel": "paragrafo",
     "texto": "Texto do parágrafo..."
   },
   {
+    "document_id": "${norma_id}",
     "anchor": "art.1.a",
     "nivel": "alinea",
     "texto": "Texto da alínea..."
@@ -108,13 +113,14 @@ Sua tarefa é extrair e estruturar o texto do PDF em formato JSON com a seguinte
 ]
 
 Regras:
-1. Identifique artigos (Art. 1º, Art. 2º, etc.)
-2. Identifique incisos (I -, II -, III -, etc.) e relacione ao artigo pai
-3. Identifique parágrafos (§ 1º, § 2º, Parágrafo único) e relacione ao artigo pai
-4. Identifique alíneas (a), b), c)) e relacione ao artigo/inciso pai
-5. Mantenha o texto original, apenas formatando para legibilidade
-6. Retorne APENAS o JSON válido, sem explicações adicionais
-7. Se não encontrar estrutura de artigos, retorne o texto completo com anchor "texto" e nivel "artigo"`
+1. Inclua "document_id": "${norma_id}" em TODOS os itens
+2. Identifique artigos (Art. 1º, Art. 2º, etc.)
+3. Identifique incisos (I -, II -, III -, etc.) e relacione ao artigo pai
+4. Identifique parágrafos (§ 1º, § 2º, Parágrafo único) e relacione ao artigo pai
+5. Identifique alíneas (a), b), c)) e relacione ao artigo/inciso pai
+6. Mantenha o texto original, apenas formatando para legibilidade
+7. Retorne APENAS o JSON válido, sem explicações adicionais
+8. Se não encontrar estrutura de artigos, retorne o texto completo com anchor "texto" e nivel "artigo"`
           },
           {
             role: "user",
@@ -169,6 +175,7 @@ Regras:
       console.error("Failed to parse AI response as JSON:", parseError);
       // Fallback: save raw text
       estrutura = [{
+        document_id: norma_id,
         anchor: "texto",
         nivel: "artigo",
         texto: aiContent.substring(0, 50000)

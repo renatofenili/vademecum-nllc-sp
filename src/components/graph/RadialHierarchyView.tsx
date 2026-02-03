@@ -46,14 +46,21 @@ const ringColors: Record<number, string> = {
 };
 
 const tipoLabels: Record<string, string> = {
-  constituicao: "CF",
-  lei_complementar: "LC",
+  constituicao: "Constituição",
+  lei_complementar: "Lei Complementar",
   lei: "Lei",
   decreto: "Decreto",
   resolucao: "Resolução",
   portaria: "Portaria",
-  instrucao_normativa: "IN",
+  instrucao_normativa: "Instrução Normativa",
   outro: "Outro",
+};
+
+const statusLabels: Record<string, { label: string; color: string }> = {
+  vigente: { label: "Vigente", color: "text-green-600" },
+  revogado: { label: "Revogado", color: "text-red-600" },
+  alterado: { label: "Alterado", color: "text-amber-600" },
+  publicada: { label: "Vigente", color: "text-green-600" },
 };
 
 export const RadialHierarchyView = ({
@@ -261,22 +268,48 @@ export const RadialHierarchyView = ({
         {/* Tooltip */}
         {hoveredNode && (
           <div
-            className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-xs pointer-events-none"
+            className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-sm pointer-events-none"
             style={{
-              left: Math.min(hoveredNode.x * zoom + pan.x + 20, dimensions.width - 200),
-              top: Math.min(hoveredNode.y * zoom + pan.y - 10, dimensions.height - 100),
+              left: Math.min(hoveredNode.x * zoom + pan.x + 20, dimensions.width - 250),
+              top: Math.min(hoveredNode.y * zoom + pan.y - 10, dimensions.height - 150),
             }}
           >
-            <p className="font-semibold text-sm">{hoveredNode.label}</p>
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
+            {/* Nome */}
+            <p className="font-semibold text-sm text-foreground">
+              {hoveredNode.act.tipo === "constituicao" 
+                ? "Constituição Federal de 1988" 
+                : `${tipoLabels[hoveredNode.act.tipo] || hoveredNode.act.tipo} nº ${hoveredNode.act.numero}`}
+            </p>
+            
+            {/* ID */}
+            <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+              ID: {hoveredNode.id}
+            </p>
+            
+            {/* Tipo e Status */}
+            <div className="flex items-center gap-3 mt-2 text-xs">
+              <span className="bg-muted px-2 py-0.5 rounded">
+                {tipoLabels[hoveredNode.act.tipo] || hoveredNode.act.tipo}
+              </span>
+              <span className={statusLabels[hoveredNode.act.status || "vigente"]?.color || "text-muted-foreground"}>
+                ● {statusLabels[hoveredNode.act.status || "vigente"]?.label || hoveredNode.act.status || "Vigente"}
+              </span>
+            </div>
+            
+            {/* Ementa */}
+            <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
               {hoveredNode.act.ementa}
             </p>
+            
+            {/* Órgão emissor */}
             {hoveredNode.act.orgao_emissor && (
               <p className="text-xs text-muted-foreground mt-1">
                 📍 {hoveredNode.act.orgao_emissor}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
+            
+            {/* Data */}
+            <p className="text-xs text-muted-foreground mt-1">
               📅 {new Date(hoveredNode.act.data_publicacao).toLocaleDateString("pt-BR")}
             </p>
           </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { TreeDeciduous } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { HierarchicalMapView } from "@/components/graph/HierarchicalMapView";
+import { RadialHierarchyView } from "@/components/graph/RadialHierarchyView";
 import { ActsGraphData } from "@/components/graph/types";
 
 const MapasTab = () => {
@@ -42,15 +42,15 @@ const MapasTab = () => {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Hierarquia normativa a partir da Constituição Federal de 1988
+            Hierarquia normativa em anéis concêntricos — CF/88 ao centro
           </p>
         </div>
       </div>
 
       {/* Map container */}
-      <Card className="min-h-[600px] flex flex-col overflow-hidden">
+      <Card className="min-h-[700px] flex flex-col overflow-hidden">
         <CardContent className="flex-1 flex flex-col p-0">
-          <HierarchicalMapView
+          <RadialHierarchyView
             data={actsData}
             isLoading={isLoading}
           />
@@ -60,7 +60,7 @@ const MapasTab = () => {
       {/* Instructions */}
       <div className="flex justify-center">
         <div className="inline-flex items-center gap-6 text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
-          <span>🖱️ Clique para expandir • Hover para detalhes • Arraste para navegar</span>
+          <span>🖱️ Arraste para navegar • Scroll para zoom • Hover para detalhes</span>
         </div>
       </div>
     </div>

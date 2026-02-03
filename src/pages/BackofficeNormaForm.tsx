@@ -154,6 +154,58 @@ const BackofficeNormaForm = () => {
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const computeExtractionStats = (textoExtraido: unknown) => {
+    if (!textoExtraido || typeof textoExtraido !== 'string') return null;
+    try {
+      const estrutura = JSON.parse(textoExtraido);
+      if (!Array.isArray(estrutura)) return null;
+
+      const normalize = (nivel: unknown) => {
+        const s = String(nivel ?? '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '');
+        if (s === 'artigo') return 'artigo';
+        if (s === 'inciso') return 'inciso';
+        if (s === 'paragrafo') return 'paragrafo';
+        if (s === 'alinea') return 'alinea';
+        return s;
+      };
+
+      const stats = {
+        artigos: 0,
+        incisos: 0,
+        paragrafos: 0,
+        alineas: 0,
+      };
+
+      for (const item of estrutura as any[]) {
+        const n = normalize(item?.nivel);
+        if (n === 'artigo') stats.artigos += 1;
+        else if (n === 'inciso') stats.incisos += 1;
+        else if (n === 'paragrafo') stats.paragrafos += 1;
+        else if (n === 'alinea') stats.alineas += 1;
+      }
+
+      return stats;
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshExtractionMeta = async (normaId: string) => {
+    const { data, error } = await supabase
+      .from('normas')
+      .select('texto_extraido_status, texto_extraido')
+      .eq('id', normaId)
+      .single();
+
+    if (error) return;
+
+    setExtractionStatus((data as any)?.texto_extraido_status ?? null);
+    setExtractionStats(computeExtractionStats((data as any)?.texto_extraido));
+  };
   
   const [formData, setFormData] = useState({
     numero: '',
@@ -273,26 +325,7 @@ const BackofficeNormaForm = () => {
 
       // Load extraction status and stats
       setExtractionStatus((normaData as any).texto_extraido_status || null);
-
-      // Calculate extraction stats from texto_extraido
-      if ((normaData as any).texto_extraido) {
-        try {
-          const estrutura = JSON.parse((normaData as any).texto_extraido);
-          if (Array.isArray(estrutura)) {
-            const stats = {
-              artigos: estrutura.filter((item: any) => item.nivel === 'artigo').length,
-              incisos: estrutura.filter((item: any) => item.nivel === 'inciso').length,
-              paragrafos: estrutura.filter((item: any) => item.nivel === 'paragrafo').length,
-              alineas: estrutura.filter((item: any) => item.nivel === 'alinea').length,
-            };
-            setExtractionStats(stats);
-          }
-        } catch {
-          setExtractionStats(null);
-        }
-      } else {
-        setExtractionStats(null);
-      }
+      setExtractionStats(computeExtractionStats((normaData as any).texto_extraido));
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -457,6 +490,7 @@ const BackofficeNormaForm = () => {
   const triggerTextExtraction = async (storagePath: string, normaId: string) => {
     setIsExtractingText(true);
     setExtractionStatus('pendente');
+    setExtractionStats(null);
     
     try {
       console.log('Triggering text extraction for:', normaId, storagePath);
@@ -477,7 +511,8 @@ const BackofficeNormaForm = () => {
           variant: 'destructive',
         });
       } else {
-        setExtractionStatus('extraido');
+        // Refresh status+stats from DB (without overwriting unsaved form fields)
+        await refreshExtractionMeta(normaId);
         toast({
           title: 'Texto extraído!',
           description: 'O texto do PDF foi extraído e estruturado com sucesso.',

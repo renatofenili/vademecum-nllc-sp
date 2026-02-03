@@ -1,11 +1,16 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, X, GitBranch, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { ActsGraphData, ActNode } from "./types";
 
 interface RadialHierarchyViewProps {
   data: ActsGraphData | null;
   isLoading: boolean;
+  onDrillDown?: (actId: string) => void;
 }
 
 interface RingNode {
@@ -85,6 +90,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 export const RadialHierarchyView = ({
   data,
   isLoading,
+  onDrillDown,
 }: RadialHierarchyViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -93,6 +99,7 @@ export const RadialHierarchyView = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
+  const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.2, 3));
@@ -133,7 +140,7 @@ export const RadialHierarchyView = ({
   }, []);
 
   // Build radial nodes and links
-  const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount } = useMemo(() => {
+  const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
     if (!data || !data.nodes.length) {
       return { 
         nodes: [], 
@@ -142,6 +149,8 @@ export const RadialHierarchyView = ({
         center: { x: 0, y: 0 },
         regulatesCount: new Map<string, number>(),
         regulatedByCount: new Map<string, number>(),
+        regulatesMap: new Map<string, string[]>(),
+        regulatedByMap: new Map<string, string[]>(),
       };
     }
 
@@ -268,15 +277,28 @@ export const RadialHierarchyView = ({
       });
     }
 
-    // Build regulation counts per node
+    // Build regulation counts and maps per node
     const regulatesCount = new Map<string, number>(); // How many this node regulates
     const regulatedByCount = new Map<string, number>(); // How many regulate this node
+    const regulatesMap = new Map<string, string[]>(); // List of node IDs this node regulates
+    const regulatedByMap = new Map<string, string[]>(); // List of node IDs that regulate this node
     
     graphLinks.forEach((link) => {
       if (link.type === "regulamenta" || link.type === "hierarquia") {
         // fromId regulates toId
         regulatesCount.set(link.fromId, (regulatesCount.get(link.fromId) || 0) + 1);
         regulatedByCount.set(link.toId, (regulatedByCount.get(link.toId) || 0) + 1);
+        
+        // Build lists
+        const existingRegulates = regulatesMap.get(link.fromId) || [];
+        if (!existingRegulates.includes(link.toId)) {
+          regulatesMap.set(link.fromId, [...existingRegulates, link.toId]);
+        }
+        
+        const existingRegulatedBy = regulatedByMap.get(link.toId) || [];
+        if (!existingRegulatedBy.includes(link.fromId)) {
+          regulatedByMap.set(link.toId, [...existingRegulatedBy, link.fromId]);
+        }
       }
     });
 
@@ -287,6 +309,8 @@ export const RadialHierarchyView = ({
       center: { x: cx, y: cy },
       regulatesCount,
       regulatedByCount,
+      regulatesMap,
+      regulatedByMap,
     };
   }, [data, dimensions]);
 
@@ -499,14 +523,18 @@ export const RadialHierarchyView = ({
                     transform={`translate(${node.x}, ${node.y})`}
                     onMouseEnter={() => setHoveredNode(node)}
                     onMouseLeave={() => setHoveredNode(null)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedNode(node);
+                    }}
                     className="cursor-pointer"
                   >
                     {/* Node circle */}
                     <circle
                       r={nodeRadius}
                       fill={color}
-                      stroke="white"
-                      strokeWidth={2}
+                      stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : "white"}
+                      strokeWidth={selectedNode?.id === node.id ? 4 : 2}
                       className="transition-all duration-200 hover:opacity-80"
                       style={{
                         filter: hoveredNode?.id === node.id ? "brightness(1.2)" : "none",
@@ -571,6 +599,132 @@ export const RadialHierarchyView = ({
           </div>
         </div>
       </div>
+
+      {/* Detail Panel Sheet */}
+      <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
+        <SheetContent side="right" className="w-[400px] sm:w-[450px] p-0 flex flex-col">
+          {selectedNode && (
+            <>
+              <SheetHeader className="p-4 pb-3 border-b">
+                <SheetTitle className="text-base font-semibold leading-tight">
+                  {selectedNode.act.tipo === "constituicao" 
+                    ? "Constituição Federal de 1988" 
+                    : `${tipoLabels[selectedNode.act.tipo] || selectedNode.act.tipo} nº ${selectedNode.act.numero}`}
+                </SheetTitle>
+              </SheetHeader>
+              
+              <ScrollArea className="flex-1">
+                <div className="p-4 space-y-4">
+                  {/* Tipo e Status */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary">
+                      {tipoLabels[selectedNode.act.tipo] || selectedNode.act.tipo}
+                    </Badge>
+                    <Badge 
+                      variant="outline"
+                      className={statusLabels[selectedNode.act.status || "vigente"]?.color || "text-muted-foreground"}
+                    >
+                      {statusLabels[selectedNode.act.status || "vigente"]?.label || selectedNode.act.status || "Vigente"}
+                    </Badge>
+                  </div>
+                  
+                  {/* Resumo / Ementa */}
+                  <div>
+                    <h4 className="text-sm font-medium text-foreground mb-1">Resumo</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {selectedNode.act.ementa}
+                    </p>
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Normas que regulamenta */}
+                  <div>
+                    <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                      <ArrowUpRight className="h-4 w-4 text-green-600" />
+                      Regulamenta ({regulatesCount.get(selectedNode.id) || 0})
+                    </h4>
+                    {(regulatesMap.get(selectedNode.id) || []).length > 0 ? (
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {(regulatesMap.get(selectedNode.id) || []).map((nodeId) => {
+                          const relatedNode = nodes.find((n) => n.id === nodeId);
+                          if (!relatedNode) return null;
+                          return (
+                            <button
+                              key={nodeId}
+                              onClick={() => setSelectedNode(relatedNode)}
+                              className="w-full text-left p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-sm"
+                            >
+                              <span className="font-medium">
+                                {tipoLabels[relatedNode.act.tipo] || relatedNode.act.tipo} {relatedNode.act.numero}
+                              </span>
+                              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                {relatedNode.act.ementa}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nenhuma norma regulamentada</p>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Normas que o regulamentam */}
+                  <div>
+                    <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                      <ArrowDownLeft className="h-4 w-4 text-blue-600" />
+                      Regulamentado por ({regulatedByCount.get(selectedNode.id) || 0})
+                    </h4>
+                    {(regulatedByMap.get(selectedNode.id) || []).length > 0 ? (
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {(regulatedByMap.get(selectedNode.id) || []).map((nodeId) => {
+                          const relatedNode = nodes.find((n) => n.id === nodeId);
+                          if (!relatedNode) return null;
+                          return (
+                            <button
+                              key={nodeId}
+                              onClick={() => setSelectedNode(relatedNode)}
+                              className="w-full text-left p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-sm"
+                            >
+                              <span className="font-medium">
+                                {tipoLabels[relatedNode.act.tipo] || relatedNode.act.tipo} {relatedNode.act.numero}
+                              </span>
+                              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                {relatedNode.act.ementa}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nenhuma norma regulamentadora</p>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Botão Expandir Dispositivos */}
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      if (onDrillDown && selectedNode) {
+                        onDrillDown(selectedNode.id);
+                      }
+                    }}
+                  >
+                    <GitBranch className="h-4 w-4" />
+                    Expandir dispositivos
+                  </Button>
+                </div>
+              </ScrollArea>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

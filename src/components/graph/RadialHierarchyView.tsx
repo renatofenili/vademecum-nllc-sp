@@ -281,11 +281,6 @@ export const RadialHierarchyView = ({
                 : `${tipoLabels[hoveredNode.act.tipo] || hoveredNode.act.tipo} nº ${hoveredNode.act.numero}`}
             </p>
             
-            {/* ID */}
-            <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
-              ID: {hoveredNode.id}
-            </p>
-            
             {/* Tipo e Status */}
             <div className="flex items-center gap-3 mt-2 text-xs">
               <span className="bg-muted px-2 py-0.5 rounded">

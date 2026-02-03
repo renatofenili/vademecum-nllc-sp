@@ -152,6 +152,7 @@ const BackofficeNormaForm = () => {
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isExtractingText, setIsExtractingText] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
+  const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
@@ -270,8 +271,28 @@ const BackofficeNormaForm = () => {
         pdf_upload_em: (normaData as any).pdf_upload_em || null,
       });
 
-      // Load extraction status
+      // Load extraction status and stats
       setExtractionStatus((normaData as any).texto_extraido_status || null);
+
+      // Calculate extraction stats from texto_extraido
+      if ((normaData as any).texto_extraido) {
+        try {
+          const estrutura = JSON.parse((normaData as any).texto_extraido);
+          if (Array.isArray(estrutura)) {
+            const stats = {
+              artigos: estrutura.filter((item: any) => item.nivel === 'artigo').length,
+              incisos: estrutura.filter((item: any) => item.nivel === 'inciso').length,
+              paragrafos: estrutura.filter((item: any) => item.nivel === 'paragrafo').length,
+              alineas: estrutura.filter((item: any) => item.nivel === 'alinea').length,
+            };
+            setExtractionStats(stats);
+          }
+        } catch {
+          setExtractionStats(null);
+        }
+      } else {
+        setExtractionStats(null);
+      }
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -1058,9 +1079,14 @@ const BackofficeNormaForm = () => {
                             <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                             <div className="flex-1">
                               <p className="text-sm font-medium text-primary">Texto extraído</p>
-                              <p className="text-xs text-muted-foreground">
-                                O conteúdo foi estruturado em artigos, incisos e parágrafos
-                              </p>
+                              {extractionStats && (
+                                <p className="text-xs text-muted-foreground">
+                                  {extractionStats.artigos} artigo{extractionStats.artigos !== 1 ? 's' : ''}
+                                  {extractionStats.paragrafos > 0 && `, ${extractionStats.paragrafos} parágrafo${extractionStats.paragrafos !== 1 ? 's' : ''}`}
+                                  {extractionStats.incisos > 0 && `, ${extractionStats.incisos} inciso${extractionStats.incisos !== 1 ? 's' : ''}`}
+                                  {extractionStats.alineas > 0 && `, ${extractionStats.alineas} alínea${extractionStats.alineas !== 1 ? 's' : ''}`}
+                                </p>
+                              )}
                             </div>
                             <Button
                               type="button"

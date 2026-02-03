@@ -34,6 +34,9 @@ export type Database = {
           pdf_tamanho: number | null
           pdf_upload_em: string | null
           pdf_url: string | null
+          remissoes_extraidas: Json | null
+          remissoes_extraidas_em: string | null
+          remissoes_status: string | null
           status: string | null
           tema: Json | null
           texto_extraido: string | null
@@ -62,6 +65,9 @@ export type Database = {
           pdf_tamanho?: number | null
           pdf_upload_em?: string | null
           pdf_url?: string | null
+          remissoes_extraidas?: Json | null
+          remissoes_extraidas_em?: string | null
+          remissoes_status?: string | null
           status?: string | null
           tema?: Json | null
           texto_extraido?: string | null
@@ -90,6 +96,9 @@ export type Database = {
           pdf_tamanho?: number | null
           pdf_upload_em?: string | null
           pdf_url?: string | null
+          remissoes_extraidas?: Json | null
+          remissoes_extraidas_em?: string | null
+          remissoes_status?: string | null
           status?: string | null
           tema?: Json | null
           texto_extraido?: string | null

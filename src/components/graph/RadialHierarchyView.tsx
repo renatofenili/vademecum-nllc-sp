@@ -133,9 +133,16 @@ export const RadialHierarchyView = ({
   }, []);
 
   // Build radial nodes and links
-  const { nodes, links, ringRadii, center } = useMemo(() => {
+  const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount } = useMemo(() => {
     if (!data || !data.nodes.length) {
-      return { nodes: [], links: [], ringRadii: [], center: { x: 0, y: 0 } };
+      return { 
+        nodes: [], 
+        links: [], 
+        ringRadii: [], 
+        center: { x: 0, y: 0 },
+        regulatesCount: new Map<string, number>(),
+        regulatedByCount: new Map<string, number>(),
+      };
     }
 
     const cx = dimensions.width / 2;
@@ -261,7 +268,26 @@ export const RadialHierarchyView = ({
       });
     }
 
-    return { nodes: result, links: graphLinks, ringRadii: radii, center: { x: cx, y: cy } };
+    // Build regulation counts per node
+    const regulatesCount = new Map<string, number>(); // How many this node regulates
+    const regulatedByCount = new Map<string, number>(); // How many regulate this node
+    
+    graphLinks.forEach((link) => {
+      if (link.type === "regulamenta" || link.type === "hierarquia") {
+        // fromId regulates toId
+        regulatesCount.set(link.fromId, (regulatesCount.get(link.fromId) || 0) + 1);
+        regulatedByCount.set(link.toId, (regulatedByCount.get(link.toId) || 0) + 1);
+      }
+    });
+
+    return { 
+      nodes: result, 
+      links: graphLinks, 
+      ringRadii: radii, 
+      center: { x: cx, y: cy },
+      regulatesCount,
+      regulatedByCount,
+    };
   }, [data, dimensions]);
 
   // Mouse handlers for panning
@@ -356,7 +382,7 @@ export const RadialHierarchyView = ({
             className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-sm pointer-events-none"
             style={{
               left: Math.min(hoveredNode.x * zoom + pan.x + 20, dimensions.width - 250),
-              top: Math.min(hoveredNode.y * zoom + pan.y - 10, dimensions.height - 150),
+              top: Math.min(hoveredNode.y * zoom + pan.y - 10, dimensions.height - 180),
             }}
           >
             {/* Nome */}
@@ -376,21 +402,25 @@ export const RadialHierarchyView = ({
               </span>
             </div>
             
+            {/* Regulation counts */}
+            <div className="flex items-center gap-4 mt-3 text-xs bg-muted/50 rounded px-2 py-1.5">
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Regulamenta:</span>
+                <span className="font-semibold text-foreground">
+                  {regulatesCount.get(hoveredNode.id) || 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Regulamentado por:</span>
+                <span className="font-semibold text-foreground">
+                  {regulatedByCount.get(hoveredNode.id) || 0}
+                </span>
+              </div>
+            </div>
+            
             {/* Ementa */}
-            <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
+            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
               {hoveredNode.act.ementa}
-            </p>
-            
-            {/* Órgão emissor */}
-            {hoveredNode.act.orgao_emissor && (
-              <p className="text-xs text-muted-foreground mt-1">
-                📍 {hoveredNode.act.orgao_emissor}
-              </p>
-            )}
-            
-            {/* Data */}
-            <p className="text-xs text-muted-foreground mt-1">
-              📅 {new Date(hoveredNode.act.data_publicacao).toLocaleDateString("pt-BR")}
             </p>
           </div>
         )}

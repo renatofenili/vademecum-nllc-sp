@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,9 +58,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Convert PDF to base64 for AI processing
+    // Convert PDF to base64 for AI processing (using Deno std library to avoid stack overflow)
     const arrayBuffer = await pdfData.arrayBuffer();
-    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64Pdf = base64Encode(new Uint8Array(arrayBuffer));
 
     console.log(`PDF downloaded, size: ${arrayBuffer.byteLength} bytes`);
 

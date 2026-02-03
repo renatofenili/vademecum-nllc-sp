@@ -3,10 +3,10 @@ import Tree, { RawNodeDatum } from "react-d3-tree";
 import { Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActsGraphData, ActNode } from "./types";
+
 interface HierarchicalMapViewProps {
   data: ActsGraphData | null;
   isLoading: boolean;
-  rootOption: "cf88" | "lei14133";
 }
 
 interface TreeNode extends RawNodeDatum {
@@ -20,19 +20,32 @@ interface TreeNode extends RawNodeDatum {
   };
 }
 
+// Hierarchy order for normative types (lower = higher in hierarchy)
+const tipoHierarchy: Record<string, number> = {
+  constituicao: 0,
+  lei_complementar: 1,
+  lei: 2,
+  decreto: 3,
+  resolucao: 4,
+  portaria: 5,
+  instrucao_normativa: 6,
+  outro: 7,
+};
+
 const tipoLabels: Record<string, string> = {
   constituicao: "Constituição",
+  lei_complementar: "Lei Complementar",
   lei: "Lei",
   decreto: "Decreto",
   resolucao: "Resolução",
   portaria: "Portaria",
   instrucao_normativa: "IN",
+  outro: "Outro",
 };
 
 export const HierarchicalMapView = ({
   data,
   isLoading,
-  rootOption,
 }: HierarchicalMapViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<any>(null);
@@ -75,18 +88,32 @@ export const HierarchicalMapView = ({
     };
   }, []);
 
-  // Build tree structure from graph data
+  // Build hierarchical tree structure from graph data
   const treeData = useMemo((): TreeNode | null => {
     if (!data || !data.nodes.length) return null;
 
-    const rootNode = data.nodes.find((n) => n.id === rootOption);
+    // Find CF/88 as root (always)
+    const rootNode = data.nodes.find((n) => n.id === "cf88" || n.tipo === "constituicao");
     if (!rootNode) return null;
 
-    // Build first level children (all non-root nodes)
-    const children: TreeNode[] = data.nodes
-      .filter((n) => n.id !== rootOption)
-      .slice(0, 12)
-      .map((act) => ({
+    // Group nodes by hierarchy level
+    const nodesByLevel = new Map<number, ActNode[]>();
+    data.nodes
+      .filter((n) => n.id !== rootNode.id)
+      .forEach((node) => {
+        const level = tipoHierarchy[node.tipo] ?? 7;
+        if (!nodesByLevel.has(level)) {
+          nodesByLevel.set(level, []);
+        }
+        nodesByLevel.get(level)!.push(node);
+      });
+
+    // Build tree recursively by hierarchy level
+    const buildLevel = (parentLevel: number): TreeNode[] => {
+      const nextLevel = parentLevel + 1;
+      const nodesAtLevel = nodesByLevel.get(nextLevel) || [];
+      
+      return nodesAtLevel.slice(0, 8).map((act) => ({
         name: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
         attributes: {
           tipo: act.tipo,
@@ -97,22 +124,26 @@ export const HierarchicalMapView = ({
           type: "act" as const,
           act,
         },
-        children: [],
+        children: buildLevel(nextLevel),
       }));
+    };
+
+    // Start with laws under CF/88
+    const lawChildren = buildLevel(0);
 
     return {
-      name: rootOption === "cf88" ? "CF/1988" : "Lei 14.133/2021",
+      name: "CF/1988",
       attributes: {
-        tipo: rootNode.tipo,
+        tipo: "constituicao",
       },
       nodeData: {
-        id: rootOption,
+        id: rootNode.id,
         type: "root" as const,
         act: rootNode,
       },
-      children,
+      children: lawChildren,
     };
-  }, [data, rootOption]);
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -137,12 +168,11 @@ export const HierarchicalMapView = ({
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* Debug info */}
+      {/* Info bar */}
       <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex gap-4">
-        <span>📊 Nós: {data?.nodes.length || 0}</span>
-        <span>🔗 Arestas: {data?.edges.length || 0}</span>
-        <span>📐 {dimensions.width}×{dimensions.height}px</span>
-        <span>🎯 Raiz: {rootOption}</span>
+        <span>📊 Normas: {data?.nodes.length || 0}</span>
+        <span>🔗 Relações: {data?.edges.length || 0}</span>
+        <span>🎯 Raiz: CF/1988</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
       </div>
 

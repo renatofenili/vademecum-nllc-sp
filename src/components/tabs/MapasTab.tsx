@@ -1,23 +1,21 @@
 import { useState, useEffect } from "react";
-import { Scale, Gavel, TreeDeciduous } from "lucide-react";
+import { TreeDeciduous } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { HierarchicalMapView } from "@/components/graph/HierarchicalMapView";
-import { RootOption, ActsGraphData } from "@/components/graph/types";
+import { ActsGraphData } from "@/components/graph/types";
 
 const MapasTab = () => {
-  const [rootOption, setRootOption] = useState<RootOption>("lei14133");
   const [actsData, setActsData] = useState<ActsGraphData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load acts graph on mount and when root changes
+  // Load acts graph on mount - CF/88 is always root
   useEffect(() => {
     const loadActsGraph = async () => {
       setIsLoading(true);
       try {
         const { data, error } = await supabase.functions.invoke("graph-acts", {
-          body: { root: rootOption, depth: 2 },
+          body: { root: "cf88", depth: 3 },
         });
 
         if (error) throw error;
@@ -30,7 +28,7 @@ const MapasTab = () => {
     };
 
     loadActsGraph();
-  }, [rootOption]);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -44,29 +42,9 @@ const MapasTab = () => {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Visualização hierárquica da estrutura normativa — do geral ao específico
+            Hierarquia normativa a partir da Constituição Federal de 1988
           </p>
         </div>
-      </div>
-
-      {/* Root selector */}
-      <div className="flex justify-center gap-4">
-        <Button
-          variant={rootOption === "cf88" ? "default" : "outline"}
-          onClick={() => setRootOption("cf88")}
-          className="gap-2"
-        >
-          <Scale className="h-4 w-4" />
-          CF/88
-        </Button>
-        <Button
-          variant={rootOption === "lei14133" ? "default" : "outline"}
-          onClick={() => setRootOption("lei14133")}
-          className="gap-2"
-        >
-          <Gavel className="h-4 w-4" />
-          Lei nº 14.133/2021
-        </Button>
       </div>
 
       {/* Map container */}
@@ -75,7 +53,6 @@ const MapasTab = () => {
           <HierarchicalMapView
             data={actsData}
             isLoading={isLoading}
-            rootOption={rootOption}
           />
         </CardContent>
       </Card>

@@ -217,6 +217,8 @@ export type Database = {
         | "lei"
         | "instrucao_normativa"
         | "outro"
+        | "lei_federal"
+        | "lei_estadual"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -352,6 +354,8 @@ export const Constants = {
         "lei",
         "instrucao_normativa",
         "outro",
+        "lei_federal",
+        "lei_estadual",
       ],
     },
   },

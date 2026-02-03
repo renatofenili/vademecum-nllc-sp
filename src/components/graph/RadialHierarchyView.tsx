@@ -16,16 +16,16 @@ interface RadialHierarchyViewProps {
   onDrillDown?: (actId: string) => void;
 }
 
-interface ExpandedDispositivos {
-  actId: string;
-  dispositivos: DispositivoNode[];
-  isLoading: boolean;
-}
-
-// Hierarchical structure for dispositivos
 interface ArtigoGroup {
   artigo: DispositivoNode;
   children: DispositivoNode[];
+}
+
+interface ExpandedDispositivos {
+  actId: string;
+  dispositivos: DispositivoNode[];
+  artigoGroups: ArtigoGroup[];
+  isLoading: boolean;
 }
 
 interface RingNode {
@@ -114,6 +114,7 @@ export const RadialHierarchyView = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
+  const [hoveredArtigo, setHoveredArtigo] = useState<{ artigo: ArtigoGroup; x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
 
@@ -130,6 +131,29 @@ export const RadialHierarchyView = ({
     setPan({ x: 0, y: 0 });
   }, []);
 
+  // Helper to group dispositivos into artigos
+  const groupDispositivosIntoArtigos = (dispositivos: DispositivoNode[]): ArtigoGroup[] => {
+    const groups: ArtigoGroup[] = [];
+    let currentArtigo: ArtigoGroup | null = null;
+    
+    dispositivos.forEach((disp) => {
+      if (disp.nivel === "artigo") {
+        if (currentArtigo) {
+          groups.push(currentArtigo);
+        }
+        currentArtigo = { artigo: disp, children: [] };
+      } else if (currentArtigo) {
+        currentArtigo.children.push(disp);
+      }
+    });
+    
+    if (currentArtigo) {
+      groups.push(currentArtigo);
+    }
+    
+    return groups;
+  };
+
   // Function to load dispositivos for a node
   const loadDispositivos = useCallback(async (actId: string) => {
     // If already expanded for this node, collapse it
@@ -138,7 +162,7 @@ export const RadialHierarchyView = ({
       return;
     }
 
-    setExpandedDispositivos({ actId, dispositivos: [], isLoading: true });
+    setExpandedDispositivos({ actId, dispositivos: [], artigoGroups: [], isLoading: true });
 
     try {
       const { data: result, error } = await supabase.functions.invoke("graph-dispositivos", {
@@ -150,12 +174,14 @@ export const RadialHierarchyView = ({
       const dispositivosData = result as DispositivosGraphData;
       
       if (dispositivosData.nodes && dispositivosData.nodes.length > 0) {
+        const artigoGroups = groupDispositivosIntoArtigos(dispositivosData.nodes);
         setExpandedDispositivos({
           actId,
           dispositivos: dispositivosData.nodes,
+          artigoGroups,
           isLoading: false,
         });
-        toast.success(`${dispositivosData.nodes.length} dispositivos carregados`);
+        toast.success(`${artigoGroups.length} artigos carregados (${dispositivosData.nodes.length} dispositivos)`);
       } else {
         setExpandedDispositivos(null);
         toast.info("Nenhum dispositivo encontrado para esta norma");
@@ -502,6 +528,69 @@ export const RadialHierarchyView = ({
           </div>
         )}
 
+        {/* Tooltip for artigo nodes */}
+        {hoveredArtigo && (
+          <div
+            className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-md pointer-events-none"
+            style={{
+              left: Math.min(hoveredArtigo.x * zoom + pan.x + 20, dimensions.width - 350),
+              top: Math.min(hoveredArtigo.y * zoom + pan.y - 10, dimensions.height - 300),
+            }}
+          >
+            {/* Artigo header */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+              <p className="font-semibold text-sm text-foreground">
+                {hoveredArtigo.artigo.artigo.anchor}
+              </p>
+              {hoveredArtigo.artigo.children.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {hoveredArtigo.artigo.children.length} dispositivos
+                </Badge>
+              )}
+            </div>
+            
+            {/* Artigo text */}
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 mb-2">
+              {hoveredArtigo.artigo.artigo.texto}
+            </p>
+            
+            {/* Children preview */}
+            {hoveredArtigo.artigo.children.length > 0 && (
+              <div className="border-t border-border pt-2 mt-2 space-y-1 max-h-[150px] overflow-y-auto">
+                {hoveredArtigo.artigo.children.slice(0, 8).map((child, idx) => {
+                  const nivelLabel: Record<string, string> = {
+                    paragrafo: "§",
+                    inciso: "",
+                    alinea: "",
+                  };
+                  const nivelColor: Record<string, string> = {
+                    paragrafo: "bg-cyan-500",
+                    inciso: "bg-pink-500",
+                    alinea: "bg-purple-500",
+                  };
+                  return (
+                    <div key={idx} className="flex items-start gap-1.5 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${nivelColor[child.nivel] || "bg-muted"} shrink-0 mt-1`} />
+                      <span className="text-muted-foreground">
+                        {nivelLabel[child.nivel]}{child.anchor.replace(/^(art\.\d+)?/i, "").trim()}: 
+                      </span>
+                      <span className="text-foreground line-clamp-1 flex-1">
+                        {child.texto.slice(0, 80)}{child.texto.length > 80 ? "…" : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+                {hoveredArtigo.artigo.children.length > 8 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    +{hoveredArtigo.artigo.children.length - 8} mais dispositivos...
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div
           ref={containerRef}
           className="w-full h-[550px] bg-gradient-to-br from-background to-muted/30 cursor-grab active:cursor-grabbing"
@@ -569,7 +658,8 @@ export const RadialHierarchyView = ({
                 const isCenter = node.ring === 0;
                 const nodeRadius = isCenter ? 40 : 24;
                 const color = ringColors[node.ring];
-                const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.dispositivos.length > 0;
+                const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.artigoGroups.length > 0;
+                const artigoGroups = hasExpandedDispositivos ? expandedDispositivos.artigoGroups : [];
 
                 return (
                   <g key={node.id}>
@@ -624,26 +714,84 @@ export const RadialHierarchyView = ({
                       )}
                     </g>
 
-                    {/* Dispositivos indicator - simplified visual on map */}
-                    {hasExpandedDispositivos && (
-                      <g transform={`translate(${node.x + 30}, ${node.y - 30})`}>
-                        <circle
-                          r={16}
-                          fill="hsl(45, 93%, 47%)"
-                          stroke="white"
-                          strokeWidth={2}
-                          className="animate-pulse"
-                        />
-                        <text
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          className="fill-white font-bold pointer-events-none"
-                          style={{ fontSize: 10 }}
-                        >
-                          {expandedDispositivos.dispositivos.length}
-                        </text>
-                      </g>
-                    )}
+                    {/* Artigos as child nodes around the parent */}
+                    {hasExpandedDispositivos && artigoGroups.map((group, idx) => {
+                      const count = artigoGroups.length;
+                      const maxPerRing = 20;
+                      const ringIndex = Math.floor(idx / maxPerRing);
+                      const indexInRing = idx % maxPerRing;
+                      const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+                      
+                      const baseRadius = nodeRadius + 45;
+                      const ringSpacing = 35;
+                      const artigoRadius = baseRadius + ringIndex * ringSpacing;
+                      
+                      // Distribute around parent node
+                      const angleSpread = Math.min(Math.PI * 1.8, countInThisRing * 0.18);
+                      const startAngle = node.angle - angleSpread / 2;
+                      const artigoAngle = countInThisRing > 1 
+                        ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
+                        : node.angle;
+                      
+                      const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
+                      const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
+                      const childCount = group.children.length;
+
+                      return (
+                        <g key={`artigo-${idx}`}>
+                          {/* Connection line from parent to artigo */}
+                          <line
+                            x1={node.x}
+                            y1={node.y}
+                            x2={artigoX}
+                            y2={artigoY}
+                            stroke="hsl(45, 93%, 47%)"
+                            strokeWidth={1}
+                            strokeDasharray="3 2"
+                            opacity={0.5}
+                          />
+                          
+                          {/* Artigo node */}
+                          <g
+                            transform={`translate(${artigoX}, ${artigoY})`}
+                            onMouseEnter={() => setHoveredArtigo({ artigo: group, x: artigoX, y: artigoY })}
+                            onMouseLeave={() => setHoveredArtigo(null)}
+                            className="cursor-pointer"
+                          >
+                            <circle
+                              r={14}
+                              fill="hsl(45, 93%, 47%)"
+                              stroke="white"
+                              strokeWidth={1.5}
+                              className="transition-all duration-200 hover:brightness-110"
+                            />
+                            <text
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              className="fill-white font-semibold pointer-events-none"
+                              style={{ fontSize: 7 }}
+                            >
+                              {group.artigo.anchor.replace(/^art\.?/i, "").trim() || `A${idx + 1}`}
+                            </text>
+                            
+                            {/* Badge with children count */}
+                            {childCount > 0 && (
+                              <g transform="translate(10, -10)">
+                                <circle r={7} fill="hsl(var(--primary))" stroke="white" strokeWidth={1} />
+                                <text
+                                  textAnchor="middle"
+                                  dominantBaseline="central"
+                                  className="fill-white pointer-events-none"
+                                  style={{ fontSize: 6, fontWeight: 600 }}
+                                >
+                                  {childCount}
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        </g>
+                      );
+                    })}
                   </g>
                 );
               })}
@@ -811,30 +959,13 @@ export const RadialHierarchyView = ({
                       <GitBranch className="h-4 w-4" />
                     )}
                     {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading
-                      ? `Recolher dispositivos (${expandedDispositivos.dispositivos.length})`
+                      ? `Recolher dispositivos (${expandedDispositivos.artigoGroups.length} artigos)`
                       : "Expandir dispositivos"}
                   </Button>
                   
                   {/* Dispositivos hierarchy view */}
-                  {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading && expandedDispositivos.dispositivos.length > 0 && (() => {
-                    // Group dispositivos by artigo
-                    const artigoGroups: ArtigoGroup[] = [];
-                    let currentArtigo: ArtigoGroup | null = null;
-                    
-                    expandedDispositivos.dispositivos.forEach((disp) => {
-                      if (disp.nivel === "artigo") {
-                        if (currentArtigo) {
-                          artigoGroups.push(currentArtigo);
-                        }
-                        currentArtigo = { artigo: disp, children: [] };
-                      } else if (currentArtigo) {
-                        currentArtigo.children.push(disp);
-                      }
-                    });
-                    
-                    if (currentArtigo) {
-                      artigoGroups.push(currentArtigo);
-                    }
+                  {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading && expandedDispositivos.artigoGroups.length > 0 && (() => {
+                    const artigoGroups = expandedDispositivos.artigoGroups;
                     
                     // Nível colors and labels
                     const nivelConfig: Record<string, { color: string; label: string; indent: number }> = {
@@ -849,7 +980,7 @@ export const RadialHierarchyView = ({
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                             <FileText className="h-4 w-4" />
-                            Dispositivos ({expandedDispositivos.dispositivos.length})
+                            {artigoGroups.length} Artigos ({expandedDispositivos.dispositivos.length} dispositivos)
                           </h4>
                           <div className="flex gap-1">
                             {Object.entries(nivelConfig).slice(0, 4).map(([nivel, config]) => (

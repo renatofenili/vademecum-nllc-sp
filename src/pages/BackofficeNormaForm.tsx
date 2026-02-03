@@ -142,7 +142,7 @@ const BackofficeNormaForm = () => {
     ementa: '',
     link_externo: '',
     status: 'publicada' as NormStatus,
-    observacoes: '',
+    analise_norma: '',
     orgao_emissor: '',
   });
 
@@ -235,7 +235,7 @@ const BackofficeNormaForm = () => {
         ementa: normaData.ementa,
         link_externo: normaData.link_externo || '',
         status: (normaData.status as NormStatus) || 'publicada',
-        observacoes: normaData.observacoes || '',
+        analise_norma: (normaData as any).analise_norma || '',
         orgao_emissor: normaData.orgao_emissor || '',
       });
 
@@ -463,7 +463,7 @@ const BackofficeNormaForm = () => {
         ementa: formData.ementa.trim(),
         link_externo: formData.link_externo.trim() || null,
         status: formData.status,
-        observacoes: formData.observacoes.trim() || null,
+        analise_norma: formData.analise_norma.trim() || null,
         orgao_emissor: formData.orgao_emissor || null,
         pdf_url: pdfData.pdf_url,
         pdf_storage_path: pdfData.pdf_storage_path,
@@ -991,13 +991,13 @@ const BackofficeNormaForm = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="observacoes">Observações</Label>
+                <Label htmlFor="analise_norma">Análise da Norma</Label>
                 <Textarea
-                  id="observacoes"
-                  placeholder="Notas internas sobre a norma..."
-                  value={formData.observacoes}
-                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                  rows={3}
+                  id="analise_norma"
+                  placeholder="Análise técnica ou jurídica da norma..."
+                  value={formData.analise_norma}
+                  onChange={(e) => setFormData({ ...formData, analise_norma: e.target.value })}
+                  rows={4}
                 />
               </div>
 

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       normas: {
         Row: {
+          analise_norma: string | null
           created_at: string
           data_publicacao: string
           ementa: string
@@ -43,6 +44,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analise_norma?: string | null
           created_at?: string
           data_publicacao: string
           ementa: string
@@ -70,6 +72,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analise_norma?: string | null
           created_at?: string
           data_publicacao?: string
           ementa?: string

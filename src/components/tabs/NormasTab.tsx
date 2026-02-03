@@ -81,6 +81,56 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     return tipos[tipo] || tipo;
   };
 
+  // Parse texto_extraido JSON to render formatted text
+  const renderTextoExtraido = (textoExtraido: string | null) => {
+    if (!textoExtraido) return null;
+
+    try {
+      const dispositivos = JSON.parse(textoExtraido) as Array<{
+        anchor: string;
+        nivel: string;
+        texto: string;
+      }>;
+
+      if (!Array.isArray(dispositivos) || dispositivos.length === 0) {
+        return <p className="text-muted-foreground">Texto sem dispositivos estruturados</p>;
+      }
+
+      return (
+        <div className="space-y-4">
+          {dispositivos.map((dispositivo, index) => {
+            const nivelStyles: Record<string, string> = {
+              artigo: "font-semibold text-foreground text-base",
+              paragrafo: "text-foreground ml-4",
+              inciso: "text-foreground ml-8",
+              alinea: "text-foreground ml-12",
+            };
+
+            const style = nivelStyles[dispositivo.nivel] || "text-foreground";
+
+            return (
+              <div key={`${dispositivo.anchor}-${index}`} className="group">
+                <p className={`${style} leading-relaxed`}>
+                  {dispositivo.texto}
+                </p>
+                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity font-mono">
+                  {dispositivo.anchor}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    } catch (e) {
+      // If not valid JSON, render as plain text
+      return (
+        <pre className="whitespace-pre-wrap text-sm font-sans text-foreground leading-relaxed">
+          {textoExtraido}
+        </pre>
+      );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Hero Section */}
@@ -217,9 +267,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
               <CardContent className="p-4 h-[calc(100%-140px)] overflow-y-auto">
                 {normaDetalhe.texto_extraido ? (
                   <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm font-sans text-foreground leading-relaxed">
-                      {normaDetalhe.texto_extraido}
-                    </pre>
+                    {renderTextoExtraido(normaDetalhe.texto_extraido)}
                   </div>
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">

@@ -1,16 +1,24 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, X, GitBranch, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, X, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ActsGraphData, ActNode } from "./types";
+import { ActsGraphData, ActNode, DispositivosGraphData, DispositivoNode } from "./types";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface RadialHierarchyViewProps {
   data: ActsGraphData | null;
   isLoading: boolean;
   onDrillDown?: (actId: string) => void;
+}
+
+interface ExpandedDispositivos {
+  actId: string;
+  dispositivos: DispositivoNode[];
+  isLoading: boolean;
 }
 
 interface RingNode {
@@ -100,6 +108,8 @@ export const RadialHierarchyView = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
+  const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
+  const [hoveredDispositivo, setHoveredDispositivo] = useState<DispositivoNode | null>(null);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.2, 3));
@@ -113,6 +123,43 @@ export const RadialHierarchyView = ({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
+
+  // Function to load dispositivos for a node
+  const loadDispositivos = useCallback(async (actId: string) => {
+    // If already expanded for this node, collapse it
+    if (expandedDispositivos?.actId === actId && !expandedDispositivos.isLoading) {
+      setExpandedDispositivos(null);
+      return;
+    }
+
+    setExpandedDispositivos({ actId, dispositivos: [], isLoading: true });
+
+    try {
+      const { data: result, error } = await supabase.functions.invoke("graph-dispositivos", {
+        body: { act_id: actId },
+      });
+
+      if (error) throw error;
+
+      const dispositivosData = result as DispositivosGraphData;
+      
+      if (dispositivosData.nodes && dispositivosData.nodes.length > 0) {
+        setExpandedDispositivos({
+          actId,
+          dispositivos: dispositivosData.nodes,
+          isLoading: false,
+        });
+        toast.success(`${dispositivosData.nodes.length} dispositivos carregados`);
+      } else {
+        setExpandedDispositivos(null);
+        toast.info("Nenhum dispositivo encontrado para esta norma");
+      }
+    } catch (err) {
+      console.error("Error loading dispositivos:", err);
+      setExpandedDispositivos(null);
+      toast.error("Erro ao carregar dispositivos");
+    }
+  }, [expandedDispositivos]);
 
   // Measure container
   useEffect(() => {
@@ -400,8 +447,8 @@ export const RadialHierarchyView = ({
           </Button>
         </div>
 
-        {/* Tooltip */}
-        {hoveredNode && (
+        {/* Tooltip for act nodes */}
+        {hoveredNode && !hoveredDispositivo && (
           <div
             className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-sm pointer-events-none"
             style={{
@@ -445,6 +492,31 @@ export const RadialHierarchyView = ({
             {/* Ementa */}
             <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
               {hoveredNode.act.ementa}
+            </p>
+          </div>
+        )}
+
+        {/* Tooltip for dispositivo nodes */}
+        {hoveredDispositivo && (
+          <div
+            className="absolute z-30 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-md pointer-events-none"
+            style={{
+              left: Math.min(dimensions.width / 2, dimensions.width - 320),
+              top: 60,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="secondary" className="text-xs capitalize">
+                {hoveredDispositivo.nivel}
+              </Badge>
+              <span className="font-mono text-xs text-muted-foreground">
+                {hoveredDispositivo.anchor}
+              </span>
+            </div>
+            <p className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
+              {hoveredDispositivo.texto.length > 300 
+                ? hoveredDispositivo.texto.slice(0, 300) + "…" 
+                : hoveredDispositivo.texto}
             </p>
           </div>
         )}
@@ -516,42 +588,150 @@ export const RadialHierarchyView = ({
                 const isCenter = node.ring === 0;
                 const nodeRadius = isCenter ? 40 : 24;
                 const color = ringColors[node.ring];
+                const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.dispositivos.length > 0;
 
                 return (
-                  <g
-                    key={node.id}
-                    transform={`translate(${node.x}, ${node.y})`}
-                    onMouseEnter={() => setHoveredNode(node)}
-                    onMouseLeave={() => setHoveredNode(null)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedNode(node);
-                    }}
-                    className="cursor-pointer"
-                  >
-                    {/* Node circle */}
-                    <circle
-                      r={nodeRadius}
-                      fill={color}
-                      stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : "white"}
-                      strokeWidth={selectedNode?.id === node.id ? 4 : 2}
-                      className="transition-all duration-200 hover:opacity-80"
-                      style={{
-                        filter: hoveredNode?.id === node.id ? "brightness(1.2)" : "none",
+                  <g key={node.id}>
+                    {/* Main node */}
+                    <g
+                      transform={`translate(${node.x}, ${node.y})`}
+                      onMouseEnter={() => setHoveredNode(node)}
+                      onMouseLeave={() => setHoveredNode(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNode(node);
                       }}
-                    />
-                    
-                    {/* Node label */}
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      className="fill-white font-semibold pointer-events-none select-none"
-                      style={{ fontSize: isCenter ? 14 : 9 }}
+                      className="cursor-pointer"
                     >
-                      {isCenter ? "CF/88" : node.label.length > 12 
-                        ? node.label.slice(0, 10) + "…" 
-                        : node.label}
-                    </text>
+                      {/* Node circle */}
+                      <circle
+                        r={nodeRadius}
+                        fill={color}
+                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : "white"}
+                        strokeWidth={selectedNode?.id === node.id ? 4 : 2}
+                        className="transition-all duration-200 hover:opacity-80"
+                        style={{
+                          filter: hoveredNode?.id === node.id ? "brightness(1.2)" : "none",
+                        }}
+                      />
+                      
+                      {/* Node label */}
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        className="fill-white font-semibold pointer-events-none select-none"
+                        style={{ fontSize: isCenter ? 14 : 9 }}
+                      >
+                        {isCenter ? "CF/88" : node.label.length > 12 
+                          ? node.label.slice(0, 10) + "…" 
+                          : node.label}
+                      </text>
+                      
+                      {/* Loading indicator for dispositivos */}
+                      {expandedDispositivos?.actId === node.id && expandedDispositivos.isLoading && (
+                        <g transform="translate(20, -20)">
+                          <circle r={8} fill="hsl(var(--background))" stroke="hsl(var(--border))" />
+                          <text
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            className="fill-muted-foreground animate-pulse"
+                            style={{ fontSize: 8 }}
+                          >
+                            ...
+                          </text>
+                        </g>
+                      )}
+                    </g>
+
+                    {/* Dispositivos as child nodes */}
+                    {hasExpandedDispositivos && expandedDispositivos.dispositivos.slice(0, 12).map((disp, idx) => {
+                      const dispCount = Math.min(expandedDispositivos.dispositivos.length, 12);
+                      const dispAngle = node.angle + ((idx - (dispCount - 1) / 2) * 0.15);
+                      const dispRadius = 50; // Distance from parent node
+                      const dispX = node.x + dispRadius * Math.cos(dispAngle);
+                      const dispY = node.y + dispRadius * Math.sin(dispAngle);
+                      const dispNodeRadius = 12;
+                      
+                      // Get dispositivo level color
+                      const nivelColors: Record<string, string> = {
+                        artigo: "hsl(45, 93%, 47%)",      // Amber
+                        paragrafo: "hsl(200, 98%, 39%)",  // Cyan
+                        inciso: "hsl(330, 81%, 60%)",     // Pink
+                        alinea: "hsl(280, 68%, 60%)",     // Purple
+                      };
+                      const dispColor = nivelColors[disp.nivel] || "hsl(var(--muted-foreground))";
+                      
+                      // Format anchor for display
+                      const shortLabel = disp.anchor.length > 8 
+                        ? disp.anchor.slice(0, 6) + "…" 
+                        : disp.anchor;
+
+                      return (
+                        <g key={`${node.id}-disp-${idx}`}>
+                          {/* Connection line to parent */}
+                          <line
+                            x1={node.x}
+                            y1={node.y}
+                            x2={dispX}
+                            y2={dispY}
+                            stroke={dispColor}
+                            strokeWidth={1}
+                            strokeDasharray="2 2"
+                            opacity={0.6}
+                          />
+                          
+                          {/* Dispositivo node */}
+                          <g
+                            transform={`translate(${dispX}, ${dispY})`}
+                            onMouseEnter={() => setHoveredDispositivo(disp)}
+                            onMouseLeave={() => setHoveredDispositivo(null)}
+                            className="cursor-pointer"
+                          >
+                            <circle
+                              r={dispNodeRadius}
+                              fill={dispColor}
+                              stroke="white"
+                              strokeWidth={1.5}
+                              className="transition-all duration-200 hover:opacity-80"
+                              style={{
+                                filter: hoveredDispositivo?.anchor === disp.anchor ? "brightness(1.2)" : "none",
+                              }}
+                            />
+                            <text
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              className="fill-white font-medium pointer-events-none select-none"
+                              style={{ fontSize: 6 }}
+                            >
+                              {shortLabel}
+                            </text>
+                          </g>
+                        </g>
+                      );
+                    })}
+                    
+                    {/* Indicator for more dispositivos */}
+                    {hasExpandedDispositivos && expandedDispositivos.dispositivos.length > 12 && (
+                      <g transform={`translate(${node.x + 55}, ${node.y + 35})`}>
+                        <rect
+                          x={-15}
+                          y={-8}
+                          width={30}
+                          height={16}
+                          rx={4}
+                          fill="hsl(var(--muted))"
+                          stroke="hsl(var(--border))"
+                        />
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          className="fill-muted-foreground"
+                          style={{ fontSize: 8 }}
+                        >
+                          +{expandedDispositivos.dispositivos.length - 12}
+                        </text>
+                      </g>
+                    )}
                   </g>
                 );
               })}
@@ -708,16 +888,19 @@ export const RadialHierarchyView = ({
                   
                   {/* Botão Expandir Dispositivos */}
                   <Button
-                    variant="outline"
+                    variant={expandedDispositivos?.actId === selectedNode.id ? "default" : "outline"}
                     className="w-full justify-start gap-2"
-                    onClick={() => {
-                      if (onDrillDown && selectedNode) {
-                        onDrillDown(selectedNode.id);
-                      }
-                    }}
+                    disabled={expandedDispositivos?.isLoading}
+                    onClick={() => loadDispositivos(selectedNode.id)}
                   >
-                    <GitBranch className="h-4 w-4" />
-                    Expandir dispositivos
+                    {expandedDispositivos?.actId === selectedNode.id && expandedDispositivos.isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <GitBranch className="h-4 w-4" />
+                    )}
+                    {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading
+                      ? `Recolher dispositivos (${expandedDispositivos.dispositivos.length})`
+                      : "Expandir dispositivos"}
                   </Button>
                 </div>
               </ScrollArea>

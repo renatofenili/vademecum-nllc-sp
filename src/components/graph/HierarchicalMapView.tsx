@@ -37,11 +37,11 @@ const tipoLabels: Record<string, string> = {
 };
 
 const tipoLegendFill: Record<string, string> = {
-  constituicao: "hsl(var(--chart-1))",
-  lei: "hsl(var(--chart-2))",
-  decreto: "hsl(var(--chart-3))",
-  resolucao: "hsl(var(--chart-4))",
-  portaria: "hsl(var(--chart-5))",
+  constituicao: "hsl(var(--chart-1, var(--primary)))",
+  lei: "hsl(var(--chart-2, var(--primary)))",
+  decreto: "hsl(var(--chart-3, var(--accent)))",
+  resolucao: "hsl(var(--chart-4, var(--muted-foreground)))",
+  portaria: "hsl(var(--chart-5, var(--foreground)))",
   instrucao_normativa: "hsl(var(--muted))",
 };
 
@@ -395,11 +395,12 @@ export const HierarchicalMapView = ({
             stroke: hsl(var(--ring));
           }
           .map-node-text {
-            fill: hsl(var(--primary-foreground));
+            fill: hsl(var(--card-foreground));
             font-weight: 500;
           }
-          .map-node-act .map-node-text {
+          .map-node-root .map-node-text {
             fill: hsl(var(--primary-foreground));
+            font-weight: 600;
           }
           .map-node-badge {
             fill: hsl(var(--background));
@@ -411,11 +412,11 @@ export const HierarchicalMapView = ({
           }
 
           /* Color by tipo using chart tokens */
-          .map-node-constituicao .map-node-circle { fill: hsl(var(--chart-1)); stroke: hsl(var(--chart-1)); }
-          .map-node-lei .map-node-circle { fill: hsl(var(--chart-2)); stroke: hsl(var(--chart-2)); }
-          .map-node-decreto .map-node-circle { fill: hsl(var(--chart-3)); stroke: hsl(var(--chart-3)); }
-          .map-node-resolucao .map-node-circle { fill: hsl(var(--chart-4)); stroke: hsl(var(--chart-4)); }
-          .map-node-portaria .map-node-circle { fill: hsl(var(--chart-5)); stroke: hsl(var(--chart-5)); }
+          .map-node-constituicao .map-node-circle { fill: hsl(var(--chart-1, var(--primary))); stroke: hsl(var(--chart-1, var(--primary))); }
+          .map-node-lei .map-node-circle { fill: hsl(var(--chart-2, var(--primary))); stroke: hsl(var(--chart-2, var(--primary))); }
+          .map-node-decreto .map-node-circle { fill: hsl(var(--chart-3, var(--accent))); stroke: hsl(var(--chart-3, var(--accent))); }
+          .map-node-resolucao .map-node-circle { fill: hsl(var(--chart-4, var(--muted-foreground))); stroke: hsl(var(--chart-4, var(--muted-foreground))); }
+          .map-node-portaria .map-node-circle { fill: hsl(var(--chart-5, var(--foreground))); stroke: hsl(var(--chart-5, var(--foreground))); }
           .map-node-instrucao_normativa .map-node-circle { fill: hsl(var(--muted)); stroke: hsl(var(--muted)); }
 
           .link-hierarchy {

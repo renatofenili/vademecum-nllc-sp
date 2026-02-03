@@ -1,14 +1,22 @@
 import { Link } from "react-router-dom";
-import { FileText, Route, CheckSquare, RefreshCw } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, RefreshCw } from "lucide-react";
 
-const navItems = [
-  { label: "Normas", href: "#normas", icon: FileText },
-  { label: "Trilhas", href: "#trilhas", icon: Route },
-  { label: "Checklists", href: "#checklists", icon: CheckSquare },
-  { label: "O que mudou", href: "#mudancas", icon: RefreshCw },
+export type TabType = "normas" | "relatorios" | "consultas" | "mapas" | "mudancas";
+
+interface HeaderProps {
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
+}
+
+const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
+  { label: "Normas", tab: "normas", icon: FileText },
+  { label: "Relatórios", tab: "relatorios", icon: FileBarChart },
+  { label: "Consultas", tab: "consultas", icon: Search },
+  { label: "Mapas", tab: "mapas", icon: Network },
+  { label: "O que mudou", tab: "mudancas", icon: RefreshCw },
 ];
 
-const Header = () => {
+const Header = ({ activeTab = "normas", onTabChange }: HeaderProps) => {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="container flex h-16 items-center justify-between">
@@ -21,18 +29,41 @@ const Header = () => {
           </span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            <button
+              key={item.tab}
+              onClick={() => onTabChange?.(item.tab)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === item.tab
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
             >
+              <item.icon className="h-4 w-4" />
               {item.label}
-            </a>
+            </button>
           ))}
         </nav>
       </div>
+
+      {/* Mobile Nav */}
+      <nav className="md:hidden flex overflow-x-auto border-t border-border bg-card">
+        {navItems.map((item) => (
+          <button
+            key={item.tab}
+            onClick={() => onTabChange?.(item.tab)}
+            className={`flex-1 min-w-fit flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors ${
+              activeTab === item.tab
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <item.icon className="h-4 w-4" />
+            <span className="hidden sm:inline">{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </header>
   );
 };

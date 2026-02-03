@@ -1,6 +1,19 @@
 import { FileText } from "lucide-react";
+import { TabType } from "./Header";
 
-const Footer = () => {
+interface FooterProps {
+  onTabChange?: (tab: TabType) => void;
+}
+
+const Footer = ({ onTabChange }: FooterProps) => {
+  const navItems: { label: string; tab: TabType }[] = [
+    { label: "Normas", tab: "normas" },
+    { label: "Relatórios", tab: "relatorios" },
+    { label: "Consultas", tab: "consultas" },
+    { label: "Mapas", tab: "mapas" },
+    { label: "O que mudou", tab: "mudancas" },
+  ];
+
   return (
     <footer className="border-t border-border bg-card py-12">
       <div className="container">
@@ -18,18 +31,15 @@ const Footer = () => {
           </div>
 
           <nav className="flex flex-wrap items-center justify-center gap-6">
-            <a href="#normas" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Normas
-            </a>
-            <a href="#trilhas" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Trilhas
-            </a>
-            <a href="#checklists" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Checklists
-            </a>
-            <a href="#mudancas" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              O que mudou
-            </a>
+            {navItems.map((item) => (
+              <button
+                key={item.tab}
+                onClick={() => onTabChange?.(item.tab)}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
         </div>
 

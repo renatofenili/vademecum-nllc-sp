@@ -310,28 +310,62 @@ function extractFallbackArticlesFromText(
   batchEnd: number
 ): ToolArgs["dispositivos"] {
   const text = `\n${normalizePdfExtractedText(fullText)}\n`;
-  // Headings at line start to reduce false-positives from references.
-  const headingRe = /^\s*(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b.*$/gim;
+  
+  // Multiple regex patterns to catch different formatting styles used in Brazilian laws
+  // Pattern 1: "Art. 6º" or "Art. 6" or "Art.6" at start of line
+  // Pattern 2: "Artigo 6" or "ARTIGO 6" 
+  // Pattern 3: Variations with "Art " (space)
+  const headingPatterns = [
+    /^\s*(?:art\.?\s*)(\d{1,4})\s*(?:º|°|o|\.)?(?:\s*[-–—])?\s*/gim,
+    /^\s*(?:artigo)\s+(\d{1,4})\s*(?:º|°|o|\.)?(?:\s*[-–—])?\s*/gim,
+    /(?:^|\n)\s*Art\.?\s*(\d{1,4})\s*(?:º|°|o|\.)?/gim,
+  ];
+  
   const headings: { n: number; index: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = headingRe.exec(text)) !== null) {
-    const n = Number(m[1]);
-    if (!Number.isFinite(n) || n <= 0) continue;
-    headings.push({ n, index: m.index });
+  
+  for (const headingRe of headingPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = headingRe.exec(text)) !== null) {
+      const n = Number(m[1]);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      // Avoid duplicates at same position
+      const exists = headings.some(h => h.n === n && Math.abs(h.index - m!.index) < 20);
+      if (!exists) {
+        headings.push({ n, index: m.index });
+      }
+    }
   }
 
-  if (headings.length === 0) return [];
+  if (headings.length === 0) {
+    console.log(`PDF fallback: no article headings found in text (len=${text.length})`);
+    return [];
+  }
 
-  // Ensure in-order.
+  // Ensure in-order by position
   headings.sort((a, b) => a.index - b.index);
+  
+  // Remove duplicates keeping first occurrence
+  const uniqueHeadings: { n: number; index: number }[] = [];
+  const seenArticles = new Set<number>();
+  for (const h of headings) {
+    if (!seenArticles.has(h.n)) {
+      seenArticles.add(h.n);
+      uniqueHeadings.push(h);
+    }
+  }
+
+  console.log(`PDF fallback: found ${uniqueHeadings.length} unique article headings, looking for art.${batchStart}-${batchEnd}`);
 
   const out: ToolArgs["dispositivos"] = [];
   for (let n = batchStart; n <= batchEnd; n++) {
-    const hIdx = headings.findIndex((h) => h.n === n);
-    if (hIdx === -1) continue;
-    const startIdx = headings[hIdx].index;
+    const hIdx = uniqueHeadings.findIndex((h) => h.n === n);
+    if (hIdx === -1) {
+      console.log(`PDF fallback: article ${n} not found in headings`);
+      continue;
+    }
+    const startIdx = uniqueHeadings[hIdx].index;
     // Find the next heading after this one (not necessarily n+1 due to OCR gaps).
-    const nextHeading = headings.slice(hIdx + 1).find((h) => h.index > startIdx);
+    const nextHeading = uniqueHeadings.slice(hIdx + 1).find((h) => h.index > startIdx);
     const endIdx = nextHeading ? nextHeading.index : text.length;
     const slice = text.slice(startIdx, endIdx);
     const cleaned = normalizePdfExtractedText(slice);
@@ -343,6 +377,7 @@ function extractFallbackArticlesFromText(
     });
   }
 
+  console.log(`PDF fallback: extracted ${out.length} articles for batch ${batchStart}-${batchEnd}`);
   return out;
 }
 
@@ -352,8 +387,11 @@ async function buildPdfFallbackDispositivos(
   batchEnd: number
 ): Promise<ToolArgs["dispositivos"]> {
   try {
+    console.log(`PDF fallback: starting extraction for articles ${batchStart}-${batchEnd}`);
     const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
     const pages = Math.min(doc.numPages || 0, 2500);
+    console.log(`PDF fallback: document has ${pages} pages`);
+    
     const parts: string[] = [];
     for (let pageNum = 1; pageNum <= pages; pageNum++) {
       const page = await doc.getPage(pageNum);
@@ -362,6 +400,15 @@ async function buildPdfFallbackDispositivos(
       if (pageText) parts.push(pageText);
     }
     const fullText = parts.join("\n\n");
+    console.log(`PDF fallback: extracted ${fullText.length} characters of text`);
+    
+    // Debug: log a sample around article 6 to understand the format
+    const art6Match = fullText.match(/(?:art|artigo)\.?\s*6/i);
+    if (art6Match && art6Match.index !== undefined) {
+      const sample = fullText.slice(Math.max(0, art6Match.index - 50), art6Match.index + 200);
+      console.log(`PDF fallback: sample around "art 6": ${sample.slice(0, 250).replace(/\n/g, "\\n")}`);
+    }
+    
     return extractFallbackArticlesFromText(fullText, batchStart, batchEnd);
   } catch (e) {
     console.warn("PDF fallback extraction failed:", e);
@@ -1034,7 +1081,18 @@ Deno.serve(async (req) => {
         retryable = false;
         retry_after_ms = 0;
         used_pdf_fallback = true;
-        // Keep model_used for traceability; origin will be marked as fallback.
+        model_used = model_used ?? PRIMARY_MODEL;
+      } else {
+        // PDF fallback also failed to find articles in this range.
+        // Treat as empty batch and FORCE advance to avoid infinite loop.
+        console.warn(
+          `PDF fallback found no articles for batch ${batchStart}-${batchEnd}. Treating as empty and advancing.`
+        );
+        dispositivos = [];
+        ok = true;
+        retryable = false;
+        retry_after_ms = 0;
+        used_pdf_fallback = true;
         model_used = model_used ?? PRIMARY_MODEL;
       }
     }

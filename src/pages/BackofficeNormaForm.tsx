@@ -677,8 +677,9 @@ const BackofficeNormaForm = () => {
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
       let retryCount = 0;
-      // Max retries before pausing (auto-resume can continue later)
-      const maxRetriesPerBatch = 12;
+      // Max retries for the same batch_start before forcing skip
+      const maxRetriesPerBatch = 6;
+      let lastFailedBatchStart: number | null = null;
 
       let done = false;
       for (let i = 0; i < maxBatches; i++) {
@@ -719,8 +720,17 @@ const BackofficeNormaForm = () => {
         await refreshExtractionMeta(normaId);
 
         const retryable = Boolean((data as any)?.retryable);
+        const currentBatchStart = (data as any)?.batch_start as number | undefined;
+        const currentBatchEnd = (data as any)?.batch_end as number | undefined;
+        
         if (retryable) {
-          retryCount += 1;
+          // Track if we're stuck on the same batch
+          if (currentBatchStart != null && currentBatchStart === lastFailedBatchStart) {
+            retryCount += 1;
+          } else {
+            retryCount = 1;
+            lastFailedBatchStart = currentBatchStart ?? null;
+          }
 
           const retryAfter = Number((data as any)?.retry_after_ms ?? 900);
           const suggestedBatchSize = Number((data as any)?.suggested_batch_size ?? NaN);
@@ -731,23 +741,30 @@ const BackofficeNormaForm = () => {
             batchSize = Math.max(1, Math.floor(batchSize / 2));
           }
 
-          console.warn('Retryable batch failure; will retry', {
+          console.warn('Retryable batch failure', {
             normaId,
             retryCount,
             maxRetriesPerBatch,
             retryAfter,
-            batchStart: (data as any)?.batch_start,
-            batchEnd: (data as any)?.batch_end,
+            batchStart: currentBatchStart,
+            batchEnd: currentBatchEnd,
             batchSize,
           });
 
-          // If we've exceeded max retries, pause and let auto-resume handle later.
+          // If we've exceeded max retries on the SAME batch, force skip to next batch
           if (retryCount >= maxRetriesPerBatch) {
+            console.warn(`Forcing skip past stuck batch ${currentBatchStart}-${currentBatchEnd}`);
+            // Force move to next batch (end + 1)
+            nextBatchStart = (currentBatchEnd ?? currentBatchStart ?? 1) + 1;
+            retryCount = 0;
+            lastFailedBatchStart = null;
+            batchSize = baseBatchSize; // Reset batch size
             toast({
-              title: 'Extração pausada',
-              description: 'O serviço de IA está instável. A extração ficará pendente e será retomada automaticamente ao reabrir a norma.',
+              title: 'Lote problemático pulado',
+              description: `Artigos ${currentBatchStart}-${currentBatchEnd} não puderam ser extraídos e foram pulados.`,
             });
-            break;
+            await sleep(500);
+            continue;
           }
 
           await sleep(Math.max(700, Math.min(5000, retryAfter)));
@@ -756,6 +773,7 @@ const BackofficeNormaForm = () => {
 
         // Successful batch - reset retry tracking
         retryCount = 0;
+        lastFailedBatchStart = null;
 
         // Se o lote foi concluído, volta gradualmente ao tamanho padrão.
         if (batchSize < baseBatchSize) {

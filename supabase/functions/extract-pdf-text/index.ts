@@ -15,6 +15,51 @@ interface ExtractedArticle {
   texto: string;
 }
 
+type ToolArgs = {
+  dispositivos: {
+    anchor: string;
+    nivel: "artigo" | "inciso" | "paragrafo" | "alinea";
+    texto: string;
+  }[];
+};
+
+function safeJsonParse<T>(raw: unknown): T | null {
+  if (raw == null) return null;
+  if (typeof raw === "object") return raw as T;
+  if (typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
+  const msg = aiResult?.choices?.[0]?.message;
+
+  // OpenAI-style tool calls
+  const toolCalls = msg?.tool_calls;
+  if (Array.isArray(toolCalls)) {
+    for (const call of toolCalls) {
+      const name = call?.function?.name ?? call?.name;
+      const argsRaw = call?.function?.arguments ?? call?.arguments;
+      if (!argsRaw) continue;
+      if (name && name !== "extract_dispositivos") continue;
+      const parsed = safeJsonParse<ToolArgs>(argsRaw);
+      if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
+    }
+  }
+
+  // Legacy OpenAI-style function_call
+  const fc = msg?.function_call;
+  if (fc?.arguments) {
+    const parsed = safeJsonParse<ToolArgs>(fc.arguments);
+    if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
+  }
+
+  return null;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -71,107 +116,152 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
+    const gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+    const toolsPayload = [
+      {
+        type: "function",
+        function: {
+          name: "extract_dispositivos",
+          description: "Extrai todos os dispositivos de uma norma jurídica brasileira",
+          parameters: {
+            type: "object",
+            properties: {
+              dispositivos: {
+                type: "array",
+                description: "Lista de todos os dispositivos extraídos do documento",
+                items: {
+                  type: "object",
+                  properties: {
+                    anchor: {
+                      type: "string",
+                      description: "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)",
+                    },
+                    nivel: {
+                      type: "string",
+                      enum: ["artigo", "inciso", "paragrafo", "alinea"],
+                      description: "Tipo do dispositivo",
+                    },
+                    texto: {
+                      type: "string",
+                      description: "Texto completo do dispositivo",
+                    },
+                  },
+                  required: ["anchor", "nivel", "texto"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["dispositivos"],
+            additionalProperties: false,
+          },
+        },
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
+    ];
+
+    const messagesPayload = [
+      {
+        role: "system",
+        content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
 Extraia TODOS os dispositivos do documento: artigos, incisos, parágrafos e alíneas.
 Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1.a) e o texto completo.
-É CRÍTICO extrair TODOS os artigos do documento, sem omitir nenhum.`
+É CRÍTICO extrair TODOS os artigos do documento, sem omitir nenhum.`,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "file",
+            file: {
+              filename: "norma.pdf",
+              file_data: `data:application/pdf;base64,${base64Pdf}`,
+            },
           },
           {
-            role: "user",
-            content: [
-              {
-                type: "file",
-                file: {
-                  filename: "norma.pdf",
-                  file_data: `data:application/pdf;base64,${base64Pdf}`
-                }
-              },
-              {
-                type: "text",
-                text: "Extraia TODOS os dispositivos desta norma jurídica usando a função extract_dispositivos. Não omita nenhum artigo."
-              }
-            ]
-          }
+            type: "text",
+            text:
+              "Extraia TODOS os dispositivos desta norma jurídica usando a função extract_dispositivos. Não omita nenhum artigo.",
+          },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "extract_dispositivos",
-              description: "Extrai todos os dispositivos de uma norma jurídica brasileira",
-              parameters: {
-                type: "object",
-                properties: {
-                  dispositivos: {
-                    type: "array",
-                    description: "Lista de todos os dispositivos extraídos do documento",
-                    items: {
-                      type: "object",
-                      properties: {
-                        anchor: {
-                          type: "string",
-                          description: "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)"
-                        },
-                        nivel: {
-                          type: "string",
-                          enum: ["artigo", "inciso", "paragrafo", "alinea"],
-                          description: "Tipo do dispositivo"
-                        },
-                        texto: {
-                          type: "string",
-                          description: "Texto completo do dispositivo"
-                        }
-                      },
-                      required: ["anchor", "nivel", "texto"],
-                      additionalProperties: false
-                    }
-                  }
-                },
-                required: ["dispositivos"],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
-        temperature: 0.1,
-        max_tokens: 64000,
-      }),
+      },
+    ];
+
+    const buildGatewayBody = (model: string) => ({
+      model,
+      messages: messagesPayload,
+      tools: toolsPayload,
+      tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
+      temperature: 0.1,
+      max_tokens: 64000,
     });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
+    const callGateway = async (model: string) => {
+      const resp = await fetch(gatewayUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(buildGatewayBody(model)),
+      });
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error("AI API error:", resp.status, errorText?.slice(0, 2000));
+        throw new Error(`AI API error: ${resp.status}`);
+      }
+
+      return await resp.json();
+    };
+
+    // 1) Tenta um modelo mais novo por padrão; 2) fallback para pro; 3) fallback para o flash antigo
+    const candidateModels = [
+      "google/gemini-3-flash-preview",
+      "google/gemini-2.5-pro",
+      "google/gemini-2.5-flash",
+    ];
+
+    let aiResult: any = null;
+    let usedModel = candidateModels[0];
+    let toolArgs: ToolArgs | null = null;
+
+    for (const m of candidateModels) {
+      usedModel = m;
+      aiResult = await callGateway(m);
+      toolArgs = extractToolArgsFromAiResult(aiResult);
+
+      const msg = aiResult?.choices?.[0]?.message;
+      const toolCallsCount = Array.isArray(msg?.tool_calls) ? msg.tool_calls.length : 0;
+      const hasLegacyFunctionCall = Boolean(msg?.function_call);
+      const contentLen =
+        typeof msg?.content === "string" ? msg.content.length : Array.isArray(msg?.content) ? msg.content.length : 0;
+
+      console.log(
+        JSON.stringify({
+          ai_model: m,
+          has_tool_args: Boolean(toolArgs),
+          tool_calls_count: toolCallsCount,
+          has_legacy_function_call: hasLegacyFunctionCall,
+          message_keys: msg ? Object.keys(msg) : [],
+          content_len: contentLen,
+        })
+      );
+
+      if (toolArgs?.dispositivos?.length) break;
+      console.warn(`No tool args extracted for model ${m}; retrying with next model...`);
     }
 
-    const aiResult = await aiResponse.json();
-    
     console.log("AI response received, extracting tool call...");
 
     // Parse the tool call response
     let estrutura: ExtractedArticle[];
     let parsedOk = false;
     try {
-      const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-      
-      if (!toolCall || toolCall.function?.name !== "extract_dispositivos") {
-        throw new Error("No valid tool call in response");
+      if (!toolArgs?.dispositivos || !Array.isArray(toolArgs.dispositivos) || toolArgs.dispositivos.length === 0) {
+        throw new Error("No valid tool args in response");
       }
 
-      const args = JSON.parse(toolCall.function.arguments);
-      const dispositivos = args.dispositivos;
+      const dispositivos = toolArgs.dispositivos;
 
       if (!Array.isArray(dispositivos) || dispositivos.length === 0) {
         throw new Error("No dispositivos in tool call response");
@@ -191,7 +281,7 @@ Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1
       console.error("Failed to parse tool call response:", parseError);
       
       // Fallback: try to get content from message
-      const content = aiResult.choices?.[0]?.message?.content || "";
+      const content = aiResult?.choices?.[0]?.message?.content || "";
       console.log("Fallback content preview:", content.slice(0, 200));
       
       estrutura = [{
@@ -210,7 +300,7 @@ Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1
       .update({
         texto_extraido: JSON.stringify(estrutura),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: "lovable-ai-gemini",
+        texto_extraido_origem: `lovable-ai:${usedModel}`,
         texto_extraido_status: parsedOk ? "extraido" : "erro",
       })
       .eq("id", norma_id);

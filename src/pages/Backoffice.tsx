@@ -5,11 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft, FileSearch } from 'lucide-react';
+import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDateBR } from '@/lib/date';
-import NormIntegrityValidator from '@/components/NormIntegrityValidator';
 
 type NormType =
   | 'decreto'
@@ -170,99 +168,76 @@ const Backoffice = () => {
       </header>
 
       <main className="container py-8">
-        <Tabs defaultValue="normas" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="normas" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Gerenciar Normas
-            </TabsTrigger>
-            <TabsTrigger value="validator" className="gap-2">
-              <FileSearch className="h-4 w-4" />
-              Validador de Integridade
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="normas">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-2xl">Gerenciar Normas</CardTitle>
-                <Button onClick={() => navigate('/backoffice/norma/nova')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Norma
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {isLoadingNormas ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : normas.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhuma norma cadastrada.</p>
-                    <p className="text-sm">Clique em "Nova Norma" para começar.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Número</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="max-w-md">Ementa</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {normas.map((norma) => (
-                          <TableRow key={norma.id}>
-                            <TableCell className="font-medium">{norma.numero}</TableCell>
-                            <TableCell>{normTypeLabels[norma.tipo]}</TableCell>
-                            <TableCell>
-                              {norma.status && statusLabels[norma.status as NormStatus] && (
-                                <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColors[norma.status as NormStatus]}`}>
-                                  {statusLabels[norma.status as NormStatus]}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-md truncate">{norma.ementa}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => navigate(`/backoffice/norma/${norma.id}`)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDelete(norma.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="validator">
-            <Card>
-              <CardContent className="pt-6">
-                <NormIntegrityValidator />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-2xl">Gerenciar Normas</CardTitle>
+            <Button onClick={() => navigate('/backoffice/norma/nova')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Norma
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isLoadingNormas ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : normas.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhuma norma cadastrada.</p>
+                <p className="text-sm">Clique em "Nova Norma" para começar.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="max-w-md">Ementa</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {normas.map((norma) => (
+                      <TableRow key={norma.id}>
+                        <TableCell className="font-medium">{norma.numero}</TableCell>
+                        <TableCell>{normTypeLabels[norma.tipo]}</TableCell>
+                        <TableCell>
+                          {norma.status && statusLabels[norma.status as NormStatus] && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${statusColors[norma.status as NormStatus]}`}>
+                              {statusLabels[norma.status as NormStatus]}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-md truncate">{norma.ementa}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/backoffice/norma/${norma.id}`)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(norma.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );

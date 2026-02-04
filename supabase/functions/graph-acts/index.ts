@@ -30,8 +30,14 @@ interface ActEdge {
 
 // Map of virtual IDs to potential database numero patterns
 const virtualIdPatterns: Record<string, string[]> = {
-  "lei-14133-2021": ["14.133/2021", "14133/2021"],
+  "lei-14133-2021": ["14.133/2021", "14133/2021", "14.133"],
   "cf88": ["CF/1988", "CF 1988"],
+  "decreto-lei-2848-1940": ["2.848/1940", "2848/1940"],
+};
+
+// Normalize a numero for comparison (lowercase, remove spaces and special chars)
+const normalizeNumero = (numero: string): string => {
+  return numero.toLowerCase().replace(/[\s.-]/g, "").replace(/\//g, "");
 };
 
 interface GraphResponse {
@@ -105,10 +111,10 @@ Deno.serve(async (req) => {
       normaMap.set(n.id, n);
     }
     
-    // Also map by numero for resolving virtual references (e.g., "lei-14133-2021" -> actual UUID)
-    const normaByNumero = new Map<string, any>();
+    // Also map by normalized numero for resolving virtual references
+    const normaByNormalizedNumero = new Map<string, any>();
     for (const n of (normas || [])) {
-      normaByNumero.set(n.numero.toLowerCase().replace(/\s+/g, ""), n);
+      normaByNormalizedNumero.set(normalizeNumero(n.numero), n);
     }
     
     // Helper to resolve a to_document ID (could be UUID or virtual like "lei-14133-2021")
@@ -116,21 +122,28 @@ Deno.serve(async (req) => {
       // If it's already a known UUID
       if (normaMap.has(toDocId)) return toDocId;
       
-      // Check virtual patterns
+      // Check virtual patterns (e.g., "lei-14133-2021" -> look for "14.133/2021")
       for (const [virtualId, patterns] of Object.entries(virtualIdPatterns)) {
         if (toDocId === virtualId) {
           for (const pattern of patterns) {
-            const norma = normaByNumero.get(pattern.toLowerCase().replace(/\s+/g, ""));
-            if (norma) return norma.id;
+            const normalizedPattern = normalizeNumero(pattern);
+            const norma = normaByNormalizedNumero.get(normalizedPattern);
+            if (norma) {
+              console.log(`Resolved virtual ID "${toDocId}" to norma ${norma.id} (${norma.numero})`);
+              return norma.id;
+            }
           }
         }
       }
       
-      // Try direct numero match (lowercase, no spaces)
-      const normalized = toDocId.toLowerCase().replace(/[^a-z0-9]/g, "");
-      for (const [key, n] of normaByNumero) {
-        if (key.replace(/[^a-z0-9]/g, "").includes(normalized)) {
-          return n.id;
+      // Try extracting numbers from virtual ID and match against numeros
+      const numbersFromId = toDocId.replace(/[^0-9]/g, "");
+      if (numbersFromId.length >= 4) {
+        for (const [normalizedNum, n] of normaByNormalizedNumero) {
+          if (normalizedNum.includes(numbersFromId.slice(0, 5))) {
+            console.log(`Fuzzy matched "${toDocId}" to norma ${n.id} (${n.numero})`);
+            return n.id;
+          }
         }
       }
       

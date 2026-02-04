@@ -530,6 +530,34 @@ const BackofficeNormaForm = () => {
       setExtractionOrigin(null);
       setExtractionProgress(null);
 
+      // Persistir imediatamente no backend para garantir que a extração sempre use o ÚLTIMO PDF carregado
+      // (mesmo se o usuário não clicar em "Salvar" antes de extrair).
+      if (isEditing && id) {
+        try {
+          await supabase
+            .from('normas')
+            .update({
+              pdf_url: urlData.publicUrl,
+              pdf_storage_path: storagePath,
+              pdf_nome_arquivo: file.name,
+              pdf_tamanho: file.size,
+              pdf_mime_type: file.type,
+              pdf_upload_em: new Date().toISOString(),
+              // Resetar extração para forçar re-extração limpa
+              texto_extraido: null,
+              texto_extraido_status: null,
+              texto_extraido_origem: null,
+              texto_extraido_em: null,
+              texto_extraido_progresso_atual: null,
+              texto_extraido_progresso_total: null,
+              texto_extraido_progresso_em: null,
+            } as any)
+            .eq('id', id);
+        } catch (err) {
+          console.error('Falha ao persistir PDF no backend:', err);
+        }
+      }
+
       toast({
         title: 'PDF carregado!',
         description: 'O arquivo foi enviado com sucesso.',
@@ -626,13 +654,8 @@ const BackofficeNormaForm = () => {
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
       let retryCount = 0;
-      // Track skipped batches due to repeated failures
-      const skippedBatches: { start: number; end: number }[] = [];
-      // Track which batch we're currently retrying
-      let currentBatchStart: number | null = null;
-      let currentBatchEnd: number | null = null;
-      // Max retries before skipping a problematic batch
-      const maxRetriesPerBatch = 3;
+      // Max retries before pausing (auto-resume can continue later)
+      const maxRetriesPerBatch = 12;
 
       let done = false;
       for (let i = 0; i < maxBatches; i++) {
@@ -672,22 +695,9 @@ const BackofficeNormaForm = () => {
 
         await refreshExtractionMeta(normaId);
 
-        const batchStart = (data as any)?.batch_start as number | undefined;
-        const batchEnd = (data as any)?.batch_end as number | undefined;
-
         const retryable = Boolean((data as any)?.retryable);
         if (retryable) {
-          // Check if this is the same batch we've been retrying
-          const isSameBatch = currentBatchStart === batchStart && currentBatchEnd === batchEnd;
-          
-          if (isSameBatch) {
-            retryCount += 1;
-          } else {
-            // New batch, reset retry counter
-            retryCount = 1;
-            currentBatchStart = batchStart ?? null;
-            currentBatchEnd = batchEnd ?? null;
-          }
+          retryCount += 1;
 
           const retryAfter = Number((data as any)?.retry_after_ms ?? 900);
           const suggestedBatchSize = Number((data as any)?.suggested_batch_size ?? NaN);
@@ -698,36 +708,23 @@ const BackofficeNormaForm = () => {
             batchSize = Math.max(1, Math.floor(batchSize / 2));
           }
 
-          console.warn('Retryable batch failure', {
+          console.warn('Retryable batch failure; will retry', {
             normaId,
             retryCount,
             maxRetriesPerBatch,
             retryAfter,
-            batchStart,
-            batchEnd,
+            batchStart: (data as any)?.batch_start,
+            batchEnd: (data as any)?.batch_end,
             batchSize,
           });
 
-          // If we've exceeded max retries for this batch, skip it and move on
+          // If we've exceeded max retries, pause and let auto-resume handle later.
           if (retryCount >= maxRetriesPerBatch) {
-            console.warn(`Skipping problematic batch art.${batchStart}-${batchEnd} after ${retryCount} failures`);
-            
-            if (batchStart != null && batchEnd != null) {
-              skippedBatches.push({ start: batchStart, end: batchEnd });
-            }
-            
-            // Reset for next batch
-            retryCount = 0;
-            currentBatchStart = null;
-            currentBatchEnd = null;
-            batchSize = baseBatchSize;
-            
-            // Skip to next batch (advance past the problematic one)
-            nextBatchStart = (batchEnd ?? batchStart ?? 1) + 1;
-            
-            // Small delay before trying next batch
-            await sleep(500);
-            continue;
+            toast({
+              title: 'Extração pausada',
+              description: 'O serviço de IA está instável. A extração ficará pendente e será retomada automaticamente ao reabrir a norma.',
+            });
+            break;
           }
 
           await sleep(Math.max(700, Math.min(5000, retryAfter)));
@@ -736,8 +733,6 @@ const BackofficeNormaForm = () => {
 
         // Successful batch - reset retry tracking
         retryCount = 0;
-        currentBatchStart = null;
-        currentBatchEnd = null;
 
         // Se o lote foi concluído, volta gradualmente ao tamanho padrão.
         if (batchSize < baseBatchSize) {
@@ -762,20 +757,10 @@ const BackofficeNormaForm = () => {
       await refreshExtractionMeta(normaId);
 
       if (done) {
-        if (skippedBatches.length > 0) {
-          const skippedDesc = skippedBatches
-            .map((b) => `art.${b.start}-${b.end}`)
-            .join(', ');
-          toast({
-            title: 'Extração concluída com ressalvas',
-            description: `Alguns artigos não puderam ser extraídos (${skippedDesc}). O restante foi processado com sucesso.`,
-          });
-        } else {
-          toast({
-            title: 'Texto extraído!',
-            description: 'O texto do PDF foi extraído e estruturado com sucesso.',
-          });
-        }
+        toast({
+          title: 'Texto extraído!',
+          description: 'O texto do PDF foi extraído e estruturado com sucesso.',
+        });
       } else {
         toast({
           title: 'Extração em andamento',

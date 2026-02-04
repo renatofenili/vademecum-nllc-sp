@@ -28,6 +28,12 @@ interface ActEdge {
   }[];
 }
 
+// Map of virtual IDs to potential database numero patterns
+const virtualIdPatterns: Record<string, string[]> = {
+  "lei-14133-2021": ["14.133/2021", "14133/2021"],
+  "cf88": ["CF/1988", "CF 1988"],
+};
+
 interface GraphResponse {
   root: string;
   nodes: ActNode[];
@@ -94,9 +100,42 @@ Deno.serve(async (req) => {
     const edges: ActEdge[] = [];
     const normaMap = new Map<string, any>();
     
+    // Map by ID
     for (const n of (normas || [])) {
       normaMap.set(n.id, n);
     }
+    
+    // Also map by numero for resolving virtual references (e.g., "lei-14133-2021" -> actual UUID)
+    const normaByNumero = new Map<string, any>();
+    for (const n of (normas || [])) {
+      normaByNumero.set(n.numero.toLowerCase().replace(/\s+/g, ""), n);
+    }
+    
+    // Helper to resolve a to_document ID (could be UUID or virtual like "lei-14133-2021")
+    const resolveDocId = (toDocId: string): string | null => {
+      // If it's already a known UUID
+      if (normaMap.has(toDocId)) return toDocId;
+      
+      // Check virtual patterns
+      for (const [virtualId, patterns] of Object.entries(virtualIdPatterns)) {
+        if (toDocId === virtualId) {
+          for (const pattern of patterns) {
+            const norma = normaByNumero.get(pattern.toLowerCase().replace(/\s+/g, ""));
+            if (norma) return norma.id;
+          }
+        }
+      }
+      
+      // Try direct numero match (lowercase, no spaces)
+      const normalized = toDocId.toLowerCase().replace(/[^a-z0-9]/g, "");
+      for (const [key, n] of normaByNumero) {
+        if (key.replace(/[^a-z0-9]/g, "").includes(normalized)) {
+          return n.id;
+        }
+      }
+      
+      return null;
+    };
 
     for (const norma of (normas || [])) {
       if (!norma.remissoes_extraidas) continue;
@@ -117,17 +156,20 @@ Deno.serve(async (req) => {
         if (!refGroup.references) continue;
         
         for (const ref of refGroup.references) {
-          const toDocId = ref.to_document;
-          if (toDocId && toDocId !== norma.id && normaMap.has(toDocId)) {
-            if (!targetDocs.has(toDocId)) {
-              targetDocs.set(toDocId, []);
-            }
-            targetDocs.get(toDocId)!.push({
-              from_anchor: refGroup.from_anchor || "",
-              to_anchor: ref.to_anchor || "",
-              excerpt: ref.raw_reference || "",
-            });
+          const rawToDocId = ref.to_document;
+          if (!rawToDocId) continue;
+          
+          const resolvedId = resolveDocId(rawToDocId);
+          if (!resolvedId || resolvedId === norma.id) continue;
+          
+          if (!targetDocs.has(resolvedId)) {
+            targetDocs.set(resolvedId, []);
           }
+          targetDocs.get(resolvedId)!.push({
+            from_anchor: refGroup.from_anchor || "",
+            to_anchor: ref.to_anchor || "",
+            excerpt: ref.raw_reference || "",
+          });
         }
       }
 
@@ -147,6 +189,8 @@ Deno.serve(async (req) => {
             relationType = "implements";
           } else if (fromNorma.tipo === "resolucao" && toNorma.tipo === "lei") {
             relationType = "regulates";
+          } else if (fromNorma.tipo === "instrucao_normativa" && toNorma.tipo === "lei") {
+            relationType = "regulates";
           }
         }
 
@@ -154,7 +198,7 @@ Deno.serve(async (req) => {
           from_act: norma.id,
           to_act: toDocId,
           relation_type: relationType,
-          evidences: evidences.slice(0, 5), // Limit evidences
+          evidences: evidences, // Keep all evidences for article connections
         });
       }
     }

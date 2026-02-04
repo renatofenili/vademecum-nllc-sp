@@ -540,7 +540,104 @@ export const RadialHierarchyView = ({
     };
   }, [data, dimensions, expansionOffset]);
 
-  // Mouse handlers for panning
+  // Calculate article positions for expanded norms (needed for inter-norm article links)
+  const artigoPositions = useMemo(() => {
+    const positions = new Map<string, { x: number; y: number; parentActId: string }>();
+    
+    if (nodes.length === 0) return positions;
+    
+    nodes.forEach((node) => {
+      const nodeExpanded = expandedDispositivosMap.get(node.id);
+      if (!nodeExpanded || nodeExpanded.isLoading || !nodeExpanded.artigoGroups.length) return;
+      
+      const artigoGroups = nodeExpanded.artigoGroups;
+      const count = artigoGroups.length;
+      const maxPerRing = 20;
+      
+      artigoGroups.forEach((group, idx) => {
+        const ringIndex = Math.floor(idx / maxPerRing);
+        const indexInRing = idx % maxPerRing;
+        const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+        
+        const baseRadius = 75;
+        const ringSpacing = 35;
+        const artigoRadius = baseRadius + ringIndex * ringSpacing;
+        
+        const angleSpread = Math.min(Math.PI * 1.8, countInThisRing * 0.18);
+        const startAngle = node.angle - angleSpread / 2;
+        const artigoAngle = countInThisRing > 1 
+          ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
+          : node.angle;
+        
+        const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
+        const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
+        
+        // Key: "actId:anchor" (e.g., "uuid:art.74")
+        positions.set(`${node.id}:${group.artigo.anchor}`, { 
+          x: artigoX, 
+          y: artigoY, 
+          parentActId: node.id 
+        });
+      });
+    });
+    
+    return positions;
+  }, [nodes, expandedDispositivosMap]);
+
+  // Calculate inter-norm article links (from regulating norms to specific articles)
+  const articleLinks = useMemo(() => {
+    const linksToArticles: Array<{
+      fromNodeId: string;
+      fromX: number;
+      fromY: number;
+      toAnchor: string;
+      toX: number;
+      toY: number;
+      toActId: string;
+    }> = [];
+    
+    if (!data?.edges || artigoPositions.size === 0) return linksToArticles;
+    
+    // For each edge, check if the target act has expanded articles
+    data.edges.forEach((edge) => {
+      const fromNode = nodes.find(n => n.id === edge.from_act);
+      if (!fromNode) return;
+      
+      // Check if target act has expanded dispositivos
+      const targetExpanded = expandedDispositivosMap.get(edge.to_act);
+      if (!targetExpanded || targetExpanded.isLoading || !targetExpanded.artigoGroups.length) return;
+      
+      // For each evidence, find matching article positions
+      edge.evidences.forEach((evidence) => {
+        if (!evidence.to_anchor) return;
+        
+        // Normalize anchor for matching (e.g., "art.74" should match "art.74")
+        const anchorKey = `${edge.to_act}:${evidence.to_anchor}`;
+        const artigoPos = artigoPositions.get(anchorKey);
+        
+        if (artigoPos) {
+          // Avoid duplicate links
+          const exists = linksToArticles.some(
+            l => l.fromNodeId === fromNode.id && l.toAnchor === evidence.to_anchor && l.toActId === edge.to_act
+          );
+          
+          if (!exists) {
+            linksToArticles.push({
+              fromNodeId: fromNode.id,
+              fromX: fromNode.x,
+              fromY: fromNode.y,
+              toAnchor: evidence.to_anchor,
+              toX: artigoPos.x,
+              toY: artigoPos.y,
+              toActId: edge.to_act,
+            });
+          }
+        }
+      });
+    });
+    
+    return linksToArticles;
+  }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);
@@ -868,6 +965,51 @@ export const RadialHierarchyView = ({
                   />
                 );
               })}
+
+              {/* Article-level connection links (from regulating norms to specific articles) */}
+              {showRegulamentaLinks && articleLinks.map((link, index) => {
+                const fromNode = nodes.find(n => n.id === link.fromNodeId);
+                const toNode = nodes.find(n => n.id === link.toActId);
+                
+                // Dim links if theme mode is active
+                const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromNodeId);
+                const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toActId);
+                const linkHighlighted = fromHighlighted || toHighlighted;
+                
+                // Use color of the source node
+                const fromColor = fromNode ? ringColors[fromNode.ring] : "hsl(0, 0%, 40%)";
+                
+                return (
+                  <line
+                    key={`article-link-${link.fromNodeId}-${link.toAnchor}-${index}`}
+                    x1={link.fromX}
+                    y1={link.fromY}
+                    x2={link.toX}
+                    y2={link.toY}
+                    stroke={fromColor}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    opacity={highlightedNormaIds ? (linkHighlighted ? 0.7 : 0.1) : 0.5}
+                    className="transition-opacity duration-300"
+                    markerEnd="url(#arrowhead)"
+                  />
+                );
+              })}
+
+              {/* Arrow marker definition */}
+              <defs>
+                <marker
+                  id="arrowhead"
+                  markerWidth="6"
+                  markerHeight="6"
+                  refX="5"
+                  refY="3"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L0,6 L6,3 z" fill="hsl(0, 0%, 40%)" opacity="0.6" />
+                </marker>
+              </defs>
 
               {/* Nodes */}
               {nodes.map((node) => {

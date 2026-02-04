@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Loader2, ZoomIn, ZoomOut, Maximize2, GitBranch, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronRight, FileText, Palette, X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -123,7 +124,7 @@ export const RadialHierarchyView = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
-  const [hoveredArtigo, setHoveredArtigo] = useState<{ artigo: ArtigoGroup; x: number; y: number } | null>(null);
+  const [selectedArtigo, setSelectedArtigo] = useState<ArtigoGroup | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
   
@@ -708,63 +709,7 @@ export const RadialHierarchyView = ({
           </div>
         )}
 
-        {/* Tooltip for artigo nodes */}
-        {hoveredArtigo && (
-          <div
-            className="absolute z-20 bg-popover border border-border rounded-lg shadow-lg p-3 max-w-md pointer-events-none"
-            style={{
-              left: Math.min(hoveredArtigo.x * zoom + pan.x + 20, dimensions.width - 350),
-              top: Math.min(hoveredArtigo.y * zoom + pan.y - 10, dimensions.height - 300),
-            }}
-          >
-            {/* Artigo header - without count */}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
-              <p className="font-semibold text-sm text-foreground">
-                {hoveredArtigo.artigo.artigo.anchor}
-              </p>
-            </div>
-            
-            {/* Artigo text - full, no truncation */}
-            <p className="text-xs text-muted-foreground leading-relaxed mb-2" style={{ textAlign: "justify" }}>
-              {hoveredArtigo.artigo.artigo.texto}
-            </p>
-            
-            {/* Children preview */}
-            {hoveredArtigo.artigo.children.length > 0 && (
-              <div className="border-t border-border pt-2 mt-2 space-y-1 max-h-[150px] overflow-y-auto">
-                {hoveredArtigo.artigo.children.slice(0, 8).map((child, idx) => {
-                  const nivelLabel: Record<string, string> = {
-                    paragrafo: "§",
-                    inciso: "",
-                    alinea: "",
-                  };
-                  const nivelColor: Record<string, string> = {
-                    paragrafo: "bg-cyan-500",
-                    inciso: "bg-pink-500",
-                    alinea: "bg-purple-500",
-                  };
-                  return (
-                    <div key={idx} className="flex items-start gap-1.5 text-xs">
-                      <span className={`w-2 h-2 rounded-full ${nivelColor[child.nivel] || "bg-muted"} shrink-0 mt-1`} />
-                      <span className="text-muted-foreground">
-                        {nivelLabel[child.nivel]}{child.anchor.replace(/^(art\.\d+)?/i, "").trim()}: 
-                      </span>
-                      <span className="text-foreground line-clamp-1 flex-1">
-                        {child.texto.slice(0, 80)}{child.texto.length > 80 ? "…" : ""}
-                      </span>
-                    </div>
-                  );
-                })}
-                {hoveredArtigo.artigo.children.length > 8 && (
-                  <p className="text-xs text-muted-foreground italic">
-                    +{hoveredArtigo.artigo.children.length - 8} mais dispositivos...
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Artigo nodes handled via Dialog, not tooltip */}
 
         <div
           ref={containerRef}
@@ -954,11 +899,13 @@ export const RadialHierarchyView = ({
                             opacity={0.5}
                           />
                           
-                          {/* Artigo node */}
+                          {/* Artigo node - click to open detail */}
                           <g
                             transform={`translate(${artigoX}, ${artigoY})`}
-                            onMouseEnter={() => setHoveredArtigo({ artigo: group, x: artigoX, y: artigoY })}
-                            onMouseLeave={() => setHoveredArtigo(null)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedArtigo(group);
+                            }}
                             className="cursor-pointer"
                           >
                             <circle
@@ -976,8 +923,6 @@ export const RadialHierarchyView = ({
                             >
                               {group.artigo.anchor.replace(/^art\.?/i, "").trim() || `A${idx + 1}`}
                             </text>
-                            
-                            {/* Badge removed - count not needed on map */}
                           </g>
                         </g>
                       );
@@ -1227,6 +1172,65 @@ export const RadialHierarchyView = ({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Artigo Detail Dialog */}
+      <Dialog open={!!selectedArtigo} onOpenChange={(open) => !open && setSelectedArtigo(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          {selectedArtigo && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-amber-500" />
+                  {selectedArtigo.artigo.anchor}
+                </DialogTitle>
+              </DialogHeader>
+              
+              <ScrollArea className="flex-1 -mx-6 px-6">
+                <div className="space-y-4 py-2">
+                  {/* Artigo principal */}
+                  <div className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
+                    {selectedArtigo.artigo.texto}
+                  </div>
+                  
+                  {/* Dispositivos filhos (parágrafos, incisos, alíneas) */}
+                  {selectedArtigo.children.length > 0 && (
+                    <div className="space-y-3 border-l-2 border-amber-300 pl-4 mt-4">
+                      {selectedArtigo.children.map((child, idx) => {
+                        const nivelStyles: Record<string, { bg: string; border: string; label: string }> = {
+                          paragrafo: { bg: "bg-cyan-50 dark:bg-cyan-900/20", border: "border-cyan-300", label: "§" },
+                          inciso: { bg: "bg-pink-50 dark:bg-pink-900/20", border: "border-pink-300", label: "" },
+                          alinea: { bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-300", label: "" },
+                        };
+                        const style = nivelStyles[child.nivel] || nivelStyles.inciso;
+                        
+                        // Format anchor for display
+                        const displayAnchor = child.anchor.replace(/^art\.\d+/i, "").trim();
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded-lg ${style.bg} border-l-2 ${style.border}`}
+                            style={{ marginLeft: child.nivel === "alinea" ? "16px" : child.nivel === "inciso" ? "8px" : "0" }}
+                          >
+                            <div className="flex items-baseline gap-2 mb-1">
+                              <span className="font-semibold text-sm text-muted-foreground">
+                                {style.label}{displayAnchor}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
+                              {child.texto}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

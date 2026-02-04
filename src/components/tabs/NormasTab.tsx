@@ -82,6 +82,28 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     return tipos[tipo] || tipo;
   };
 
+  // Apply formal formatting rules to text
+  const applyFormalFormatting = (text: string): string => {
+    let formatted = text;
+    
+    // 1. "Art." starts new line (but not at the very beginning)
+    formatted = formatted.replace(/(?<!^)(\bArt\.?\s*\d)/gi, '\n$1');
+    
+    // 2. Roman numeral incisos start new line: "I -", "II -", "III -", etc.
+    formatted = formatted.replace(/(?<!^)\s*((?:X{0,3}(?:IX|IV|V?I{0,3}))\s*[-–—])/gi, '\n$1');
+    
+    // 3. Paragraphs "§" start new line
+    formatted = formatted.replace(/(?<!^)\s*(§\s*\d|§\s*único)/gi, '\n$1');
+    
+    // 4. Alíneas "a)", "b)", etc. start new line
+    formatted = formatted.replace(/(?<!^)\s*([a-z]\))/gi, '\n$1');
+    
+    // Clean up multiple consecutive newlines
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    
+    return formatted.trim();
+  };
+
   // Parse texto_extraido JSON to render formatted text
   const renderTextoExtraido = (textoExtraido: string | null) => {
     if (!textoExtraido) return null;
@@ -101,6 +123,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
         <div className="space-y-4 text-justify">
           {dispositivos.map((dispositivo, index) => {
             const nivelStyles: Record<string, string> = {
+              ementa: "text-foreground font-medium italic",
               preambulo: "text-foreground",
               artigo: "text-foreground",
               paragrafo: "text-foreground ml-4",
@@ -109,11 +132,12 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
             };
 
             const style = nivelStyles[dispositivo.nivel] || "text-foreground";
+            const formattedText = applyFormalFormatting(dispositivo.texto);
 
             return (
               <div key={`${dispositivo.anchor}-${index}`} className="group">
-                <p className={`${style} leading-relaxed`}>
-                  {dispositivo.texto}
+                <p className={`${style} leading-relaxed whitespace-pre-line`}>
+                  {formattedText}
                 </p>
                 <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity font-mono">
                   {dispositivo.anchor}
@@ -124,10 +148,11 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
         </div>
       );
     } catch (e) {
-      // If not valid JSON, render as plain text
+      // If not valid JSON, apply formatting rules to plain text
+      const formattedText = applyFormalFormatting(textoExtraido);
       return (
         <pre className="whitespace-pre-wrap text-sm font-sans text-foreground leading-relaxed">
-          {textoExtraido}
+          {formattedText}
         </pre>
       );
     }

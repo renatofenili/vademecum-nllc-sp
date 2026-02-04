@@ -512,6 +512,7 @@ const BackofficeNormaForm = () => {
       const maxBatches = 60; // safety guard
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
+      let retryCount = 0;
 
       let done = false;
       for (let i = 0; i < maxBatches; i++) {
@@ -536,6 +537,30 @@ const BackofficeNormaForm = () => {
         }
 
         await refreshExtractionMeta(normaId);
+
+        const retryable = Boolean((data as any)?.retryable);
+        if (retryable) {
+          retryCount += 1;
+          const retryAfter = Number((data as any)?.retry_after_ms ?? 900);
+          console.warn('Retryable batch failure; retrying same batch...', {
+            normaId,
+            retryCount,
+            retryAfter,
+            batchStart: (data as any)?.batch_start,
+            batchEnd: (data as any)?.batch_end,
+          });
+
+          if (retryCount >= 4) {
+            throw new Error(
+              'Falha repetida ao extrair este lote. Tente novamente em alguns minutos.'
+            );
+          }
+
+          await sleep(Math.max(700, Math.min(5000, retryAfter)));
+          continue;
+        }
+
+        retryCount = 0;
 
         const emptyBatch = Boolean((data as any)?.empty_batch);
         const batchDone = Boolean((data as any)?.done);

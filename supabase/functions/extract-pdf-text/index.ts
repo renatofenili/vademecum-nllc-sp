@@ -23,6 +23,19 @@ type ToolArgs = {
   }[];
 };
 
+type GatewayBatchResult = {
+  dispositivos: ToolArgs["dispositivos"];
+  ok: boolean;
+  retryable: boolean;
+  retry_after_ms: number;
+  error_kind?:
+    | "gateway_http"
+    | "no_tool_args"
+    | "invalid_json"
+    | "unknown";
+  http_status?: number;
+};
+
 function safeJsonParse<T>(raw: unknown): T | null {
   if (raw == null) return null;
   if (typeof raw === "object") return raw as T;
@@ -32,6 +45,24 @@ function safeJsonParse<T>(raw: unknown): T | null {
   } catch {
     return null;
   }
+}
+
+function messageContentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    // Some gateways return content parts: [{type:'text', text:'...'}, ...]
+    return content
+      .map((p: any) => {
+        if (typeof p === "string") return p;
+        if (p?.type === "text" && typeof p?.text === "string") return p.text;
+        if (typeof p?.text === "string") return p.text;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  return "";
 }
 
 function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
@@ -58,7 +89,7 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
   }
 
   // Fallback: try to parse from content (JSON in markdown code block)
-  const contentStr = typeof msg?.content === "string" ? msg.content : "";
+  const contentStr = messageContentToText(msg?.content);
   if (contentStr) {
     // Remove markdown code block wrappers
     let cleaned = contentStr.trim();
@@ -143,7 +174,7 @@ async function callGatewayBatch(
   base64Pdf: string,
   batchStart: number,
   batchEnd: number
-): Promise<{ dispositivos: ToolArgs["dispositivos"]; ok: boolean }> {
+): Promise<GatewayBatchResult> {
   const toolsPayload = [
     {
       type: "function",
@@ -238,8 +269,23 @@ Não omita nenhum artigo do intervalo solicitado.`,
 
   if (!resp.ok) {
     const errorText = await resp.text();
-    console.error(`AI API error (batch ${batchStart}-${batchEnd}):`, resp.status, errorText?.slice(0, 1000));
-    return { dispositivos: [], ok: false };
+    const status = resp.status;
+    console.error(
+      `AI API error (batch ${batchStart}-${batchEnd}):`,
+      status,
+      errorText?.slice(0, 1000)
+    );
+
+    // Most of these are transient (rate limit / gateway issues)
+    const retryable = [408, 425, 429, 500, 502, 503, 504].includes(status);
+    return {
+      dispositivos: [],
+      ok: false,
+      retryable,
+      retry_after_ms: retryable ? 1500 : 0,
+      error_kind: "gateway_http",
+      http_status: status,
+    };
   }
 
   const aiResult = await resp.json();
@@ -257,9 +303,32 @@ Não omita nenhum artigo do intervalo solicitado.`,
   );
 
   if (toolArgs?.dispositivos && toolArgs.dispositivos.length > 0) {
-    return { dispositivos: toolArgs.dispositivos, ok: true };
+    return {
+      dispositivos: toolArgs.dispositivos,
+      ok: true,
+      retryable: false,
+      retry_after_ms: 0,
+    };
   }
-  return { dispositivos: [], ok: false };
+
+  // No tool args: usually transient model behavior; treat as retryable.
+  const msgContent = aiResult?.choices?.[0]?.message?.content;
+  const contentText = messageContentToText(msgContent);
+  console.warn(
+    JSON.stringify({
+      batch: `${batchStart}-${batchEnd}`,
+      issue: "no_tool_args",
+      content_preview: contentText ? contentText.slice(0, 300) : null,
+      content_len: contentText?.length ?? 0,
+    })
+  );
+  return {
+    dispositivos: [],
+    ok: false,
+    retryable: true,
+    retry_after_ms: 900,
+    error_kind: "no_tool_args",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -391,24 +460,54 @@ Deno.serve(async (req) => {
       if (pendErr) console.error("Failed to set pending status:", pendErr);
     }
 
-    console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
-    const { dispositivos, ok } = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
+     console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
+     const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
+     const { dispositivos, ok, retryable, retry_after_ms, error_kind } = batchResult;
 
     if (!ok) {
-      const { error: errUpd } = await supabase
-        .from("normas")
-        .update({
-          texto_extraido_status: "erro",
-          texto_extraido_em: new Date().toISOString(),
-          texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
-        })
-        .eq("id", norma_id);
-      if (errUpd) console.error("Failed to set error status:", errUpd);
+       if (retryable) {
+         // Keep as pending; let the frontend retry the SAME batch.
+         const { error: pendErr2 } = await supabase
+           .from("normas")
+           .update({
+             texto_extraido_status: "pendente",
+             texto_extraido_em: new Date().toISOString(),
+             texto_extraido_origem: `lovable-ai:${MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+           })
+           .eq("id", norma_id);
+         if (pendErr2) console.error("Failed to keep pending status:", pendErr2);
 
-      return new Response(
-        JSON.stringify({ success: false, error: "AI did not return tool args" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+         return new Response(
+           JSON.stringify({
+             success: true,
+             done: false,
+             retryable: true,
+             retry_after_ms: retry_after_ms ?? 900,
+             batch_start: batchStart,
+             batch_end: batchEnd,
+             items_added: 0,
+             artigos_added: 0,
+             next_batch_start: batchStart,
+             empty_batch: false,
+           }),
+           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+         );
+       }
+
+       const { error: errUpd } = await supabase
+         .from("normas")
+         .update({
+           texto_extraido_status: "erro",
+           texto_extraido_em: new Date().toISOString(),
+           texto_extraido_origem: `lovable-ai:${MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+         })
+         .eq("id", norma_id);
+       if (errUpd) console.error("Failed to set error status:", errUpd);
+
+       return new Response(
+         JSON.stringify({ success: false, error: "AI extraction failed" }),
+         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+       );
     }
 
     const filtered = filterDispositivosByRange(dispositivos, batchStart, batchEnd);

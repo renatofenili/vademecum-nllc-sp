@@ -127,7 +127,7 @@ export const RadialHierarchyView = ({
   const [selectedArtigo, setSelectedArtigo] = useState<ArtigoGroup | null>(null);
   const [hoveredArtigo, setHoveredArtigo] = useState<{ anchor: string; x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
-  const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
+  const [expandedDispositivosMap, setExpandedDispositivosMap] = useState<Map<string, ExpandedDispositivos>>(new Map());
   
   // Link visibility toggles - hierarchy always visible by default
   const [showHierarchyLinks, setShowHierarchyLinks] = useState(true);
@@ -231,15 +231,24 @@ export const RadialHierarchyView = ({
     return groups;
   };
 
-  // Function to load dispositivos for a node
+  // Function to load dispositivos for a node (supports multiple expansions)
   const loadDispositivos = useCallback(async (actId: string) => {
     // If already expanded for this node, collapse it
-    if (expandedDispositivos?.actId === actId && !expandedDispositivos.isLoading) {
-      setExpandedDispositivos(null);
+    if (expandedDispositivosMap.has(actId) && !expandedDispositivosMap.get(actId)?.isLoading) {
+      setExpandedDispositivosMap(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(actId);
+        return newMap;
+      });
       return;
     }
 
-    setExpandedDispositivos({ actId, dispositivos: [], artigoGroups: [], isLoading: true });
+    // Set loading state for this node
+    setExpandedDispositivosMap(prev => {
+      const newMap = new Map(prev);
+      newMap.set(actId, { actId, dispositivos: [], artigoGroups: [], isLoading: true });
+      return newMap;
+    });
 
     try {
       const { data: result, error } = await supabase.functions.invoke("graph-dispositivos", {
@@ -252,23 +261,35 @@ export const RadialHierarchyView = ({
       
       if (dispositivosData.nodes && dispositivosData.nodes.length > 0) {
         const artigoGroups = groupDispositivosIntoArtigos(dispositivosData.nodes);
-        setExpandedDispositivos({
-          actId,
-          dispositivos: dispositivosData.nodes,
-          artigoGroups,
-          isLoading: false,
+        setExpandedDispositivosMap(prev => {
+          const newMap = new Map(prev);
+          newMap.set(actId, {
+            actId,
+            dispositivos: dispositivosData.nodes,
+            artigoGroups,
+            isLoading: false,
+          });
+          return newMap;
         });
-        toast.success(`${artigoGroups.length} artigos carregados (${dispositivosData.nodes.length} dispositivos)`);
+        toast.success(`${artigoGroups.length} artigos carregados`);
       } else {
-        setExpandedDispositivos(null);
+        setExpandedDispositivosMap(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(actId);
+          return newMap;
+        });
         toast.info("Nenhum dispositivo encontrado para esta norma");
       }
     } catch (err) {
       console.error("Error loading dispositivos:", err);
-      setExpandedDispositivos(null);
+      setExpandedDispositivosMap(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(actId);
+        return newMap;
+      });
       toast.error("Erro ao carregar dispositivos");
     }
-  }, [expandedDispositivos]);
+  }, [expandedDispositivosMap]);
 
   // Measure container
   useEffect(() => {
@@ -295,26 +316,42 @@ export const RadialHierarchyView = ({
     };
   }, []);
 
-  // Calculate expansion offset based on expanded dispositivos
+  // Calculate expansion offset based on all expanded dispositivos
   const expansionOffset = useMemo(() => {
-    if (!expandedDispositivos || expandedDispositivos.isLoading || !expandedDispositivos.artigoGroups.length) {
+    if (expandedDispositivosMap.size === 0) {
       return { ring: -1, offset: 0 };
     }
     
-    // Find the ring of the expanded node
-    const expandedNode = data?.nodes.find(n => n.id === expandedDispositivos.actId);
-    if (!expandedNode) return { ring: -1, offset: 0 };
+    // Find the innermost ring with expanded dispositivos
+    let minRing = 4;
+    let maxOffset = 0;
     
-    const expandedRing = tipoToRing[expandedNode.tipo] ?? 3;
+    expandedDispositivosMap.forEach((expanded) => {
+      if (expanded.isLoading || !expanded.artigoGroups.length) return;
+      
+      const expandedNode = data?.nodes.find(n => n.id === expanded.actId);
+      if (!expandedNode) return;
+      
+      const expandedRing = tipoToRing[expandedNode.tipo] ?? 3;
+      if (expandedRing < minRing) {
+        minRing = expandedRing;
+      }
+      
+      // Calculate offset for this expansion
+      const artigoCount = expanded.artigoGroups.length;
+      const maxPerRing = 20;
+      const artigoRings = Math.ceil(artigoCount / maxPerRing);
+      const offset = 75 + (artigoRings * 35) + 30;
+      
+      if (offset > maxOffset) {
+        maxOffset = offset;
+      }
+    });
     
-    // Calculate offset based on number of artigos (more artigos = more space needed)
-    const artigoCount = expandedDispositivos.artigoGroups.length;
-    const maxPerRing = 20;
-    const artigoRings = Math.ceil(artigoCount / maxPerRing);
-    const offset = 75 + (artigoRings * 35) + 30; // baseRadius + rings * spacing + padding
+    if (minRing === 4) return { ring: -1, offset: 0 };
     
-    return { ring: expandedRing, offset };
-  }, [expandedDispositivos, data?.nodes]);
+    return { ring: minRing, offset: maxOffset };
+  }, [expandedDispositivosMap, data?.nodes]);
 
   // Build radial nodes and links
   const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
@@ -839,8 +876,10 @@ export const RadialHierarchyView = ({
                 const nodeWidth = isCenter ? 90 : 110;
                 const nodeHeight = isCenter ? 45 : 36;
                 const color = ringColors[node.ring];
-                const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.artigoGroups.length > 0;
-                const artigoGroups = hasExpandedDispositivos ? expandedDispositivos.artigoGroups : [];
+                const nodeExpanded = expandedDispositivosMap.get(node.id);
+                const hasExpandedDispositivos = !!nodeExpanded && !nodeExpanded.isLoading && nodeExpanded.artigoGroups.length > 0;
+                const artigoGroups = hasExpandedDispositivos ? nodeExpanded.artigoGroups : [];
+                const isLoadingDispositivos = !!nodeExpanded?.isLoading;
                 
                 // Theme mode highlighting
                 const isHighlighted = !highlightedNormaIds || highlightedNormaIds.has(node.id) || isCenter;
@@ -892,7 +931,7 @@ export const RadialHierarchyView = ({
                       </text>
                       
                       {/* Loading indicator for dispositivos */}
-                      {expandedDispositivos?.actId === node.id && expandedDispositivos.isLoading && (
+                      {isLoadingDispositivos && (
                         <g transform="translate(50, -15)">
                           <circle r={8} fill="hsl(var(--background))" stroke="hsl(var(--border))" />
                           <text
@@ -1106,27 +1145,38 @@ export const RadialHierarchyView = ({
                   <Separator />
                   
                   {/* Botão Expandir Dispositivos - oculto para CF/88 */}
-                  {selectedNode.ring !== 0 && (
-                    <Button
-                      variant={expandedDispositivos?.actId === selectedNode.id ? "default" : "outline"}
-                      className="w-full justify-start gap-2"
-                      disabled={expandedDispositivos?.isLoading}
-                      onClick={() => loadDispositivos(selectedNode.id)}
-                    >
-                      {expandedDispositivos?.actId === selectedNode.id && expandedDispositivos.isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <GitBranch className="h-4 w-4" />
-                      )}
-                      {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading
-                        ? `Recolher dispositivos (${expandedDispositivos.artigoGroups.length} artigos)`
-                        : "Expandir dispositivos"}
-                    </Button>
-                  )}
+                  {selectedNode.ring !== 0 && (() => {
+                    const selectedExpanded = expandedDispositivosMap.get(selectedNode.id);
+                    const isExpanded = !!selectedExpanded && !selectedExpanded.isLoading && selectedExpanded.artigoGroups.length > 0;
+                    const isLoading = !!selectedExpanded?.isLoading;
+                    
+                    return (
+                      <Button
+                        variant={isExpanded ? "default" : "outline"}
+                        className="w-full justify-start gap-2"
+                        disabled={isLoading}
+                        onClick={() => loadDispositivos(selectedNode.id)}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <GitBranch className="h-4 w-4" />
+                        )}
+                        {isExpanded
+                          ? `Recolher dispositivos (${selectedExpanded.artigoGroups.length} artigos)`
+                          : "Expandir dispositivos"}
+                      </Button>
+                    );
+                  })()}
                   
                   {/* Dispositivos hierarchy view */}
-                  {expandedDispositivos?.actId === selectedNode.id && !expandedDispositivos.isLoading && expandedDispositivos.artigoGroups.length > 0 && (() => {
-                    const artigoGroups = expandedDispositivos.artigoGroups;
+                  {(() => {
+                    const selectedExpanded = expandedDispositivosMap.get(selectedNode.id);
+                    if (!selectedExpanded || selectedExpanded.isLoading || !selectedExpanded.artigoGroups.length) {
+                      return null;
+                    }
+                    
+                    const artigoGroups = selectedExpanded.artigoGroups;
                     
                     // Nível colors and labels
                     const nivelConfig: Record<string, { color: string; label: string; indent: number }> = {
@@ -1141,7 +1191,7 @@ export const RadialHierarchyView = ({
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                             <FileText className="h-4 w-4" />
-                            {artigoGroups.length} Artigos ({expandedDispositivos.dispositivos.length} dispositivos)
+                            {artigoGroups.length} Artigos ({selectedExpanded.dispositivos.length} dispositivos)
                           </h4>
                           <div className="flex gap-1">
                             {Object.entries(nivelConfig).slice(0, 4).map(([nivel, config]) => (

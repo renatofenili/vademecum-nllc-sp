@@ -153,8 +153,10 @@ const BackofficeNormaForm = () => {
   const [isExtractingText, setIsExtractingText] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
+  const [extractionOrigin, setExtractionOrigin] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMountedRef = useRef(true);
+  const autoResumeAttemptedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -203,10 +205,24 @@ const BackofficeNormaForm = () => {
     }
   };
 
+  const parseExtractionOrigin = (origin: string | null) => {
+    if (!origin) return null;
+    // Examples:
+    // lovable-ai:...:batched:71-80
+    // lovable-ai:...:batched:retryable:71-80:no_tool_args
+    const m = origin.match(/\bbatched:(?:retryable:|error:)?(\d+)-(\d+)(?::([a-z_]+))?/i);
+    if (!m?.[1] || !m?.[2]) return null;
+    return {
+      batchStart: Number(m[1]),
+      batchEnd: Number(m[2]),
+      errorKind: m[3] ?? null,
+    };
+  };
+
   const refreshExtractionMeta = async (normaId: string) => {
     const { data, error } = await supabase
       .from('normas')
-      .select('texto_extraido_status, texto_extraido')
+      .select('texto_extraido_status, texto_extraido, texto_extraido_origem')
       .eq('id', normaId)
       .single();
 
@@ -214,6 +230,7 @@ const BackofficeNormaForm = () => {
 
     setExtractionStatus((data as any)?.texto_extraido_status ?? null);
     setExtractionStats(computeExtractionStats((data as any)?.texto_extraido));
+    setExtractionOrigin((data as any)?.texto_extraido_origem ?? null);
   };
   
   const [formData, setFormData] = useState({
@@ -266,6 +283,34 @@ const BackofficeNormaForm = () => {
       fetchNorma();
     }
   }, [user, isAdmin, id]);
+
+  // Auto-retoma a extração quando ela está marcada como "pendente".
+  // Objetivo: evitar que o processo dependa do usuário clicar novamente após alternar janelas/abas.
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!id) return;
+    if (!pdfData.pdf_storage_path) return;
+    if (isExtractingText) return;
+
+    if (extractionStatus !== 'pendente') {
+      autoResumeAttemptedRef.current = false;
+      return;
+    }
+
+    if (autoResumeAttemptedRef.current) return;
+    autoResumeAttemptedRef.current = true;
+
+    const t = window.setTimeout(() => {
+      if (!isMountedRef.current) return;
+      if (document.visibilityState !== 'visible') {
+        autoResumeAttemptedRef.current = false;
+        return;
+      }
+      triggerTextExtraction(pdfData.pdf_storage_path!, id);
+    }, 800);
+
+    return () => window.clearTimeout(t);
+  }, [isEditing, id, pdfData.pdf_storage_path, extractionStatus, isExtractingText]);
 
   const fetchNorma = async () => {
     setIsLoadingNorma(true);
@@ -335,6 +380,7 @@ const BackofficeNormaForm = () => {
       // Load extraction status and stats
       setExtractionStatus((normaData as any).texto_extraido_status || null);
       setExtractionStats(computeExtractionStats((normaData as any).texto_extraido));
+      setExtractionOrigin((normaData as any).texto_extraido_origem || null);
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -489,6 +535,7 @@ const BackofficeNormaForm = () => {
       pdf_upload_em: null,
     });
     setExtractionStatus(null);
+    setExtractionOrigin(null);
 
     toast({
       title: 'PDF removido',
@@ -508,7 +555,8 @@ const BackofficeNormaForm = () => {
     try {
       console.log('Triggering text extraction for:', normaId, storagePath);
       
-      const batchSize = 10;
+      const baseBatchSize = 10;
+      let batchSize = baseBatchSize;
       const maxBatches = 60; // safety guard
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
@@ -542,12 +590,21 @@ const BackofficeNormaForm = () => {
         if (retryable) {
           retryCount += 1;
           const retryAfter = Number((data as any)?.retry_after_ms ?? 900);
+          const suggestedBatchSize = Number((data as any)?.suggested_batch_size ?? NaN);
+
+          if (Number.isFinite(suggestedBatchSize) && suggestedBatchSize >= 1 && suggestedBatchSize <= 30) {
+            batchSize = suggestedBatchSize;
+          } else {
+            batchSize = Math.max(1, Math.floor(batchSize / 2));
+          }
+
           console.warn('Retryable batch failure; retrying same batch...', {
             normaId,
             retryCount,
             retryAfter,
             batchStart: (data as any)?.batch_start,
             batchEnd: (data as any)?.batch_end,
+            batchSize,
           });
 
           if (retryCount >= 4) {
@@ -561,6 +618,11 @@ const BackofficeNormaForm = () => {
         }
 
         retryCount = 0;
+
+        // Se o lote foi concluído, volta gradualmente ao tamanho padrão.
+        if (batchSize < baseBatchSize) {
+          batchSize = Math.min(baseBatchSize, batchSize + 1);
+        }
 
         const emptyBatch = Boolean((data as any)?.empty_batch);
         const batchDone = Boolean((data as any)?.done);
@@ -1240,9 +1302,29 @@ const BackofficeNormaForm = () => {
                             <div className="flex-1">
                               <p className="text-sm font-medium">Extração pendente</p>
                               <p className="text-xs text-muted-foreground">
-                                O texto será extraído automaticamente
+                                {(() => {
+                                  const info = parseExtractionOrigin(extractionOrigin);
+                                  if (!info) return 'Aguardando retomada automática…';
+                                  const batch = `Último lote: arts. ${info.batchStart}–${info.batchEnd}`;
+                                  return info.errorKind ? `${batch} (${info.errorKind})` : batch;
+                                })()}
                               </p>
                             </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (pdfData.pdf_storage_path && id) {
+                                  autoResumeAttemptedRef.current = true;
+                                  triggerTextExtraction(pdfData.pdf_storage_path, id);
+                                }
+                              }}
+                              className="shrink-0"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Continuar
+                            </Button>
                           </>
                         ) : (
                           <>

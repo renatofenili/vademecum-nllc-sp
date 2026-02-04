@@ -513,6 +513,12 @@ const BackofficeNormaForm = () => {
         pdf_upload_em: new Date().toISOString(),
       });
 
+      // Limpar dados de extração anteriores quando um novo PDF é carregado
+      setExtractionStatus(null);
+      setExtractionStats(null);
+      setExtractionOrigin(null);
+      setExtractionProgress(null);
+
       toast({
         title: 'PDF carregado!',
         description: 'O arquivo foi enviado com sucesso.',
@@ -744,7 +750,11 @@ const BackofficeNormaForm = () => {
     try {
       let normaId = id;
 
-      const normaPayload = {
+      // Detectar se o PDF foi alterado (novo upload)
+      const pdfChanged = isEditing && pdfData.pdf_storage_path && 
+        pdfData.pdf_upload_em && new Date(pdfData.pdf_upload_em).getTime() > Date.now() - 60000; // Uploaded recently
+
+      const normaPayload: Record<string, unknown> = {
         numero: formData.numero.trim(),
         tipo: formData.tipo as NormType,
         data_publicacao: formData.data_publicacao,
@@ -762,6 +772,16 @@ const BackofficeNormaForm = () => {
         pdf_mime_type: pdfData.pdf_mime_type,
         pdf_upload_em: pdfData.pdf_upload_em,
       };
+
+      // Se o PDF foi alterado, limpar dados de extração para forçar re-extração limpa
+      if (pdfChanged) {
+        normaPayload.texto_extraido = null;
+        normaPayload.texto_extraido_status = null;
+        normaPayload.texto_extraido_origem = null;
+        normaPayload.texto_extraido_em = null;
+        normaPayload.texto_extraido_progresso_atual = null;
+        normaPayload.texto_extraido_progresso_total = null;
+      }
 
       if (isEditing && id) {
         const { error } = await supabase
@@ -842,10 +862,12 @@ const BackofficeNormaForm = () => {
         }
       }
 
-      // Trigger text extraction if PDF was uploaded
-      if (pdfData.pdf_storage_path && normaId && !extractionStatus) {
+      // Trigger text extraction if PDF was uploaded and no extraction in progress
+      // pdfChanged indica que limpamos os dados de extração anteriores
+      const shouldExtract = pdfData.pdf_storage_path && normaId && (!extractionStatus || pdfChanged);
+      if (shouldExtract) {
         // Don't wait for extraction, run in background
-        triggerTextExtraction(pdfData.pdf_storage_path, normaId);
+        triggerTextExtraction(pdfData.pdf_storage_path, normaId, { reset: pdfChanged });
       }
 
       toast({

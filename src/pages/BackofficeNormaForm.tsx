@@ -487,6 +487,17 @@ const BackofficeNormaForm = () => {
     setIsUploadingPdf(true);
 
     try {
+      // Remover arquivo anterior do storage se existir
+      if (pdfData.pdf_storage_path) {
+        try {
+          await supabase.storage
+            .from('normas-pdf')
+            .remove([pdfData.pdf_storage_path]);
+        } catch (error) {
+          console.error('Erro ao remover PDF anterior:', error);
+        }
+      }
+
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storagePath = `${timestamp}_${sanitizedName}`;
@@ -538,6 +549,7 @@ const BackofficeNormaForm = () => {
   };
 
   const handleRemovePdf = async () => {
+    // Remover arquivo do storage
     if (pdfData.pdf_storage_path) {
       try {
         await supabase.storage
@@ -548,6 +560,32 @@ const BackofficeNormaForm = () => {
       }
     }
 
+    // Se estiver editando, limpar dados no banco de dados
+    if (isEditing && id) {
+      try {
+        await supabase
+          .from('normas')
+          .update({
+            pdf_url: null,
+            pdf_storage_path: null,
+            pdf_nome_arquivo: null,
+            pdf_tamanho: null,
+            pdf_mime_type: null,
+            pdf_upload_em: null,
+            texto_extraido: null,
+            texto_extraido_status: null,
+            texto_extraido_origem: null,
+            texto_extraido_em: null,
+            texto_extraido_progresso_atual: null,
+            texto_extraido_progresso_total: null,
+          } as any)
+          .eq('id', id);
+      } catch (error) {
+        console.error('Erro ao limpar dados do PDF no banco:', error);
+      }
+    }
+
+    // Limpar estado local
     setPdfData({
       pdf_url: null,
       pdf_storage_path: null,
@@ -557,11 +595,13 @@ const BackofficeNormaForm = () => {
       pdf_upload_em: null,
     });
     setExtractionStatus(null);
+    setExtractionStats(null);
     setExtractionOrigin(null);
+    setExtractionProgress(null);
 
     toast({
       title: 'PDF removido',
-      description: 'O arquivo foi removido.',
+      description: 'O arquivo e a extração foram removidos.',
     });
   };
 

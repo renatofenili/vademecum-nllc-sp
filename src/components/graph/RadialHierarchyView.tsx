@@ -742,16 +742,25 @@ export const RadialHierarchyView = ({
   }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId]);
 
   // Map of highlighted article keys ("actId:normalizedAnchor") -> source color when Regulamenta is active
+  // Only highlight arts. 74 and 75 from Decreto 68.304 -> Lei 14.133
   const highlightedArticlesMap = useMemo(() => {
     const map = new Map<string, string>();
     if (!showRegulamentaLinks) return map;
-    articleLinks.forEach((link) => {
-      const fromNode = nodes.find((n) => n.id === link.fromNodeId);
-      const sourceColor = fromNode ? ringColors[fromNode.ring] : "hsl(160, 35%, 45%)";
-      map.set(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`, sourceColor);
-    });
+    articleLinks
+      .filter((link) => {
+        // Only highlight articles 74 and 75 from Decreto 68.304 connection
+        if (link.fromNodeId !== decreto68304ActId) return false;
+        if (link.toActId !== lei14133ActId) return false;
+        const normAnchor = normalizeAnchor(link.toAnchor);
+        return normAnchor === "art.74" || normAnchor === "art74" || normAnchor === "art.75" || normAnchor === "art75";
+      })
+      .forEach((link) => {
+        const fromNode = nodes.find((n) => n.id === link.fromNodeId);
+        const sourceColor = fromNode ? ringColors[fromNode.ring] : "hsl(160, 35%, 45%)";
+        map.set(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`, sourceColor);
+      });
     return map;
-  }, [showRegulamentaLinks, articleLinks, nodes]);
+  }, [showRegulamentaLinks, articleLinks, nodes, decreto68304ActId, lei14133ActId]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);

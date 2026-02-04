@@ -611,12 +611,10 @@ export const RadialHierarchyView = ({
       edge.evidences.forEach((evidence) => {
         if (!evidence.to_anchor) return;
         
-        // Normalize anchor for matching (e.g., "art.74" should match "art.74")
         const anchorKey = `${edge.to_act}:${evidence.to_anchor}`;
         const artigoPos = artigoPositions.get(anchorKey);
         
         if (artigoPos) {
-          // Avoid duplicate links
           const exists = linksToArticles.some(
             l => l.fromNodeId === fromNode.id && l.toAnchor === evidence.to_anchor && l.toActId === edge.to_act
           );
@@ -969,15 +967,12 @@ export const RadialHierarchyView = ({
               {/* Article-level connection links (from regulating norms to specific articles) */}
               {showRegulamentaLinks && articleLinks.map((link, index) => {
                 const fromNode = nodes.find(n => n.id === link.fromNodeId);
-                const toNode = nodes.find(n => n.id === link.toActId);
                 
-                // Dim links if theme mode is active
                 const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromNodeId);
                 const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toActId);
                 const linkHighlighted = fromHighlighted || toHighlighted;
                 
-                // Use color of the source node
-                const fromColor = fromNode ? ringColors[fromNode.ring] : "hsl(0, 0%, 40%)";
+                const fromColor = fromNode ? ringColors[fromNode.ring] : "hsl(0, 0%, 20%)";
                 
                 return (
                   <line
@@ -987,9 +982,9 @@ export const RadialHierarchyView = ({
                     x2={link.toX}
                     y2={link.toY}
                     stroke={fromColor}
-                    strokeWidth={1.5}
+                    strokeWidth={2.5}
                     strokeDasharray="4 3"
-                    opacity={highlightedNormaIds ? (linkHighlighted ? 0.7 : 0.1) : 0.5}
+                    opacity={highlightedNormaIds ? (linkHighlighted ? 0.85 : 0.15) : 0.75}
                     className="transition-opacity duration-300"
                     markerEnd="url(#arrowhead)"
                   />

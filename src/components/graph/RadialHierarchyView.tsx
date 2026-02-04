@@ -295,6 +295,27 @@ export const RadialHierarchyView = ({
     };
   }, []);
 
+  // Calculate expansion offset based on expanded dispositivos
+  const expansionOffset = useMemo(() => {
+    if (!expandedDispositivos || expandedDispositivos.isLoading || !expandedDispositivos.artigoGroups.length) {
+      return { ring: -1, offset: 0 };
+    }
+    
+    // Find the ring of the expanded node
+    const expandedNode = data?.nodes.find(n => n.id === expandedDispositivos.actId);
+    if (!expandedNode) return { ring: -1, offset: 0 };
+    
+    const expandedRing = tipoToRing[expandedNode.tipo] ?? 3;
+    
+    // Calculate offset based on number of artigos (more artigos = more space needed)
+    const artigoCount = expandedDispositivos.artigoGroups.length;
+    const maxPerRing = 20;
+    const artigoRings = Math.ceil(artigoCount / maxPerRing);
+    const offset = 75 + (artigoRings * 35) + 30; // baseRadius + rings * spacing + padding
+    
+    return { ring: expandedRing, offset };
+  }, [expandedDispositivos, data?.nodes]);
+
   // Build radial nodes and links
   const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
     if (!data || !data.nodes.length) {
@@ -314,8 +335,16 @@ export const RadialHierarchyView = ({
     const cy = dimensions.height / 2;
     const maxRadius = Math.min(cx, cy) - 60;
     
-    // Ring radii
-    const radii = [0, maxRadius * 0.35, maxRadius * 0.65, maxRadius * 0.95];
+    // Base ring radii - will be adjusted if there's expansion
+    const baseRadii = [0, maxRadius * 0.35, maxRadius * 0.65, maxRadius * 0.95];
+    
+    // Apply expansion offset to rings beyond the expanded one
+    const radii = baseRadii.map((r, ringIdx) => {
+      if (expansionOffset.ring >= 0 && ringIdx > expansionOffset.ring) {
+        return r + expansionOffset.offset;
+      }
+      return r;
+    });
 
     // Group nodes by ring
     const nodesByRing: Map<number, ActNode[]> = new Map([
@@ -468,7 +497,7 @@ export const RadialHierarchyView = ({
       regulatesMap,
       regulatedByMap,
     };
-  }, [data, dimensions]);
+  }, [data, dimensions, expansionOffset]);
 
   // Mouse handlers for panning
   const handleMouseDown = (e: React.MouseEvent) => {

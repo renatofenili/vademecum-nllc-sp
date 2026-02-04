@@ -444,6 +444,20 @@ export const RadialHierarchyView = ({
       return r;
     });
 
+    // Build a map of regulatory relationships from edges data
+    // This tells us which nodes actually regulate which (based on extracted references)
+    const regulatoryTargets = new Map<string, string[]>(); // nodeId -> list of target act IDs it regulates
+    if (data.edges) {
+      data.edges.forEach((edge) => {
+        if (edge.relation_type === "regulates" || edge.relation_type === "implements") {
+          const existing = regulatoryTargets.get(edge.from_act) || [];
+          if (!existing.includes(edge.to_act)) {
+            regulatoryTargets.set(edge.from_act, [...existing, edge.to_act]);
+          }
+        }
+      });
+    }
+
     // Group nodes by ring
     const nodesByRing: Map<number, ActNode[]> = new Map([
       [0, []],
@@ -457,62 +471,138 @@ export const RadialHierarchyView = ({
       nodesByRing.get(ring)!.push(node);
     });
 
-    // Calculate positions
+    // Calculate positions - process rings from inner to outer
+    // Outer rings position nodes near their regulatory targets
     const result: RingNode[] = [];
-    const nodePositions = new Map<string, { x: number; y: number; ring: number }>();
+    const nodePositions = new Map<string, { x: number; y: number; ring: number; angle: number }>();
 
-    nodesByRing.forEach((nodesInRing, ring) => {
-      const radius = radii[ring];
+    // First, position ring 0 (center)
+    const ring0Nodes = nodesByRing.get(0) || [];
+    ring0Nodes.forEach((act) => {
+      nodePositions.set(act.id, { x: cx, y: cy, ring: 0, angle: 0 });
+      result.push({
+        id: act.id,
+        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+        tipo: act.tipo,
+        act,
+        ring: 0,
+        angle: 0,
+        x: cx,
+        y: cy,
+      });
+    });
+
+    // Process rings 1, 2, 3 in order
+    for (let ringIdx = 1; ringIdx <= 3; ringIdx++) {
+      const nodesInRing = nodesByRing.get(ringIdx) || [];
+      const radius = radii[ringIdx];
       const count = nodesInRing.length;
       
-      nodesInRing.forEach((act, index) => {
-        let angle: number;
-        let x: number;
-        let y: number;
+      if (count === 0) continue;
 
-        if (ring === 0) {
-          // Center node
-          x = cx;
-          y = cy;
-          angle = 0;
-        } else {
-          // Distribute evenly around the ring
-          angle = (2 * Math.PI * index) / count - Math.PI / 2;
-          x = cx + radius * Math.cos(angle);
-          y = cy + radius * Math.sin(angle);
+      // For each node, determine its preferred angle based on regulatory target
+      const nodeAngles: { act: ActNode; preferredAngle: number | null }[] = nodesInRing.map((act) => {
+        const targets = regulatoryTargets.get(act.id) || [];
+        // Find a target in an inner ring
+        for (const targetId of targets) {
+          const targetPos = nodePositions.get(targetId);
+          if (targetPos && targetPos.ring < ringIdx) {
+            // This node should be positioned near its regulatory target
+            return { act, preferredAngle: targetPos.angle };
+          }
         }
+        return { act, preferredAngle: null };
+      });
 
-        nodePositions.set(act.id, { x, y, ring });
+      // Separate nodes with and without preferred angles
+      const withPreferred = nodeAngles.filter((n) => n.preferredAngle !== null);
+      const withoutPreferred = nodeAngles.filter((n) => n.preferredAngle === null);
 
+      // Sort nodes with preferred angles by their preferred angle
+      withPreferred.sort((a, b) => (a.preferredAngle || 0) - (b.preferredAngle || 0));
+
+      // Assign angles - nodes with preferred angles get positioned near their targets
+      // Nodes without preferred angles fill the remaining space
+      const usedAngles: number[] = [];
+      const minAngleSeparation = (2 * Math.PI) / Math.max(count, 8); // Minimum separation
+
+      // First, assign angles to nodes with preferred positions
+      withPreferred.forEach(({ act, preferredAngle }) => {
+        let angle = preferredAngle!;
+        // Adjust if too close to an already used angle
+        while (usedAngles.some((ua) => Math.abs(ua - angle) < minAngleSeparation)) {
+          angle += minAngleSeparation * 0.5;
+        }
+        usedAngles.push(angle);
+        
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+        
+        nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
         result.push({
           id: act.id,
           label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
           tipo: act.tipo,
           act,
-          ring,
+          ring: ringIdx,
           angle,
           x,
           y,
         });
       });
-    });
+
+      // Then, distribute remaining nodes evenly in unused angular space
+      if (withoutPreferred.length > 0) {
+        // Find gaps in the used angles
+        const sortedUsed = [...usedAngles].sort((a, b) => a - b);
+        
+        // Calculate even distribution for remaining nodes
+        const remainingCount = withoutPreferred.length;
+        let startAngle = -Math.PI / 2; // Start from top
+        
+        // If there are already positioned nodes, find the largest gap
+        if (sortedUsed.length > 0) {
+          let maxGap = 0;
+          let gapStart = 0;
+          
+          for (let i = 0; i < sortedUsed.length; i++) {
+            const current = sortedUsed[i];
+            const next = sortedUsed[(i + 1) % sortedUsed.length];
+            const gap = next > current ? next - current : (2 * Math.PI - current + next);
+            if (gap > maxGap) {
+              maxGap = gap;
+              gapStart = current;
+            }
+          }
+          
+          startAngle = gapStart + maxGap / (remainingCount + 1);
+        }
+        
+        withoutPreferred.forEach(({ act }, idx) => {
+          const angle = startAngle + (idx * 2 * Math.PI) / (remainingCount + sortedUsed.length);
+          
+          const x = cx + radius * Math.cos(angle);
+          const y = cy + radius * Math.sin(angle);
+          
+          nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
+          result.push({
+            id: act.id,
+            label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+            tipo: act.tipo,
+            act,
+            ring: ringIdx,
+            angle,
+            x,
+            y,
+          });
+        });
+      }
+    }
 
     // Build links with explicit types
     const graphLinks: GraphLink[] = [];
     
-    // Build a map of regulatory relationships from edges data first
-    // This tells us which nodes actually regulate which (based on extracted references)
-    const regulatoryTargets = new Map<string, string[]>(); // nodeId -> list of target act IDs it regulates
-    if (data.edges) {
-      data.edges.forEach((edge) => {
-        if (edge.relation_type === "regulates" || edge.relation_type === "implements") {
-          const existing = regulatoryTargets.get(edge.from_act) || [];
-          if (!existing.includes(edge.to_act)) {
-            regulatoryTargets.set(edge.from_act, [...existing, edge.to_act]);
-          }
-        }
-      });
-    }
+    // regulatoryTargets already built above for node positioning
     
     // 1. Hierarchy links - prefer actual regulatory relationships over angle proximity
     result.forEach((node) => {

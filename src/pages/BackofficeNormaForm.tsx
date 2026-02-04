@@ -591,7 +591,8 @@ const BackofficeNormaForm = () => {
             batch_size: batchSize,
             empty_streak: emptyStreak,
             reset: Boolean(options?.reset) && i === 0,
-            expected_total: extractionProgress?.total ?? 300,
+            // Let backend estimate based on extraction progress; only hint if we have a known value
+            expected_total: extractionProgress?.total && extractionProgress.total < 300 ? extractionProgress.total : undefined,
           },
         });
 

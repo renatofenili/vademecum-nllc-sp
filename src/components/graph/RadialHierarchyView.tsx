@@ -899,19 +899,19 @@ export const RadialHierarchyView = ({
 
                       return (
                         <g key={`artigo-${idx}`}>
-                          {/* Connection line from parent to artigo */}
+                          {/* Connection line from parent to artigo - same color as parent */}
                           <line
                             x1={node.x}
                             y1={node.y}
                             x2={artigoX}
                             y2={artigoY}
-                            stroke="hsl(45, 93%, 47%)"
+                            stroke={color}
                             strokeWidth={1}
                             strokeDasharray="3 2"
                             opacity={0.5}
                           />
                           
-                          {/* Artigo node - click to open detail */}
+                          {/* Artigo node - click to open detail, same color as parent norm */}
                           <g
                             transform={`translate(${artigoX}, ${artigoY})`}
                             onMouseEnter={() => setHoveredArtigo({ anchor: group.artigo.anchor, x: artigoX, y: artigoY })}
@@ -924,7 +924,7 @@ export const RadialHierarchyView = ({
                           >
                             <circle
                               r={14}
-                              fill="hsl(45, 93%, 47%)"
+                              fill={color}
                               stroke="white"
                               strokeWidth={1.5}
                               className="transition-all duration-200 hover:brightness-110"

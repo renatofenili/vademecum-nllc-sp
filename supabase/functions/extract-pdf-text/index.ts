@@ -82,46 +82,10 @@ Deno.serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `Você é um extrator de texto jurídico especializado em normas brasileiras (leis, decretos, resoluções, portarias, instruções normativas).
-
-Sua tarefa é extrair e estruturar o texto do PDF em formato JSON com a seguinte estrutura:
-
-[
-  {
-    "document_id": "${norma_id}",
-    "anchor": "art.1",
-    "nivel": "artigo",
-    "texto": "Texto completo do artigo..."
-  },
-  {
-    "document_id": "${norma_id}",
-    "anchor": "art.1.I",
-    "nivel": "inciso",
-    "texto": "Texto do inciso..."
-  },
-  {
-    "document_id": "${norma_id}",
-    "anchor": "art.1§1",
-    "nivel": "paragrafo",
-    "texto": "Texto do parágrafo..."
-  },
-  {
-    "document_id": "${norma_id}",
-    "anchor": "art.1.a",
-    "nivel": "alinea",
-    "texto": "Texto da alínea..."
-  }
-]
-
-Regras:
-1. Inclua "document_id": "${norma_id}" em TODOS os itens
-2. Identifique artigos (Art. 1º, Art. 2º, etc.)
-3. Identifique incisos (I -, II -, III -, etc.) e relacione ao artigo pai
-4. Identifique parágrafos (§ 1º, § 2º, Parágrafo único) e relacione ao artigo pai
-5. Identifique alíneas (a), b), c)) e relacione ao artigo/inciso pai
-6. Mantenha o texto original, apenas formatando para legibilidade
-7. Retorne APENAS o JSON válido, sem explicações adicionais e sem formatação Markdown
-8. Se não encontrar estrutura de artigos, retorne o texto completo com anchor "texto" e nivel "artigo"`
+            content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
+Extraia TODOS os dispositivos do documento: artigos, incisos, parágrafos e alíneas.
+Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1.a) e o texto completo.
+É CRÍTICO extrair TODOS os artigos do documento, sem omitir nenhum.`
           },
           {
             role: "user",
@@ -135,13 +99,54 @@ Regras:
               },
               {
                 type: "text",
-                text: "Extraia e estruture o texto desta norma jurídica em formato JSON conforme as instruções."
+                text: "Extraia TODOS os dispositivos desta norma jurídica usando a função extract_dispositivos. Não omita nenhum artigo."
               }
             ]
           }
         ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "extract_dispositivos",
+              description: "Extrai todos os dispositivos de uma norma jurídica brasileira",
+              parameters: {
+                type: "object",
+                properties: {
+                  dispositivos: {
+                    type: "array",
+                    description: "Lista de todos os dispositivos extraídos do documento",
+                    items: {
+                      type: "object",
+                      properties: {
+                        anchor: {
+                          type: "string",
+                          description: "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)"
+                        },
+                        nivel: {
+                          type: "string",
+                          enum: ["artigo", "inciso", "paragrafo", "alinea"],
+                          description: "Tipo do dispositivo"
+                        },
+                        texto: {
+                          type: "string",
+                          description: "Texto completo do dispositivo"
+                        }
+                      },
+                      required: ["anchor", "nivel", "texto"],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                required: ["dispositivos"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
         temperature: 0.1,
-        max_tokens: 32000,
+        max_tokens: 64000,
       }),
     });
 
@@ -152,177 +157,48 @@ Regras:
     }
 
     const aiResult = await aiResponse.json();
-    const aiContent = aiResult.choices?.[0]?.message?.content || "";
+    
+    console.log("AI response received, extracting tool call...");
 
-    console.log("AI response received, parsing JSON...");
-
-    // Parse the JSON from AI response
+    // Parse the tool call response
     let estrutura: ExtractedArticle[];
     let parsedOk = false;
     try {
-      const raw = aiContent.trim();
-
-      // Robustly extract JSON from possible markdown fences and/or extra leading text.
-      let jsonContent = raw;
-
-      // If there is a fenced block anywhere, prefer the first/last fence boundaries.
-      const firstFence = jsonContent.indexOf("```");
-      if (firstFence !== -1) {
-        const afterFirst = jsonContent.indexOf("\n", firstFence + 3);
-        const lastFence = jsonContent.lastIndexOf("```");
-        if (lastFence !== -1 && lastFence > firstFence) {
-          // Extract between fences (skipping the opening fence line)
-          const start = afterFirst !== -1 ? afterFirst + 1 : firstFence + 3;
-          jsonContent = jsonContent.slice(start, lastFence).trim();
-        } else {
-          // Fence opened but not closed: strip the first fence line only
-          jsonContent = jsonContent.slice(afterFirst !== -1 ? afterFirst + 1 : firstFence + 3).trim();
-        }
+      const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (!toolCall || toolCall.function?.name !== "extract_dispositivos") {
+        throw new Error("No valid tool call in response");
       }
 
-      // Also handle the common case where content starts with ```json (even if not closed)
-      jsonContent = jsonContent.replace(/^```\s*json\s*\n/i, "");
-      jsonContent = jsonContent.replace(/^```\s*\n/i, "");
-      jsonContent = jsonContent.replace(/\n```\s*$/i, "").trim();
+      const args = JSON.parse(toolCall.function.arguments);
+      const dispositivos = args.dispositivos;
 
-      const tryParse = (s: string) => JSON.parse(s);
-
-      const extractFirstJsonSegment = (text: string): string | null => {
-        const startArr = text.indexOf("[");
-        const startObj = text.indexOf("{");
-        let start = -1;
-        let open = "";
-        let close = "";
-
-        if (startArr !== -1 && (startObj === -1 || startArr < startObj)) {
-          start = startArr;
-          open = "[";
-          close = "]";
-        } else if (startObj !== -1) {
-          start = startObj;
-          open = "{";
-          close = "}";
-        }
-
-        if (start === -1) return null;
-
-        let depth = 0;
-        let inString = false;
-        let escape = false;
-
-        for (let i = start; i < text.length; i++) {
-          const ch = text[i];
-          if (inString) {
-            if (escape) {
-              escape = false;
-              continue;
-            }
-            if (ch === "\\") {
-              escape = true;
-              continue;
-            }
-            if (ch === '"') {
-              inString = false;
-              continue;
-            }
-            continue;
-          }
-
-          if (ch === '"') {
-            inString = true;
-            continue;
-          }
-          if (ch === open) depth++;
-          else if (ch === close) {
-            depth--;
-            if (depth === 0) {
-              return text.slice(start, i + 1);
-            }
-          }
-        }
-
-        return null;
-      };
-
-      let parsed: any;
-      try {
-        parsed = tryParse(jsonContent);
-      } catch {
-        const segment = extractFirstJsonSegment(jsonContent);
-        if (!segment) {
-          throw new Error("Could not extract a complete JSON segment");
-        }
-        parsed = tryParse(segment);
+      if (!Array.isArray(dispositivos) || dispositivos.length === 0) {
+        throw new Error("No dispositivos in tool call response");
       }
 
-      // Handle case where AI wrapped the array in a code block within the texto field
-      if (
-        Array.isArray(parsed) &&
-        parsed.length === 1 &&
-        parsed[0]?.anchor === "texto" &&
-        typeof parsed[0]?.texto === "string"
-      ) {
-        const innerTextRaw = String(parsed[0].texto).trim();
-        let inner = innerTextRaw;
-
-        const innerFirstFence = inner.indexOf("```");
-        if (innerFirstFence !== -1) {
-          const innerAfterFirst = inner.indexOf("\n", innerFirstFence + 3);
-          const innerLastFence = inner.lastIndexOf("```");
-          if (innerLastFence !== -1 && innerLastFence > innerFirstFence) {
-            const start = innerAfterFirst !== -1 ? innerAfterFirst + 1 : innerFirstFence + 3;
-            inner = inner.slice(start, innerLastFence).trim();
-          } else {
-            inner = inner.slice(innerAfterFirst !== -1 ? innerAfterFirst + 1 : innerFirstFence + 3).trim();
-          }
-        }
-        inner = inner.replace(/^```\s*json\s*\n/i, "");
-        inner = inner.replace(/^```\s*\n/i, "");
-        inner = inner.replace(/\n```\s*$/i, "").trim();
-
-        try {
-          let innerParsed: any;
-          try {
-            innerParsed = JSON.parse(inner);
-          } catch {
-            const innerSeg = extractFirstJsonSegment(inner);
-            if (!innerSeg) throw new Error("Could not extract inner JSON");
-            innerParsed = JSON.parse(innerSeg);
-          }
-          if (Array.isArray(innerParsed) && innerParsed.length > 1) {
-            parsed = innerParsed;
-            console.log("Extracted nested JSON from texto field");
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      estrutura = parsed;
-
-      if (!Array.isArray(estrutura)) {
-        throw new Error("Parsed content is not an array");
-      }
-
-      // Ensure document_id is set on all items
-      estrutura = estrutura.map((item: any) => ({
-        document_id: item?.document_id || norma_id,
-        anchor: item?.anchor || "texto",
-        nivel: item?.nivel || "artigo",
-        texto: item?.texto || "",
+      // Map to our format with document_id
+      estrutura = dispositivos.map((item: any) => ({
+        document_id: norma_id,
+        anchor: item.anchor || "texto",
+        nivel: item.nivel || "artigo",
+        texto: item.texto || "",
       }));
 
       parsedOk = true;
+      console.log(`Extracted ${estrutura.length} dispositivos via tool-calling`);
     } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
-      console.log("AI content preview (start):", (aiContent || "").slice(0, 200));
-      console.log("AI content preview (end):", (aiContent || "").slice(-200));
-      // Fallback: save raw text for debugging
+      console.error("Failed to parse tool call response:", parseError);
+      
+      // Fallback: try to get content from message
+      const content = aiResult.choices?.[0]?.message?.content || "";
+      console.log("Fallback content preview:", content.slice(0, 200));
+      
       estrutura = [{
         document_id: norma_id,
         anchor: "texto",
         nivel: "artigo",
-        texto: (aiContent || "").substring(0, 50000),
+        texto: content.substring(0, 50000),
       }];
     }
 

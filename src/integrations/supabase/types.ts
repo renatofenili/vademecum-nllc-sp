@@ -42,6 +42,9 @@ export type Database = {
           texto_extraido: string | null
           texto_extraido_em: string | null
           texto_extraido_origem: string | null
+          texto_extraido_progresso_atual: number | null
+          texto_extraido_progresso_em: string | null
+          texto_extraido_progresso_total: number | null
           texto_extraido_status: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
@@ -73,6 +76,9 @@ export type Database = {
           texto_extraido?: string | null
           texto_extraido_em?: string | null
           texto_extraido_origem?: string | null
+          texto_extraido_progresso_atual?: number | null
+          texto_extraido_progresso_em?: string | null
+          texto_extraido_progresso_total?: number | null
           texto_extraido_status?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
@@ -104,6 +110,9 @@ export type Database = {
           texto_extraido?: string | null
           texto_extraido_em?: string | null
           texto_extraido_origem?: string | null
+          texto_extraido_progresso_atual?: number | null
+          texto_extraido_progresso_em?: string | null
+          texto_extraido_progresso_total?: number | null
           texto_extraido_status?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string

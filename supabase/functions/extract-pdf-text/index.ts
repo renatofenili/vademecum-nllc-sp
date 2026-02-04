@@ -51,7 +51,6 @@ function safeJsonParse<T>(raw: unknown): T | null {
 function messageContentToText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    // Some gateways return content parts: [{type:'text', text:'...'}, ...]
     return content
       .map((p: any) => {
         if (typeof p === "string") return p;
@@ -85,10 +84,6 @@ function extractToolArgsDeep(aiResult: any): ToolArgs | null {
     if (visited.has(node)) return null;
     visited.add(node);
 
-    // Shapes we know about:
-    // - { function: { name, arguments } }
-    // - { name, arguments }
-    // - { tool_calls: [...] }
     const maybe1 = tryParseArgs(node?.function?.name, node?.function?.arguments);
     if (maybe1) return maybe1;
     const maybe2 = tryParseArgs(node?.name, node?.arguments);
@@ -101,7 +96,6 @@ function extractToolArgsDeep(aiResult: any): ToolArgs | null {
       }
     }
 
-    // Search recursively
     if (Array.isArray(node)) {
       for (const v of node) {
         const found = walk(v);
@@ -122,7 +116,6 @@ function extractToolArgsDeep(aiResult: any): ToolArgs | null {
 function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
   const msg = aiResult?.choices?.[0]?.message;
 
-  // OpenAI-style tool calls
   const toolCalls = msg?.tool_calls;
   if (Array.isArray(toolCalls)) {
     for (const call of toolCalls) {
@@ -135,31 +128,25 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
     }
   }
 
-  // Legacy OpenAI-style function_call
   const fc = msg?.function_call;
   if (fc?.arguments) {
     const parsed = safeJsonParse<ToolArgs>(fc.arguments);
     if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
   }
 
-  // Fallback: try to parse from content (JSON in markdown code block)
   const contentStr = messageContentToText(msg?.content);
   if (contentStr) {
-    // Remove markdown code block wrappers
     let cleaned = contentStr.trim();
     const codeBlockMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
     if (codeBlockMatch) cleaned = codeBlockMatch[1].trim();
-    // Try parsing as JSON with dispositivos
     const parsed = safeJsonParse<ToolArgs>(cleaned);
     if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
-    // Try as array directly
     const arrParsed = safeJsonParse<any[]>(cleaned);
     if (Array.isArray(arrParsed) && arrParsed.length > 0 && arrParsed[0].anchor) {
       return { dispositivos: arrParsed };
     }
   }
 
-  // Some gateways nest tool calls under annotations/metadata; do a deep scan.
   const deep = extractToolArgsDeep(aiResult);
   if (deep?.dispositivos && Array.isArray(deep.dispositivos)) return deep;
 
@@ -167,7 +154,7 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
 }
 
 const DEFAULT_BATCH_SIZE = 10;
-const MAX_ARTICLES = 300; // safety cap
+const MAX_ARTICLES = 300;
 const PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const FALLBACK_MODEL = "google/gemini-2.5-pro";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -179,11 +166,9 @@ function parseArticleNumberFromAnchor(anchor: unknown): number | null {
     .replace(/\s+/g, " ")
     .trim();
 
-  // Prefer our canonical "art.12" format
   const m1 = s.match(/\bart\.?\s*(\d{1,3})\b/);
   if (m1?.[1]) return Number(m1[1]);
 
-  // Some models may output "artigo 12"
   const m2 = s.match(/\bartigo\s*(\d{1,3})\b/);
   if (m2?.[1]) return Number(m2[1]);
 
@@ -336,7 +321,6 @@ Não omita nenhum artigo do intervalo solicitado.`,
       errorText?.slice(0, 1000)
     );
 
-    // Most of these are transient (rate limit / gateway issues)
     const retryable = [408, 425, 429, 500, 502, 503, 504].includes(status);
     return {
       dispositivos: [],
@@ -374,7 +358,6 @@ Não omita nenhum artigo do intervalo solicitado.`,
     };
   }
 
-  // No tool args: usually transient model behavior; treat as retryable.
   const msgObj = aiResult?.choices?.[0]?.message;
   const contentText = messageContentToText(msgObj?.content);
   const refusalText = messageContentToText((msgObj as any)?.refusal);
@@ -424,7 +407,6 @@ async function callGatewayBatch(
   );
   if (primary.ok) return primary;
 
-  // If the primary returns without tool args, try a stronger model once.
   if (primary.error_kind === "no_tool_args" || primary.error_kind === "invalid_json") {
     const fallback = await callGatewayBatchWithModel(
       FALLBACK_MODEL,
@@ -435,7 +417,6 @@ async function callGatewayBatch(
     );
     if (fallback.ok) return fallback;
 
-    // Keep the most actionable failure.
     return {
       ...primary,
       retry_after_ms: Math.max(primary.retry_after_ms ?? 0, fallback.retry_after_ms ?? 0),
@@ -448,14 +429,13 @@ async function callGatewayBatch(
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const reqBody = await req.json();
-    const { pdf_storage_path, norma_id } = reqBody;
+    const { pdf_storage_path, norma_id, expected_total } = reqBody;
 
     if (!pdf_storage_path || !norma_id) {
       return new Response(
@@ -466,12 +446,10 @@ Deno.serve(async (req) => {
 
     console.log(`Starting PDF extraction for norma: ${norma_id}, path: ${pdf_storage_path}`);
 
-    // Create Supabase client with service role for storage access
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Auth guard (default: required)
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     if (!token) {
@@ -489,23 +467,51 @@ Deno.serve(async (req) => {
     }
 
     // Download PDF from storage
-    const { data: pdfData, error: downloadError } = await supabase.storage
+    let pdfData: Blob | null = null;
+    let actualStoragePath = pdf_storage_path;
+
+    const { data: pdfDownload, error: downloadError } = await supabase.storage
       .from("normas-pdf")
       .download(pdf_storage_path);
 
     if (downloadError) {
-      console.error("Error downloading PDF:", downloadError);
-      await supabase.from("normas").update({
-        texto_extraido_status: "erro",
-        texto_extraido_em: new Date().toISOString(),
-      }).eq("id", norma_id);
-      return new Response(
-        JSON.stringify({ error: `Failed to download PDF: ${downloadError.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.error("Error downloading PDF from provided path:", downloadError);
+      
+      // Path in the request may be stale. Check if there's a newer path in the normas table.
+      const { data: normaRow, error: normaRowError } = await supabase
+        .from("normas")
+        .select("pdf_storage_path")
+        .eq("id", norma_id)
+        .maybeSingle();
+
+      const freshPath = normaRow?.pdf_storage_path;
+      if (!normaRowError && freshPath && freshPath !== pdf_storage_path) {
+        console.log(`Trying fresh path from DB: ${freshPath}`);
+        const { data: freshDownload, error: freshError } = await supabase.storage
+          .from("normas-pdf")
+          .download(freshPath);
+
+        if (!freshError && freshDownload) {
+          pdfData = freshDownload;
+          actualStoragePath = freshPath;
+        }
+      }
+
+      if (!pdfData) {
+        await supabase.from("normas").update({
+          texto_extraido_status: "erro",
+          texto_extraido_em: new Date().toISOString(),
+        }).eq("id", norma_id);
+        return new Response(
+          JSON.stringify({ error: `Failed to download PDF: ${downloadError.message}`, fresh_path: actualStoragePath }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      pdfData = pdfDownload;
     }
 
-    const arrayBuffer = await pdfData.arrayBuffer();
+    const arrayBuffer = await pdfData!.arrayBuffer();
     const base64Pdf = base64Encode(new Uint8Array(arrayBuffer));
 
     console.log(`PDF downloaded, size: ${arrayBuffer.byteLength} bytes`);
@@ -515,7 +521,6 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    // === Single-batch, resumable extraction ===
     const requestedBatchStart =
       typeof reqBody?.batch_start === "number" ? Math.max(1, Math.floor(reqBody.batch_start)) : null;
     const batchSize =
@@ -533,7 +538,7 @@ Deno.serve(async (req) => {
         .from("normas")
         .select("texto_extraido")
         .eq("id", norma_id)
-        .single();
+        .maybeSingle();
 
       if (!normaRowError && (normaRow as any)?.texto_extraido) {
         try {
@@ -562,76 +567,88 @@ Deno.serve(async (req) => {
     }
     const batchEnd = Math.min(MAX_ARTICLES, batchStart + batchSize - 1);
 
-     // Mark as pending before starting this batch
+    // Determine expected_total (approximation for progress)
+    const progressTotal =
+      typeof expected_total === "number" && expected_total > 0
+        ? expected_total
+        : MAX_ARTICLES;
+
+    // Mark as pending before starting this batch + save progress
     {
       const { error: pendErr } = await supabase
         .from("normas")
         .update({
           texto_extraido_status: "pendente",
           texto_extraido_em: new Date().toISOString(),
-           texto_extraido_origem: `lovable-ai:${PRIMARY_MODEL}:batched`,
+          texto_extraido_origem: `lovable-ai:${PRIMARY_MODEL}:batched`,
+          texto_extraido_progresso_atual: batchStart,
+          texto_extraido_progresso_total: progressTotal,
+          texto_extraido_progresso_em: new Date().toISOString(),
           ...(reset ? { texto_extraido: JSON.stringify([]) } : {}),
         })
         .eq("id", norma_id);
       if (pendErr) console.error("Failed to set pending status:", pendErr);
     }
 
-      console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
-      const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
-      const { dispositivos, ok, retryable, retry_after_ms, error_kind, model_used } = batchResult;
+    console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
+    const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
+    const { dispositivos, ok, retryable, retry_after_ms, error_kind, model_used } = batchResult;
 
     if (!ok) {
-       if (retryable) {
-         const suggestedBatchSize =
-           error_kind === "no_tool_args" && batchSize > 1
-             ? Math.max(1, Math.floor(batchSize / 2))
-             : batchSize;
+      if (retryable) {
+        const suggestedBatchSize =
+          error_kind === "no_tool_args" && batchSize > 1
+            ? Math.max(1, Math.floor(batchSize / 2))
+            : batchSize;
 
-         // Keep as pending; let the frontend retry the SAME batch.
-         const { error: pendErr2 } = await supabase
-           .from("normas")
-           .update({
-             texto_extraido_status: "pendente",
-             texto_extraido_em: new Date().toISOString(),
-              texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
-           })
-           .eq("id", norma_id);
-         if (pendErr2) console.error("Failed to keep pending status:", pendErr2);
+        const { error: pendErr2 } = await supabase
+          .from("normas")
+          .update({
+            texto_extraido_status: "pendente",
+            texto_extraido_em: new Date().toISOString(),
+            texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+            texto_extraido_progresso_atual: batchStart,
+            texto_extraido_progresso_em: new Date().toISOString(),
+          })
+          .eq("id", norma_id);
+        if (pendErr2) console.error("Failed to keep pending status:", pendErr2);
 
-         return new Response(
-           JSON.stringify({
-             success: true,
-             done: false,
-             retryable: true,
-             retry_after_ms: retry_after_ms ?? 900,
-              suggested_batch_size: suggestedBatchSize,
-              error_kind: error_kind ?? "unknown",
-              model_used: model_used ?? PRIMARY_MODEL,
-             batch_start: batchStart,
-             batch_end: batchEnd,
-             items_added: 0,
-             artigos_added: 0,
-             next_batch_start: batchStart,
-             empty_batch: false,
-           }),
-           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-         );
-       }
+        return new Response(
+          JSON.stringify({
+            success: true,
+            done: false,
+            retryable: true,
+            retry_after_ms: retry_after_ms ?? 900,
+            suggested_batch_size: suggestedBatchSize,
+            error_kind: error_kind ?? "unknown",
+            model_used: model_used ?? PRIMARY_MODEL,
+            batch_start: batchStart,
+            batch_end: batchEnd,
+            items_added: 0,
+            artigos_added: 0,
+            next_batch_start: batchStart,
+            empty_batch: false,
+            progress_current: batchStart,
+            progress_total: progressTotal,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-       const { error: errUpd } = await supabase
-         .from("normas")
-         .update({
-           texto_extraido_status: "erro",
-           texto_extraido_em: new Date().toISOString(),
-            texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
-         })
-         .eq("id", norma_id);
-       if (errUpd) console.error("Failed to set error status:", errUpd);
+      const { error: errUpd } = await supabase
+        .from("normas")
+        .update({
+          texto_extraido_status: "erro",
+          texto_extraido_em: new Date().toISOString(),
+          texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+        })
+        .eq("id", norma_id);
+      if (errUpd) console.error("Failed to set error status:", errUpd);
 
-       return new Response(
-         JSON.stringify({ success: false, error: "AI extraction failed" }),
-         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-       );
+      return new Response(
+        JSON.stringify({ success: false, error: "AI extraction failed" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const filtered = filterDispositivosByRange(dispositivos, batchStart, batchEnd);
@@ -644,6 +661,16 @@ Deno.serve(async (req) => {
     const done = isEmptyBatch && emptyStreak >= 1 && nextEstrutura.length > 0;
 
     const statusToPersist = done ? "extraido" : "pendente";
+
+    // Compute current progress from the maximum article extracted so far
+    const maxArticleNow = nextEstrutura.reduce((acc, cur) => {
+      const n = parseArticleNumberFromAnchor(cur?.anchor);
+      if (n != null && n > acc) return n;
+      return acc;
+    }, 0);
+
+    const progressCurrent = done ? progressTotal : maxArticleNow > 0 ? maxArticleNow : batchEnd;
+
     const { error: updateError } = await supabase
       .from("normas")
       .update({
@@ -651,6 +678,9 @@ Deno.serve(async (req) => {
         texto_extraido_em: new Date().toISOString(),
         texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:${batchStart}-${batchEnd}`,
         texto_extraido_status: statusToPersist,
+        texto_extraido_progresso_atual: progressCurrent,
+        texto_extraido_progresso_total: progressTotal,
+        texto_extraido_progresso_em: new Date().toISOString(),
       })
       .eq("id", norma_id);
 
@@ -674,6 +704,8 @@ Deno.serve(async (req) => {
         artigos_added: artigosAdded,
         next_batch_start: done ? null : batchEnd + 1,
         empty_batch: isEmptyBatch,
+        progress_current: progressCurrent,
+        progress_total: progressTotal,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

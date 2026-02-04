@@ -154,6 +154,7 @@ const BackofficeNormaForm = () => {
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const [extractionOrigin, setExtractionOrigin] = useState<string | null>(null);
+  const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMountedRef = useRef(true);
   const autoResumeAttemptedRef = useRef(false);
@@ -222,15 +223,21 @@ const BackofficeNormaForm = () => {
   const refreshExtractionMeta = async (normaId: string) => {
     const { data, error } = await supabase
       .from('normas')
-      .select('texto_extraido_status, texto_extraido, texto_extraido_origem')
+      .select('texto_extraido_status, texto_extraido, texto_extraido_origem, texto_extraido_progresso_atual, texto_extraido_progresso_total')
       .eq('id', normaId)
-      .single();
+      .maybeSingle();
 
-    if (error) return;
+    if (error || !data) return;
 
     setExtractionStatus((data as any)?.texto_extraido_status ?? null);
     setExtractionStats(computeExtractionStats((data as any)?.texto_extraido));
     setExtractionOrigin((data as any)?.texto_extraido_origem ?? null);
+
+    const progAtual = (data as any)?.texto_extraido_progresso_atual;
+    const progTotal = (data as any)?.texto_extraido_progresso_total;
+    if (typeof progAtual === 'number' && typeof progTotal === 'number' && progTotal > 0) {
+      setExtractionProgress({ current: progAtual, total: progTotal });
+    }
   };
   
   const [formData, setFormData] = useState({
@@ -381,6 +388,15 @@ const BackofficeNormaForm = () => {
       setExtractionStatus((normaData as any).texto_extraido_status || null);
       setExtractionStats(computeExtractionStats((normaData as any).texto_extraido));
       setExtractionOrigin((normaData as any).texto_extraido_origem || null);
+
+      // Load extraction progress
+      const progAtual = (normaData as any).texto_extraido_progresso_atual;
+      const progTotal = (normaData as any).texto_extraido_progresso_total;
+      if (typeof progAtual === 'number' && typeof progTotal === 'number' && progTotal > 0) {
+        setExtractionProgress({ current: progAtual, total: progTotal });
+      } else {
+        setExtractionProgress(null);
+      }
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -551,6 +567,7 @@ const BackofficeNormaForm = () => {
     setIsExtractingText(true);
     setExtractionStatus('pendente');
     setExtractionStats(null);
+    setExtractionProgress(null);
     
     try {
       console.log('Triggering text extraction for:', normaId, storagePath);
@@ -1236,11 +1253,25 @@ const BackofficeNormaForm = () => {
                         {isExtractingText ? (
                           <>
                             <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
-                            <div className="flex-1">
+                            <div className="flex-1 space-y-1">
                               <p className="text-sm font-medium">Extraindo texto...</p>
-                              <p className="text-xs text-muted-foreground">
-                                A IA está analisando e estruturando o conteúdo do PDF
-                              </p>
+                              {extractionProgress && extractionProgress.total > 0 ? (
+                                <>
+                                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                                    <div 
+                                      className="h-full bg-primary transition-all duration-300" 
+                                      style={{ width: `${Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}% — Artigo {extractionProgress.current} de ~{extractionProgress.total}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  A IA está analisando e estruturando o conteúdo do PDF
+                                </p>
+                              )}
                             </div>
                           </>
                         ) : extractionStatus === 'extraido' ? (
@@ -1299,16 +1330,30 @@ const BackofficeNormaForm = () => {
                         ) : extractionStatus === 'pendente' ? (
                           <>
                             <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
-                            <div className="flex-1">
+                            <div className="flex-1 space-y-1">
                               <p className="text-sm font-medium">Extração pendente</p>
-                              <p className="text-xs text-muted-foreground">
-                                {(() => {
-                                  const info = parseExtractionOrigin(extractionOrigin);
-                                  if (!info) return 'Aguardando retomada automática…';
-                                  const batch = `Último lote: arts. ${info.batchStart}–${info.batchEnd}`;
-                                  return info.errorKind ? `${batch} (${info.errorKind})` : batch;
-                                })()}
-                              </p>
+                              {extractionProgress && extractionProgress.total > 0 ? (
+                                <>
+                                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                                    <div 
+                                      className="h-full bg-primary transition-all duration-300" 
+                                      style={{ width: `${Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}% — Artigo {extractionProgress.current} de ~{extractionProgress.total}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {(() => {
+                                    const info = parseExtractionOrigin(extractionOrigin);
+                                    if (!info) return 'Aguardando retomada automática…';
+                                    const batch = `Último lote: arts. ${info.batchStart}–${info.batchEnd}`;
+                                    return info.errorKind ? `${batch} (${info.errorKind})` : batch;
+                                  })()}
+                                </p>
+                              )}
                             </div>
                             <Button
                               type="button"

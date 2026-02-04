@@ -574,7 +574,9 @@ const BackofficeNormaForm = () => {
       
       const baseBatchSize = 5;
       let batchSize = baseBatchSize;
-      const maxBatches = 60; // safety guard
+      // Safety guard to avoid infinite loops, but high enough to cover long norms.
+      // The backend is responsible for signaling completion via `done`.
+      const maxBatches = 250;
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
       let retryCount = 0;

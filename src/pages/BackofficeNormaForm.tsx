@@ -152,7 +152,7 @@ const BackofficeNormaForm = () => {
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isExtractingText, setIsExtractingText] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
-  const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
+  const [extractionStats, setExtractionStats] = useState<{ ementa: number; preambulo: number; artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const [extractionOrigin, setExtractionOrigin] = useState<string | null>(null);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +178,8 @@ const BackofficeNormaForm = () => {
           .toLowerCase()
           .normalize('NFD')
           .replace(/\p{Diacritic}/gu, '');
+        if (s === 'ementa') return 'ementa';
+        if (s === 'preambulo') return 'preambulo';
         if (s === 'artigo') return 'artigo';
         if (s === 'inciso') return 'inciso';
         if (s === 'paragrafo') return 'paragrafo';
@@ -186,6 +188,8 @@ const BackofficeNormaForm = () => {
       };
 
       const stats = {
+        ementa: 0,
+        preambulo: 0,
         artigos: 0,
         incisos: 0,
         paragrafos: 0,
@@ -194,7 +198,9 @@ const BackofficeNormaForm = () => {
 
       for (const item of estrutura as any[]) {
         const n = normalize(item?.nivel);
-        if (n === 'artigo') stats.artigos += 1;
+        if (n === 'ementa') stats.ementa += 1;
+        else if (n === 'preambulo') stats.preambulo += 1;
+        else if (n === 'artigo') stats.artigos += 1;
         else if (n === 'inciso') stats.incisos += 1;
         else if (n === 'paragrafo') stats.paragrafos += 1;
         else if (n === 'alinea') stats.alineas += 1;
@@ -1436,8 +1442,10 @@ const BackofficeNormaForm = () => {
                               <p className="text-sm font-medium text-primary">Texto extraído</p>
                               {extractionStats && (
                                 <p className="text-xs text-muted-foreground">
+                                  {extractionStats.ementa > 0 && 'Ementa, '}
+                                  {extractionStats.preambulo > 0 && 'Preâmbulo, '}
                                   {extractionStats.artigos} artigo{extractionStats.artigos !== 1 ? 's' : ''}
-                                  {extractionStats.paragrafos > 0 && `, ${extractionStats.paragrafos} parágrafo${extractionStats.paragrafos !== 1 ? 's' : ''}`}
+                                  {extractionStats.paragrafos > 0 && `, ${extractionStats.paragrafos} §`}
                                   {extractionStats.incisos > 0 && `, ${extractionStats.incisos} inciso${extractionStats.incisos !== 1 ? 's' : ''}`}
                                   {extractionStats.alineas > 0 && `, ${extractionStats.alineas} alínea${extractionStats.alineas !== 1 ? 's' : ''}`}
                                 </p>

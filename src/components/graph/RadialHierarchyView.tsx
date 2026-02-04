@@ -880,7 +880,9 @@ export const RadialHierarchyView = ({
         const anchors = ["art.31"];
         anchors.forEach((a) => {
           const key = `${lei14133ActId}:${a}`;
-          const pos = artigoPositions.get(key) || artigoPositions.get(`${lei14133ActId}:${normalizeAnchor(a)}`);
+          const normKey = `${lei14133ActId}:${normalizeAnchor(a)}`;
+          const pos = artigoPositions.get(key) || artigoPositions.get(normKey);
+          
           if (!pos) return;
 
           const exists = linksToArticles.some(
@@ -1262,14 +1264,23 @@ export const RadialHierarchyView = ({
               })}
 
               {/* Article-level connection links (from regulating norms to specific articles) */}
-              {/* Only show lines from Decreto 68.304 -> arts. 74/75 when Regulamenta is enabled */}
+              {/* Show lines from Decreto 68.304 -> arts. 74/75 and Decreto 68.422 -> art. 31 when Regulamenta is enabled */}
               {showRegulamentaLinks && articleLinks
                 .filter((link) => {
-                  // Only show Decreto 68.304 -> Lei 14.133 arts. 74/75
-                  if (link.fromNodeId !== decreto68304ActId) return false;
                   if (link.toActId !== lei14133ActId) return false;
                   const normAnchor = normalizeAnchor(link.toAnchor);
-                  return normAnchor === "art.74" || normAnchor === "art74" || normAnchor === "art.75" || normAnchor === "art75";
+                  
+                  // Decreto 68.304 -> Lei 14.133 arts. 74/75
+                  if (link.fromNodeId === decreto68304ActId) {
+                    return normAnchor === "art.74" || normAnchor === "art74" || normAnchor === "art.75" || normAnchor === "art75";
+                  }
+                  
+                  // Decreto 68.422 -> Lei 14.133 art. 31
+                  if (link.fromNodeId === decreto68422ActId) {
+                    return normAnchor === "art.31" || normAnchor === "art31";
+                  }
+                  
+                  return false;
                 })
                 .map((link, index) => {
                 const fromNode = nodes.find(n => n.id === link.fromNodeId);

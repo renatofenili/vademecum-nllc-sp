@@ -156,7 +156,7 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
 }
 
 const DEFAULT_BATCH_SIZE = 5;
-const MAX_ARTICLES = 300;
+const MAX_ARTICLES = 500; // Safety ceiling, not the estimate
 // Cheaper defaults to avoid exhausting credits on long PDFs.
 const PRIMARY_MODEL = "google/gemini-2.5-flash-lite";
 const FALLBACK_MODEL = "google/gemini-2.5-flash";
@@ -748,11 +748,21 @@ Deno.serve(async (req) => {
     }
     const batchEnd = Math.min(MAX_ARTICLES, batchStart + batchSize - 1);
 
-    // Determine expected_total (approximation for progress)
-    const progressTotal =
-      typeof expected_total === "number" && expected_total > 0
-        ? expected_total
-        : MAX_ARTICLES;
+    // Determine expected_total (approximation for progress).
+    // If explicit expected_total is provided and > 0, use it.
+    // Otherwise, estimate from existing extraction or default to a reasonable ceiling.
+    let progressTotal: number;
+    if (typeof expected_total === "number" && expected_total > 0) {
+      progressTotal = expected_total;
+    } else if (maxExisting > 0) {
+      // We have extracted some articles already; estimate remaining based on batch position.
+      // If we're at article 100, we probably have ~20% more to go, so estimate ~120.
+      // Use a multiplier of 1.15 to avoid overestimating too much.
+      progressTotal = Math.ceil(maxExisting * 1.15);
+    } else {
+      // First batch: start with a conservative estimate that will be refined.
+      progressTotal = 200;
+    }
 
     // Mark as pending before starting this batch + save progress
     {
@@ -864,7 +874,18 @@ Deno.serve(async (req) => {
       return acc;
     }, 0);
 
-    const progressCurrent = done ? progressTotal : maxArticleNow > 0 ? maxArticleNow : batchEnd;
+    // Dynamically refine progressTotal based on what we've extracted so far.
+    // If maxArticleNow is close to or exceeds the current progressTotal, bump the estimate.
+    // When done, set progressTotal = maxArticleNow for an accurate final count.
+    let refinedProgressTotal = progressTotal;
+    if (done) {
+      refinedProgressTotal = maxArticleNow > 0 ? maxArticleNow : progressTotal;
+    } else if (maxArticleNow > 0 && maxArticleNow >= progressTotal * 0.85) {
+      // We're nearing the estimate; extend it proportionally.
+      refinedProgressTotal = Math.ceil(maxArticleNow * 1.1);
+    }
+
+    const progressCurrent = done ? refinedProgressTotal : maxArticleNow > 0 ? maxArticleNow : batchEnd;
 
     const { error: updateError } = await supabase
       .from("normas")
@@ -874,7 +895,7 @@ Deno.serve(async (req) => {
         texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:${batchStart}-${batchEnd}`,
         texto_extraido_status: statusToPersist,
         texto_extraido_progresso_atual: progressCurrent,
-        texto_extraido_progresso_total: progressTotal,
+        texto_extraido_progresso_total: refinedProgressTotal,
         texto_extraido_progresso_em: new Date().toISOString(),
       })
       .eq("id", norma_id);
@@ -900,7 +921,7 @@ Deno.serve(async (req) => {
         next_batch_start: done ? null : batchEnd + 1,
         empty_batch: isEmptyBatch,
         progress_current: progressCurrent,
-        progress_total: progressTotal,
+        progress_total: refinedProgressTotal,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

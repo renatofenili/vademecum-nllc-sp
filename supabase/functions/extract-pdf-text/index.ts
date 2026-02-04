@@ -216,6 +216,34 @@ function dedupeByAnchor(
   return out;
 }
 
+function inferSearchTermFromStoragePath(path: string): string {
+  // Most uploads are saved as `${timestamp}_${sanitizedName}`.
+  // If the timestamp prefix becomes stale, we can search by sanitizedName.
+  return String(path || "").replace(/^\d+_/, "").trim();
+}
+
+async function storageErrorToMessage(err: any): Promise<string> {
+  try {
+    const name = err?.name ? String(err.name) : "StorageError";
+    const message = err?.message ? String(err.message) : "";
+    const status = err?.originalError?.status ?? err?.statusCode ?? err?.status ?? null;
+    let bodyText = "";
+    if (err?.originalError && typeof err.originalError?.clone === "function") {
+      try {
+        bodyText = await err.originalError.clone().text();
+      } catch {
+        bodyText = "";
+      }
+    }
+    const parts = [name, message, status ? `status=${status}` : null, bodyText ? bodyText.slice(0, 300) : null]
+      .filter(Boolean)
+      .join(" | ");
+    return parts || "Erro desconhecido no armazenamento";
+  } catch {
+    return "Erro desconhecido no armazenamento";
+  }
+}
+
 async function callGatewayBatchWithModel(
   model: string,
   lovableApiKey: string,
@@ -490,7 +518,7 @@ Deno.serve(async (req) => {
       // Path in the request may be stale. Check if there's a newer path in the normas table.
       const { data: normaRow, error: normaRowError } = await supabase
         .from("normas")
-        .select("pdf_storage_path")
+        .select("pdf_storage_path, pdf_nome_arquivo")
         .eq("id", norma_id)
         .maybeSingle();
 
@@ -507,16 +535,55 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Last resort: search by filename (strip timestamp prefix).
+      // This handles cases where the DB path was manually edited or an older upload was deleted.
+      if (!pdfData) {
+        const searchTerm = inferSearchTermFromStoragePath(
+          (normaRow?.pdf_nome_arquivo as string | undefined) || pdf_storage_path
+        );
+        if (searchTerm) {
+          console.log(`Searching storage for matching PDF: ${searchTerm}`);
+          const { data: listed, error: listError } = await supabase.storage
+            .from("normas-pdf")
+            .list("", {
+              search: searchTerm,
+              limit: 20,
+              sortBy: { column: "updated_at", order: "desc" },
+            } as any);
+
+          if (listError) {
+            console.error("Storage list error:", listError);
+          } else if (Array.isArray(listed) && listed.length > 0) {
+            const picked = listed[0]?.name;
+            if (picked) {
+              console.log(`Trying matched path from search: ${picked}`);
+              const { data: pickedDownload, error: pickedError } = await supabase.storage
+                .from("normas-pdf")
+                .download(picked);
+
+              if (!pickedError && pickedDownload) {
+                pdfData = pickedDownload;
+                actualStoragePath = picked;
+              } else {
+                console.error("Error downloading matched path:", pickedError);
+              }
+            }
+          }
+        }
+      }
+
       if (!pdfData) {
         await supabase.from("normas").update({
           texto_extraido_status: "erro",
           texto_extraido_em: new Date().toISOString(),
         }).eq("id", norma_id);
+
+        const msg = await storageErrorToMessage(downloadError);
         return new Response(
           JSON.stringify({
             success: false,
             error_kind: "unknown",
-            error_message: `Falha ao baixar o PDF do armazenamento: ${downloadError.message}`,
+            error_message: `Falha ao baixar o PDF do armazenamento. ${msg}`,
             pdf_storage_path: actualStoragePath,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

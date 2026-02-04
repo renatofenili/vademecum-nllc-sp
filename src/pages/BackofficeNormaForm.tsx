@@ -572,7 +572,7 @@ const BackofficeNormaForm = () => {
     try {
       console.log('Triggering text extraction for:', normaId, storagePath);
       
-      const baseBatchSize = 10;
+      const baseBatchSize = 5;
       let batchSize = baseBatchSize;
       const maxBatches = 60; // safety guard
       let emptyStreak = 0;
@@ -591,6 +591,7 @@ const BackofficeNormaForm = () => {
             batch_size: batchSize,
             empty_streak: emptyStreak,
             reset: Boolean(options?.reset) && i === 0,
+            expected_total: extractionProgress?.total ?? 300,
           },
         });
 
@@ -599,6 +600,18 @@ const BackofficeNormaForm = () => {
           // Pode ser timeout/transiente; tenta refletir o que o backend já salvou
           await refreshExtractionMeta(normaId);
           throw error;
+        }
+
+        // Friendly non-2xx handling: backend can return { success:false } with 200.
+        if ((data as any)?.success === false) {
+          await refreshExtractionMeta(normaId);
+          const kind = String((data as any)?.error_kind ?? 'unknown');
+          const rawMsg = String((data as any)?.error_message ?? 'Falha ao extrair texto do PDF.');
+          const msg =
+            kind === 'payment_required'
+              ? 'Créditos de IA insuficientes para concluir esta extração. Recarregue créditos e tente novamente.'
+              : rawMsg;
+          throw new Error(msg);
         }
 
         await refreshExtractionMeta(normaId);
@@ -1306,11 +1319,26 @@ const BackofficeNormaForm = () => {
                         ) : extractionStatus === 'erro' ? (
                           <>
                             <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-                            <div className="flex-1">
+                            <div className="flex-1 space-y-1">
                               <p className="text-sm font-medium text-destructive">Erro na extração</p>
                               <p className="text-xs text-muted-foreground">
                                 Não foi possível extrair o texto do PDF
                               </p>
+                              {extractionProgress && extractionProgress.total > 0 && (
+                                <>
+                                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Último progresso: {Math.min(100, Math.round((extractionProgress.current / extractionProgress.total) * 100))}% — Artigo {extractionProgress.current} de ~{extractionProgress.total}
+                                  </p>
+                                </>
+                              )}
                             </div>
                             <Button
                               type="button"

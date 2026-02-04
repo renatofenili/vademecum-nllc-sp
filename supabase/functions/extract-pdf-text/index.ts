@@ -31,10 +31,12 @@ type GatewayBatchResult = {
   model_used?: string;
   error_kind?:
     | "gateway_http"
+    | "payment_required"
     | "no_tool_args"
     | "invalid_json"
     | "unknown";
   http_status?: number;
+  error_message?: string;
 };
 
 function safeJsonParse<T>(raw: unknown): T | null {
@@ -153,10 +155,11 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
   return null;
 }
 
-const DEFAULT_BATCH_SIZE = 10;
+const DEFAULT_BATCH_SIZE = 5;
 const MAX_ARTICLES = 300;
-const PRIMARY_MODEL = "google/gemini-3-flash-preview";
-const FALLBACK_MODEL = "google/gemini-2.5-pro";
+// Cheaper defaults to avoid exhausting credits on long PDFs.
+const PRIMARY_MODEL = "google/gemini-2.5-flash-lite";
+const FALLBACK_MODEL = "google/gemini-2.5-flash";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 function parseArticleNumberFromAnchor(anchor: unknown): number | null {
@@ -300,7 +303,7 @@ Não omita nenhum artigo do intervalo solicitado.`,
     tools: toolsPayload,
     tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
     temperature: 0.1,
-    max_tokens: 9000,
+    max_tokens: 4096,
   };
 
   const resp = await fetch(GATEWAY_URL, {
@@ -313,7 +316,13 @@ Não omita nenhum artigo do intervalo solicitado.`,
   });
 
   if (!resp.ok) {
-    const errorText = await resp.text();
+    let errorText = "";
+    try {
+      const asJson = await resp.json();
+      errorText = typeof asJson === "string" ? asJson : JSON.stringify(asJson);
+    } catch {
+      errorText = await resp.text();
+    }
     const status = resp.status;
     console.error(
       `AI API error (batch ${batchStart}-${batchEnd}):`,
@@ -327,9 +336,10 @@ Não omita nenhum artigo do intervalo solicitado.`,
       ok: false,
       retryable,
       retry_after_ms: retryable ? 1500 : 0,
-      error_kind: "gateway_http",
+      error_kind: status === 402 ? "payment_required" : "gateway_http",
       http_status: status,
       model_used: model,
+      error_message: errorText?.slice(0, 1000) || undefined,
     };
   }
 
@@ -503,8 +513,13 @@ Deno.serve(async (req) => {
           texto_extraido_em: new Date().toISOString(),
         }).eq("id", norma_id);
         return new Response(
-          JSON.stringify({ error: `Failed to download PDF: ${downloadError.message}`, fresh_path: actualStoragePath }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            success: false,
+            error_kind: "unknown",
+            error_message: `Falha ao baixar o PDF do armazenamento: ${downloadError.message}`,
+            pdf_storage_path: actualStoragePath,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     } else {
@@ -584,6 +599,7 @@ Deno.serve(async (req) => {
           texto_extraido_progresso_atual: batchStart,
           texto_extraido_progresso_total: progressTotal,
           texto_extraido_progresso_em: new Date().toISOString(),
+          pdf_storage_path: actualStoragePath,
           ...(reset ? { texto_extraido: JSON.stringify([]) } : {}),
         })
         .eq("id", norma_id);
@@ -609,6 +625,7 @@ Deno.serve(async (req) => {
             texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
             texto_extraido_progresso_atual: batchStart,
             texto_extraido_progresso_em: new Date().toISOString(),
+            pdf_storage_path: actualStoragePath,
           })
           .eq("id", norma_id);
         if (pendErr2) console.error("Failed to keep pending status:", pendErr2);
@@ -646,8 +663,20 @@ Deno.serve(async (req) => {
       if (errUpd) console.error("Failed to set error status:", errUpd);
 
       return new Response(
-        JSON.stringify({ success: false, error: "AI extraction failed" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error_kind: error_kind ?? "unknown",
+          http_status: batchResult.http_status ?? null,
+          error_message:
+            error_kind === "payment_required"
+              ? "Créditos de IA insuficientes para continuar esta extração."
+              : batchResult.error_message ?? "Falha ao chamar o serviço de IA.",
+          batch_start: batchStart,
+          batch_end: batchEnd,
+          progress_current: batchStart,
+          progress_total: progressTotal,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

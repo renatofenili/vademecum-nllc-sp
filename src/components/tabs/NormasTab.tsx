@@ -90,13 +90,14 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     formatted = formatted.replace(/(?<!^)(\bArt\.?\s*\d)/gi, '\n$1');
     
     // 2. Roman numeral incisos start new line: "I -", "II -", "III -", etc.
-    formatted = formatted.replace(/(?<!^)\s*((?:X{0,3}(?:IX|IV|V?I{0,3}))\s*[-–—])/gi, '\n$1');
+    // Must be preceded by whitespace or start of line, and have actual roman numerals
+    formatted = formatted.replace(/(?<=\s|^)((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g, '\n$1');
     
     // 3. Paragraphs "§" start new line
     formatted = formatted.replace(/(?<!^)\s*(§\s*\d|§\s*único)/gi, '\n$1');
     
-    // 4. Alíneas "a)", "b)", etc. start new line
-    formatted = formatted.replace(/(?<!^)\s*([a-z]\))/gi, '\n$1');
+    // 4. Alíneas "a)", "b)", etc. start new line (must be preceded by space)
+    formatted = formatted.replace(/(?<=\s)([a-z]\))/gi, '\n$1');
     
     // Clean up multiple consecutive newlines
     formatted = formatted.replace(/\n{3,}/g, '\n\n');

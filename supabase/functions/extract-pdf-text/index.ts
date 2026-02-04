@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/base64.ts";
+import { getDocument } from "https://esm.sh/pdfjs-serverless@0.3.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -169,13 +170,116 @@ function parseArticleNumberFromAnchor(anchor: unknown): number | null {
     .replace(/\s+/g, " ")
     .trim();
 
-  const m1 = s.match(/\bart\.?\s*(\d{1,3})\b/);
+  const m1 = s.match(/\bart\.?\s*(\d{1,4})\b/);
   if (m1?.[1]) return Number(m1[1]);
 
-  const m2 = s.match(/\bartigo\s*(\d{1,3})\b/);
+  const m2 = s.match(/\bartigo\s*(\d{1,4})\b/);
   if (m2?.[1]) return Number(m2[1]);
 
   return null;
+}
+
+function parsePdfMaxFromOrigin(origin: unknown): number | null {
+  if (typeof origin !== "string") return null;
+  const m = origin.match(/\bpdfmax:(\d{1,4})\b/i);
+  if (!m?.[1]) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(MAX_ARTICLES, Math.floor(n));
+}
+
+function computeContiguousMaxFrom1(sortedUniqueNumbers: number[]): number {
+  let max = 0;
+  for (const n of sortedUniqueNumbers) {
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (n === max + 1) {
+      max = n;
+      continue;
+    }
+    if (n <= max) continue;
+    break;
+  }
+  return max;
+}
+
+function textContentToText(textContent: any): string {
+  const items = Array.isArray(textContent?.items) ? textContent.items : [];
+  const parts: string[] = [];
+  for (const it of items) {
+    const s = typeof it?.str === "string" ? it.str : "";
+    if (!s) continue;
+    parts.push(s);
+    if (it?.hasEOL) parts.push("\n");
+    else parts.push(" ");
+  }
+  return parts.join("").replace(/[ \t]+\n/g, "\n");
+}
+
+function collectArticleNumbers(text: string, strictSet: Set<number>, looseSet: Set<number>) {
+  // Strict: only headings at line start (reduces false-positives from references)
+  const strict = /^\s*(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b/gim;
+  let m: RegExpExecArray | null;
+  while ((m = strict.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) strictSet.add(n);
+  }
+
+  // Loose fallback: anywhere in text (may include references), later tamed via contiguous-from-1 heuristic.
+  const loose = /\b(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b/gi;
+  while ((m = loose.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) looseSet.add(n);
+  }
+}
+
+async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<number | null> {
+  try {
+    const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
+    const strictSet = new Set<number>();
+    const looseSet = new Set<number>();
+
+    const pages = Math.min(doc.numPages || 0, 2500);
+    for (let pageNum = 1; pageNum <= pages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContentToText(textContent);
+      if (pageText) collectArticleNumbers(pageText, strictSet, looseSet);
+    }
+
+    const toSorted = (s: Set<number>) =>
+      Array.from(s)
+        .map((n) => Math.floor(n))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= MAX_ARTICLES)
+        .sort((a, b) => a - b);
+
+    const strictNums = toSorted(strictSet);
+    const looseNums = toSorted(looseSet);
+    const strictContig = computeContiguousMaxFrom1(strictNums);
+    const looseContig = computeContiguousMaxFrom1(looseNums);
+
+    const contig = Math.max(strictContig, looseContig);
+    const maxFound = Math.max(strictNums.at(-1) ?? 0, looseNums.at(-1) ?? 0);
+
+    const inferred = contig >= 10 ? contig : maxFound;
+    if (!Number.isFinite(inferred) || inferred <= 0) return null;
+
+    return Math.min(MAX_ARTICLES, Math.floor(inferred));
+  } catch (e) {
+    console.warn("Failed to infer max article from PDF bytes:", e);
+    return null;
+  }
+}
+
+function filterEstruturaToMaxArticle(
+  estrutura: ExtractedArticle[],
+  maxArticle: number | null
+): ExtractedArticle[] {
+  if (!maxArticle || maxArticle <= 0) return estrutura;
+  return (estrutura || []).filter((cur) => {
+    const n = parseArticleNumberFromAnchor(cur?.anchor);
+    if (n == null) return true; // keep unknown anchors to avoid accidental data loss
+    return n <= maxArticle;
+  });
 }
 
 function filterDispositivosByRange(
@@ -693,7 +797,8 @@ Deno.serve(async (req) => {
     }
 
     const arrayBuffer = await pdfData!.arrayBuffer();
-    const base64Pdf = base64Encode(new Uint8Array(arrayBuffer));
+    const pdfBytes = new Uint8Array(arrayBuffer);
+    const base64Pdf = base64Encode(pdfBytes);
 
     console.log(`PDF downloaded, size: ${arrayBuffer.byteLength} bytes`);
 
@@ -714,10 +819,11 @@ Deno.serve(async (req) => {
 
     // Load existing extraction (for resume)
     let existingEstrutura: ExtractedArticle[] = [];
+    let existingOrigin: string | null = null;
     if (!reset) {
       const { data: normaRow, error: normaRowError } = await supabase
         .from("normas")
-        .select("texto_extraido")
+        .select("texto_extraido, texto_extraido_origem")
         .eq("id", norma_id)
         .maybeSingle();
 
@@ -731,7 +837,22 @@ Deno.serve(async (req) => {
           // ignore parse errors
         }
       }
+
+      if (!normaRowError && typeof (normaRow as any)?.texto_extraido_origem === "string") {
+        existingOrigin = String((normaRow as any).texto_extraido_origem);
+      }
     }
+
+    // Infer the real maximum article number from the PDF (preferred), or reuse cached value from origin.
+    // This prevents hallucinated articles like "art.232" when the PDF only goes to 194.
+    let pdfMaxArticle: number | null = reset ? null : parsePdfMaxFromOrigin(existingOrigin);
+    if (!pdfMaxArticle) {
+      pdfMaxArticle = await inferPdfMaxArticleFromBytes(pdfBytes);
+    }
+    const effectiveMaxArticle = pdfMaxArticle && pdfMaxArticle > 0 ? pdfMaxArticle : MAX_ARTICLES;
+
+    // Sanitize existing structure: drop anything beyond the real PDF max (fixes past hallucinations).
+    existingEstrutura = filterEstruturaToMaxArticle(existingEstrutura, pdfMaxArticle);
 
     const maxExisting = existingEstrutura.reduce((acc, cur) => {
       const n = parseArticleNumberFromAnchor(cur?.anchor);
@@ -739,39 +860,72 @@ Deno.serve(async (req) => {
       return acc;
     }, 0);
 
-    const batchStart = requestedBatchStart ?? (maxExisting > 0 ? maxExisting + 1 : 1);
-    if (batchStart > MAX_ARTICLES) {
+    // If the client asks for a batch outside the real range, ignore and resume from maxExisting+1.
+    const defaultStart = maxExisting > 0 ? maxExisting + 1 : 1;
+    const batchStart =
+      typeof requestedBatchStart === "number" &&
+      requestedBatchStart >= 1 &&
+      requestedBatchStart <= effectiveMaxArticle
+        ? requestedBatchStart
+        : defaultStart;
+
+    if (batchStart > effectiveMaxArticle) {
+      // Already completed (or at least reached the end of the real PDF).
+      const progressTotal = effectiveMaxArticle;
+      const progressCurrent = Math.min(Math.max(maxExisting, 0), progressTotal);
+
+      const originPrefix = `lovable-ai:${PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}`;
+      const { error: updErr } = await supabase
+        .from("normas")
+        .update({
+          texto_extraido: JSON.stringify(existingEstrutura),
+          texto_extraido_em: new Date().toISOString(),
+          texto_extraido_origem: `${originPrefix}:batched:done`,
+          texto_extraido_status: "extraido",
+          texto_extraido_progresso_atual: progressCurrent,
+          texto_extraido_progresso_total: progressTotal,
+          texto_extraido_progresso_em: new Date().toISOString(),
+        })
+        .eq("id", norma_id);
+      if (updErr) console.error("Failed to finalize extraction:", updErr);
+
       return new Response(
-        JSON.stringify({ success: true, done: true, reason: "max_articles_reached" }),
+        JSON.stringify({
+          success: true,
+          done: true,
+          reason: pdfMaxArticle ? "pdf_max_article_reached" : "max_articles_reached",
+          progress_current: progressCurrent,
+          progress_total: progressTotal,
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const batchEnd = Math.min(MAX_ARTICLES, batchStart + batchSize - 1);
+
+    const batchEnd = Math.min(effectiveMaxArticle, batchStart + batchSize - 1);
 
     // Determine expected_total (approximation for progress).
     // If explicit expected_total is provided and > 0, use it.
     // Otherwise, estimate from existing extraction or default to a reasonable ceiling.
     let progressTotal: number;
-    if (typeof expected_total === "number" && expected_total > 0) {
-      progressTotal = expected_total;
+    if (pdfMaxArticle && pdfMaxArticle > 0) {
+      progressTotal = effectiveMaxArticle;
+    } else if (typeof expected_total === "number" && expected_total > 0) {
+      progressTotal = Math.min(MAX_ARTICLES, expected_total);
     } else if (maxExisting > 0) {
-      // We have extracted some articles already; estimate remaining based on batch position.
-      // If we're at article 100, we probably have ~20% more to go, so estimate ~120.
-      // Use a multiplier of 1.15 to avoid overestimating too much.
-      progressTotal = Math.ceil(maxExisting * 1.15);
+      progressTotal = Math.min(MAX_ARTICLES, Math.ceil(maxExisting * 1.15));
     } else {
-      // First batch: start with a conservative estimate that will be refined.
       progressTotal = 200;
     }
 
     // Mark as pending before starting this batch + save progress
     {
+      const originPrefix = `lovable-ai:${PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}`;
       const { error: pendErr } = await supabase
         .from("normas")
         .update({
           texto_extraido_status: "pendente",
           texto_extraido_em: new Date().toISOString(),
-          texto_extraido_origem: `lovable-ai:${PRIMARY_MODEL}:batched`,
+          texto_extraido_origem: `${originPrefix}:batched`,
           texto_extraido_progresso_atual: batchStart,
           texto_extraido_progresso_total: progressTotal,
           texto_extraido_progresso_em: new Date().toISOString(),
@@ -793,12 +947,13 @@ Deno.serve(async (req) => {
             ? Math.max(1, Math.floor(batchSize / 2))
             : batchSize;
 
+        const originPrefix = `lovable-ai:${model_used ?? PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}`;
         const { error: pendErr2 } = await supabase
           .from("normas")
           .update({
             texto_extraido_status: "pendente",
             texto_extraido_em: new Date().toISOString(),
-            texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+            texto_extraido_origem: `${originPrefix}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
             texto_extraido_progresso_atual: batchStart,
             texto_extraido_progresso_em: new Date().toISOString(),
             pdf_storage_path: actualStoragePath,
@@ -833,7 +988,7 @@ Deno.serve(async (req) => {
         .update({
           texto_extraido_status: "erro",
           texto_extraido_em: new Date().toISOString(),
-          texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+          texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
         })
         .eq("id", norma_id);
       if (errUpd) console.error("Failed to set error status:", errUpd);
@@ -863,7 +1018,10 @@ Deno.serve(async (req) => {
     const nextEstrutura = reset ? deduped : [...existingEstrutura, ...deduped];
 
     const isEmptyBatch = artigosAdded === 0;
-    const done = isEmptyBatch && emptyStreak >= 1 && nextEstrutura.length > 0;
+    const done =
+      pdfMaxArticle && pdfMaxArticle > 0
+        ? batchEnd >= effectiveMaxArticle
+        : isEmptyBatch && emptyStreak >= 1 && nextEstrutura.length > 0;
 
     const statusToPersist = done ? "extraido" : "pendente";
 
@@ -878,21 +1036,31 @@ Deno.serve(async (req) => {
     // If maxArticleNow is close to or exceeds the current progressTotal, bump the estimate.
     // When done, set progressTotal = maxArticleNow for an accurate final count.
     let refinedProgressTotal = progressTotal;
-    if (done) {
+    if (pdfMaxArticle && pdfMaxArticle > 0) {
+      refinedProgressTotal = effectiveMaxArticle;
+    } else if (done) {
       refinedProgressTotal = maxArticleNow > 0 ? maxArticleNow : progressTotal;
     } else if (maxArticleNow > 0 && maxArticleNow >= progressTotal * 0.85) {
-      // We're nearing the estimate; extend it proportionally.
-      refinedProgressTotal = Math.ceil(maxArticleNow * 1.1);
+      refinedProgressTotal = Math.min(MAX_ARTICLES, Math.ceil(maxArticleNow * 1.1));
     }
 
-    const progressCurrent = done ? refinedProgressTotal : maxArticleNow > 0 ? maxArticleNow : batchEnd;
+    const progressCurrent =
+      pdfMaxArticle && pdfMaxArticle > 0
+        ? Math.min(effectiveMaxArticle, done ? effectiveMaxArticle : maxArticleNow > 0 ? maxArticleNow : batchEnd)
+        : done
+          ? refinedProgressTotal
+          : maxArticleNow > 0
+            ? maxArticleNow
+            : batchEnd;
+
+    const estruturaToPersist = filterEstruturaToMaxArticle(nextEstrutura, pdfMaxArticle);
 
     const { error: updateError } = await supabase
       .from("normas")
       .update({
-        texto_extraido: JSON.stringify(nextEstrutura),
+        texto_extraido: JSON.stringify(estruturaToPersist),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:${batchStart}-${batchEnd}`,
+        texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}:batched:${batchStart}-${batchEnd}`,
         texto_extraido_status: statusToPersist,
         texto_extraido_progresso_atual: progressCurrent,
         texto_extraido_progresso_total: refinedProgressTotal,

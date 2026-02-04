@@ -741,15 +741,17 @@ export const RadialHierarchyView = ({
     return linksToArticles;
   }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId]);
 
-  // Set of highlighted article keys ("actId:normalizedAnchor") when Regulamenta is active
-  const highlightedArticles = useMemo(() => {
-    const set = new Set<string>();
-    if (!showRegulamentaLinks) return set;
+  // Map of highlighted article keys ("actId:normalizedAnchor") -> source color when Regulamenta is active
+  const highlightedArticlesMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!showRegulamentaLinks) return map;
     articleLinks.forEach((link) => {
-      set.add(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`);
+      const fromNode = nodes.find((n) => n.id === link.fromNodeId);
+      const sourceColor = fromNode ? ringColors[fromNode.ring] : "hsl(160, 35%, 45%)";
+      map.set(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`, sourceColor);
     });
-    return set;
-  }, [showRegulamentaLinks, articleLinks]);
+    return map;
+  }, [showRegulamentaLinks, articleLinks, nodes]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);
@@ -1079,29 +1081,52 @@ export const RadialHierarchyView = ({
               })}
 
               {/* Article-level connection links (from regulating norms to specific articles) */}
-              {showRegulamentaLinks && articleLinks.map((link, index) => {
+              {/* Only show lines from Decreto 68.304 -> arts. 74/75 when Regulamenta is enabled */}
+              {showRegulamentaLinks && articleLinks
+                .filter((link) => {
+                  // Only show Decreto 68.304 -> Lei 14.133 arts. 74/75
+                  if (link.fromNodeId !== decreto68304ActId) return false;
+                  if (link.toActId !== lei14133ActId) return false;
+                  const normAnchor = normalizeAnchor(link.toAnchor);
+                  return normAnchor === "art.74" || normAnchor === "art74" || normAnchor === "art.75" || normAnchor === "art75";
+                })
+                .map((link, index) => {
                 const fromNode = nodes.find(n => n.id === link.fromNodeId);
                 
                 const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromNodeId);
                 const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toActId);
                 const linkHighlighted = fromHighlighted || toHighlighted;
                 
-                const fromColor = fromNode ? ringColors[fromNode.ring] : "hsl(0, 0%, 20%)";
+                const fromColor = fromNode ? ringColors[fromNode.ring] : "hsl(160, 35%, 45%)";
                 
                 return (
-                  <line
-                    key={`article-link-${link.fromNodeId}-${link.toAnchor}-${index}`}
-                    x1={link.fromX}
-                    y1={link.fromY}
-                    x2={link.toX}
-                    y2={link.toY}
-                    stroke={fromColor}
-                    strokeWidth={2.5}
-                    strokeDasharray="4 3"
-                    opacity={highlightedNormaIds ? (linkHighlighted ? 0.85 : 0.15) : 0.75}
-                    className="transition-opacity duration-300"
-                    markerEnd="url(#arrowhead)"
-                  />
+                  <g key={`article-link-${link.fromNodeId}-${link.toAnchor}-${index}`}>
+                    {/* Glow effect behind the line */}
+                    <line
+                      x1={link.fromX}
+                      y1={link.fromY}
+                      x2={link.toX}
+                      y2={link.toY}
+                      stroke={fromColor}
+                      strokeWidth={6}
+                      opacity={highlightedNormaIds ? (linkHighlighted ? 0.25 : 0.05) : 0.2}
+                      strokeLinecap="round"
+                      style={{ filter: "blur(3px)" }}
+                    />
+                    {/* Main solid line */}
+                    <line
+                      x1={link.fromX}
+                      y1={link.fromY}
+                      x2={link.toX}
+                      y2={link.toY}
+                      stroke={fromColor}
+                      strokeWidth={2.5}
+                      opacity={highlightedNormaIds ? (linkHighlighted ? 0.9 : 0.2) : 0.85}
+                      strokeLinecap="round"
+                      className="transition-opacity duration-300"
+                      markerEnd="url(#arrowhead)"
+                    />
+                  </g>
                 );
               })}
 
@@ -1219,9 +1244,10 @@ export const RadialHierarchyView = ({
                       const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
                       const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
 
-                      // Check if this article is a target of a connection line
+                      // Check if this article is a target of a connection line and get source color
                       const artigoKey = `${node.id}:${normalizeAnchor(group.artigo.anchor)}`;
-                      const isLinkedArticle = highlightedArticles.has(artigoKey);
+                      const linkedColor = highlightedArticlesMap.get(artigoKey);
+                      const isLinkedArticle = !!linkedColor;
 
                       return (
                         <g key={`artigo-${idx}`}>
@@ -1248,21 +1274,21 @@ export const RadialHierarchyView = ({
                             }}
                             className="cursor-pointer"
                           >
-                            {/* Glow filter for linked articles */}
+                            {/* Glow filter for linked articles - same color as source decree */}
                             {isLinkedArticle && (
                               <circle
                                 r={22}
                                 fill="none"
-                                stroke="hsl(45, 90%, 55%)"
+                                stroke={linkedColor}
                                 strokeWidth={3}
-                                opacity={0.7}
+                                opacity={0.6}
                                 className="animate-pulse"
                               />
                             )}
                             <circle
                               r={14}
-                              fill={isLinkedArticle ? "hsl(45, 85%, 90%)" : "white"}
-                              stroke={isLinkedArticle ? "hsl(45, 80%, 50%)" : color}
+                              fill={isLinkedArticle ? `color-mix(in srgb, ${linkedColor} 15%, white 85%)` : "white"}
+                              stroke={isLinkedArticle ? linkedColor : color}
                               strokeWidth={isLinkedArticle ? 2.5 : 2}
                               strokeOpacity={isLinkedArticle ? 1 : 0.6}
                               className="transition-all duration-200 hover:brightness-95"

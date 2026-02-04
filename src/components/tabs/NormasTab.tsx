@@ -86,6 +86,17 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
   const applyFormalFormatting = (text: string): string => {
     let formatted = text;
     
+    // 0. FIRST: Normalize unwanted line breaks from PDF extraction
+    // Replace single newlines (not followed by structural markers) with space
+    // This fixes cases like "personalidade jurídica de\n\ndireito privado"
+    formatted = formatted.replace(
+      /\n+(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
+      ' '
+    );
+    
+    // Clean up multiple spaces
+    formatted = formatted.replace(/\s{2,}/g, ' ');
+    
     // 1. "Art." starts new line ONLY when it looks like a new article heading
     // (avoid references like "no art. 52 desta Lei").
     // Heuristic: comes after punctuation and (after the number) the next word starts uppercase.

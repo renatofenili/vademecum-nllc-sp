@@ -740,6 +740,16 @@ export const RadialHierarchyView = ({
     
     return linksToArticles;
   }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId]);
+
+  // Set of highlighted article keys ("actId:normalizedAnchor") when Regulamenta is active
+  const highlightedArticles = useMemo(() => {
+    const set = new Set<string>();
+    if (!showRegulamentaLinks) return set;
+    articleLinks.forEach((link) => {
+      set.add(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`);
+    });
+    return set;
+  }, [showRegulamentaLinks, articleLinks]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);
@@ -1208,7 +1218,10 @@ export const RadialHierarchyView = ({
                       
                       const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
                       const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
-                      const childCount = group.children.length;
+
+                      // Check if this article is a target of a connection line
+                      const artigoKey = `${node.id}:${normalizeAnchor(group.artigo.anchor)}`;
+                      const isLinkedArticle = highlightedArticles.has(artigoKey);
 
                       return (
                         <g key={`artigo-${idx}`}>
@@ -1235,12 +1248,23 @@ export const RadialHierarchyView = ({
                             }}
                             className="cursor-pointer"
                           >
+                            {/* Glow filter for linked articles */}
+                            {isLinkedArticle && (
+                              <circle
+                                r={22}
+                                fill="none"
+                                stroke="hsl(45, 90%, 55%)"
+                                strokeWidth={3}
+                                opacity={0.7}
+                                className="animate-pulse"
+                              />
+                            )}
                             <circle
                               r={14}
-                              fill="white"
-                              stroke={color}
-                              strokeWidth={2}
-                              strokeOpacity={0.6}
+                              fill={isLinkedArticle ? "hsl(45, 85%, 90%)" : "white"}
+                              stroke={isLinkedArticle ? "hsl(45, 80%, 50%)" : color}
+                              strokeWidth={isLinkedArticle ? 2.5 : 2}
+                              strokeOpacity={isLinkedArticle ? 1 : 0.6}
                               className="transition-all duration-200 hover:brightness-95"
                             />
                             <text

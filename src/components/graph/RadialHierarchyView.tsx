@@ -13,6 +13,29 @@ import { ActsGraphData, ActNode, DispositivosGraphData, DispositivoNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+// Normalize anchors coming from extraction (e.g. "art. 74" -> "art.74") so they can be matched reliably
+const normalizeAnchor = (anchor: string): string => {
+  return (anchor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[º°]/g, "")
+    .replace(/^art(?=\d)/, "art.")
+    .replace(/^artigo/, "art.")
+    .trim();
+};
+
+// Loose numero normalization for fuzzy lookups ("68.304/24" vs "68304/2024")
+const normalizeNumeroLoose = (numero: string): string => {
+  return (numero || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[º°]/g, "")
+    .replace(/[.\-]/g, "")
+    .replace(/\//g, "");
+};
+
 interface NormaTema {
   norma_id: string;
   tema: string;
@@ -290,6 +313,40 @@ export const RadialHierarchyView = ({
       toast.error("Erro ao carregar dispositivos");
     }
   }, [expandedDispositivosMap]);
+
+  // If "Regulamenta" is enabled, ensure Lei 14.133 is expanded so article-level links can be drawn.
+  // NOTE: use backend data nodes here (not radial layout nodes) to avoid ordering issues.
+  const lei14133ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "lei" && num.includes("14133") && num.includes("2021");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const decreto68304ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("68304") && (num.includes("2024") || num.endsWith("24"));
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const ensureExpanded = useCallback(
+    (actId: string) => {
+      const expanded = expandedDispositivosMap.get(actId);
+      if (expanded && (expanded.isLoading || expanded.artigoGroups.length > 0)) return;
+      // Only expand when not already expanded/loading (avoid the toggle-collapse behavior)
+      void loadDispositivos(actId);
+    },
+    [expandedDispositivosMap, loadDispositivos]
+  );
+
+  useEffect(() => {
+    if (!showRegulamentaLinks) return;
+    if (!lei14133ActId) return;
+    ensureExpanded(lei14133ActId);
+  }, [showRegulamentaLinks, lei14133ActId, ensureExpanded]);
 
   // Measure container
   useEffect(() => {
@@ -573,11 +630,23 @@ export const RadialHierarchyView = ({
         const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
         
         // Key: "actId:anchor" (e.g., "uuid:art.74")
-        positions.set(`${node.id}:${group.artigo.anchor}`, { 
+        const rawAnchor = group.artigo.anchor;
+        const normAnchor = normalizeAnchor(rawAnchor);
+
+        positions.set(`${node.id}:${rawAnchor}`, { 
           x: artigoX, 
           y: artigoY, 
           parentActId: node.id 
         });
+
+        // Also store a normalized key to match extraction variations (spaces, accents, º)
+        if (normAnchor && normAnchor !== rawAnchor) {
+          positions.set(`${node.id}:${normAnchor}`, {
+            x: artigoX,
+            y: artigoY,
+            parentActId: node.id,
+          });
+        }
       });
     });
     
@@ -607,35 +676,70 @@ export const RadialHierarchyView = ({
       const targetExpanded = expandedDispositivosMap.get(edge.to_act);
       if (!targetExpanded || targetExpanded.isLoading || !targetExpanded.artigoGroups.length) return;
       
-      // For each evidence, find matching article positions
+      // For each evidence, find matching article positions (raw + normalized)
       edge.evidences.forEach((evidence) => {
-        if (!evidence.to_anchor) return;
-        
-        const anchorKey = `${edge.to_act}:${evidence.to_anchor}`;
-        const artigoPos = artigoPositions.get(anchorKey);
-        
-        if (artigoPos) {
+        const rawToAnchor = (evidence.to_anchor || "").trim();
+        if (!rawToAnchor) return;
+
+        const candidates = [rawToAnchor, normalizeAnchor(rawToAnchor)].filter(Boolean);
+        for (const candidateAnchor of candidates) {
+          const anchorKey = `${edge.to_act}:${candidateAnchor}`;
+          const artigoPos = artigoPositions.get(anchorKey);
+          if (!artigoPos) continue;
+
+          const toAnchorKey = normalizeAnchor(candidateAnchor) || candidateAnchor;
           const exists = linksToArticles.some(
-            l => l.fromNodeId === fromNode.id && l.toAnchor === evidence.to_anchor && l.toActId === edge.to_act
+            (l) => l.fromNodeId === fromNode.id && normalizeAnchor(l.toAnchor) === toAnchorKey && l.toActId === edge.to_act
           );
-          
+
           if (!exists) {
             linksToArticles.push({
               fromNodeId: fromNode.id,
               fromX: fromNode.x,
               fromY: fromNode.y,
-              toAnchor: evidence.to_anchor,
+              toAnchor: candidateAnchor,
               toX: artigoPos.x,
               toY: artigoPos.y,
               toActId: edge.to_act,
             });
           }
+          break; // stop at first match
         }
       });
     });
+
+    // Fallback (explicit requirement): when "Regulamenta" is enabled and Lei 14.133 is expanded,
+    // draw Decreto 68.304 -> arts. 74 e 75 even if evidences are missing/heterogeneous.
+    if (lei14133ActId && decreto68304ActId) {
+      const fromNode = nodes.find((n) => n.id === decreto68304ActId);
+      const targetExpanded = expandedDispositivosMap.get(lei14133ActId);
+      if (fromNode && targetExpanded && !targetExpanded.isLoading && targetExpanded.artigoGroups.length) {
+        const anchors = ["art.74", "art.75"];
+        anchors.forEach((a) => {
+          const key = `${lei14133ActId}:${a}`;
+          const pos = artigoPositions.get(key) || artigoPositions.get(`${lei14133ActId}:${normalizeAnchor(a)}`);
+          if (!pos) return;
+
+          const exists = linksToArticles.some(
+            (l) => l.fromNodeId === fromNode.id && l.toActId === lei14133ActId && normalizeAnchor(l.toAnchor) === normalizeAnchor(a)
+          );
+          if (exists) return;
+
+          linksToArticles.push({
+            fromNodeId: fromNode.id,
+            fromX: fromNode.x,
+            fromY: fromNode.y,
+            toAnchor: a,
+            toX: pos.x,
+            toY: pos.y,
+            toActId: lei14133ActId,
+          });
+        });
+      }
+    }
     
     return linksToArticles;
-  }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions]);
+  }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);

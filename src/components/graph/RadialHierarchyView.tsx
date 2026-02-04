@@ -463,26 +463,30 @@ export const RadialHierarchyView = ({
     }
 
     // Build regulation counts and maps per node
-    const regulatesCount = new Map<string, number>(); // How many this node regulates
-    const regulatedByCount = new Map<string, number>(); // How many regulate this node
+    // In normative hierarchy: outer rings REGULATE inner rings
+    // Example: Decreto (ring 2) REGULATES Lei (ring 1)
+    // So for hierarchy links (from inner to outer): toId regulates fromId
+    const regulatesCount = new Map<string, number>(); // How many norms this node regulates (provides implementation for)
+    const regulatedByCount = new Map<string, number>(); // How many norms regulate/implement this node
     const regulatesMap = new Map<string, string[]>(); // List of node IDs this node regulates
     const regulatedByMap = new Map<string, string[]>(); // List of node IDs that regulate this node
     
     graphLinks.forEach((link) => {
       if (link.type === "regulamenta" || link.type === "hierarquia") {
-        // fromId regulates toId
-        regulatesCount.set(link.fromId, (regulatesCount.get(link.fromId) || 0) + 1);
-        regulatedByCount.set(link.toId, (regulatedByCount.get(link.toId) || 0) + 1);
+        // For hierarchy: outer ring (toId) REGULATES inner ring (fromId)
+        // toId regulates fromId (reversed from before)
+        regulatesCount.set(link.toId, (regulatesCount.get(link.toId) || 0) + 1);
+        regulatedByCount.set(link.fromId, (regulatedByCount.get(link.fromId) || 0) + 1);
         
         // Build lists
-        const existingRegulates = regulatesMap.get(link.fromId) || [];
-        if (!existingRegulates.includes(link.toId)) {
-          regulatesMap.set(link.fromId, [...existingRegulates, link.toId]);
+        const existingRegulates = regulatesMap.get(link.toId) || [];
+        if (!existingRegulates.includes(link.fromId)) {
+          regulatesMap.set(link.toId, [...existingRegulates, link.fromId]);
         }
         
-        const existingRegulatedBy = regulatedByMap.get(link.toId) || [];
-        if (!existingRegulatedBy.includes(link.fromId)) {
-          regulatedByMap.set(link.toId, [...existingRegulatedBy, link.fromId]);
+        const existingRegulatedBy = regulatedByMap.get(link.fromId) || [];
+        if (!existingRegulatedBy.includes(link.toId)) {
+          regulatedByMap.set(link.fromId, [...existingRegulatedBy, link.toId]);
         }
       }
     });

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.graph-dispositivos]
 verify_jwt = false
+
+[functions.re-extract-articles]
+verify_jwt = false

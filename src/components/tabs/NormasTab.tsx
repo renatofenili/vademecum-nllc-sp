@@ -86,19 +86,31 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
   const applyFormalFormatting = (text: string): string => {
     let formatted = text;
     
-    // 1. "Art." starts new line (but not at the very beginning)
-    formatted = formatted.replace(/(?<!^)(\bArt\.?\s*\d)/gi, '\n$1');
+    // 1. "Art." starts new line ONLY when it looks like a new article heading
+    // (avoid references like "no art. 52 desta Lei").
+    // Heuristic: comes after punctuation and (after the number) the next word starts uppercase.
+    formatted = formatted.replace(
+      /([.;:])\s+(Art\.?\s*\d{1,4}\s*(?:º|°|o|\.)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g,
+      "$1\n$2",
+    );
     
-    // 2. Roman numeral incisos start new line: "I -", "II -", "III -", etc.
-    // Must be preceded by whitespace or start of line, and have actual roman numerals
-    formatted = formatted.replace(/(?<=\s|^)((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g, '\n$1');
+    // 2. Roman numeral incisos start new line only when they start a new item
+    // (avoid references like "inciso II do art. ...").
+    formatted = formatted.replace(
+      /([.;:])\s+((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g,
+      "$1\n$2",
+    );
     
-    // 3. Paragraphs "§" start new line - but NOT when it's a reference like "o § 3º", "do § 2º"
-    // Only match § at start of sentence (after period/newline) or preceded by colon
-    formatted = formatted.replace(/(?<=[.:\n])\s*(§\s*\d+º?|§\s*único)/gi, '\n$1');
+    // 3. Paragraph markers "§" start new line only when they start a new paragraph
+    // (avoid references like "o § 3º deste artigo").
+    formatted = formatted.replace(
+      /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
+      "$1\n$2",
+    );
     
-    // 4. Alíneas "a)", "b)", etc. start new line (must be preceded by space)
-    formatted = formatted.replace(/(?<=\s)([a-z]\))/gi, '\n$1');
+    // 4. Alíneas "a)", "b)", etc. start new line only when they start a new item
+    // (avoid references like "alínea a) do inciso ...").
+    formatted = formatted.replace(/([.;:])\s+([a-z]\))(?=\s)/gi, "$1\n$2");
     
     // Clean up multiple consecutive newlines
     formatted = formatted.replace(/\n{3,}/g, '\n\n');

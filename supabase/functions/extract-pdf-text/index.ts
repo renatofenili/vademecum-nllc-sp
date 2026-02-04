@@ -30,6 +30,7 @@ type GatewayBatchResult = {
   retryable: boolean;
   retry_after_ms: number;
   model_used?: string;
+  used_pdf_fallback?: boolean;
   error_kind?:
     | "gateway_http"
     | "payment_required"
@@ -292,6 +293,80 @@ function filterDispositivosByRange(
     if (n == null) return false;
     return n >= batchStart && n <= batchEnd;
   });
+}
+
+function normalizePdfExtractedText(s: string): string {
+  return String(s || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\t\u00A0]+/g, " ")
+    .replace(/[ ]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractFallbackArticlesFromText(
+  fullText: string,
+  batchStart: number,
+  batchEnd: number
+): ToolArgs["dispositivos"] {
+  const text = `\n${normalizePdfExtractedText(fullText)}\n`;
+  // Headings at line start to reduce false-positives from references.
+  const headingRe = /^\s*(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b.*$/gim;
+  const headings: { n: number; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headingRe.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    headings.push({ n, index: m.index });
+  }
+
+  if (headings.length === 0) return [];
+
+  // Ensure in-order.
+  headings.sort((a, b) => a.index - b.index);
+
+  const out: ToolArgs["dispositivos"] = [];
+  for (let n = batchStart; n <= batchEnd; n++) {
+    const hIdx = headings.findIndex((h) => h.n === n);
+    if (hIdx === -1) continue;
+    const startIdx = headings[hIdx].index;
+    // Find the next heading after this one (not necessarily n+1 due to OCR gaps).
+    const nextHeading = headings.slice(hIdx + 1).find((h) => h.index > startIdx);
+    const endIdx = nextHeading ? nextHeading.index : text.length;
+    const slice = text.slice(startIdx, endIdx);
+    const cleaned = normalizePdfExtractedText(slice);
+    if (!cleaned) continue;
+    out.push({
+      anchor: `art.${n}`,
+      nivel: "artigo",
+      texto: cleaned,
+    });
+  }
+
+  return out;
+}
+
+async function buildPdfFallbackDispositivos(
+  pdfBytes: Uint8Array,
+  batchStart: number,
+  batchEnd: number
+): Promise<ToolArgs["dispositivos"]> {
+  try {
+    const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
+    const pages = Math.min(doc.numPages || 0, 2500);
+    const parts: string[] = [];
+    for (let pageNum = 1; pageNum <= pages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContentToText(textContent);
+      if (pageText) parts.push(pageText);
+    }
+    const fullText = parts.join("\n\n");
+    return extractFallbackArticlesFromText(fullText, batchStart, batchEnd);
+  } catch (e) {
+    console.warn("PDF fallback extraction failed:", e);
+    return [];
+  }
 }
 
 function dedupeByAnchor(
@@ -707,6 +782,8 @@ Deno.serve(async (req) => {
     let actualStoragePath = pdf_storage_path;
     let lastStorageError: any = null;
 
+    const allowStorageSearch = Boolean(reqBody?.allow_storage_search);
+
     const tryDownload = async (path: string): Promise<Blob | null> => {
       const safePath = String(path || "").trim();
       if (!safePath) return null;
@@ -745,8 +822,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3) Search by filename, including possible subfolders
-    if (!pdfData) {
+    // 3) OPTIONAL: Search by filename (disabled by default to avoid picking stale PDFs)
+    if (!pdfData && allowStorageSearch) {
       const searchTerms = inferSearchTermsFromPathOrName(
         (normaRow?.pdf_nome_arquivo as string | undefined) || pdf_storage_path
       );
@@ -758,8 +835,6 @@ Deno.serve(async (req) => {
       const dbDir = normaRow?.pdf_storage_path ? dirname(String(normaRow.pdf_storage_path)) : "";
       if (dbDir) prefixes.add(dbDir);
 
-      // If file is inside a top-level folder, list() with search only works within that folder.
-      // So we enumerate likely folders (bounded) and search within them.
       const topFolders = await listTopLevelFolders(storage);
       for (const f of topFolders) prefixes.add(f);
 
@@ -938,7 +1013,31 @@ Deno.serve(async (req) => {
 
     console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
     const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
-    const { dispositivos, ok, retryable, retry_after_ms, error_kind, model_used } = batchResult;
+    let dispositivos: ToolArgs["dispositivos"] = batchResult.dispositivos;
+    let ok = batchResult.ok;
+    let retryable = batchResult.retryable;
+    let retry_after_ms = batchResult.retry_after_ms;
+    let error_kind = batchResult.error_kind;
+    let model_used = batchResult.model_used;
+    let used_pdf_fallback = Boolean(batchResult.used_pdf_fallback);
+
+    // HARD RELIABILITY: if IA falhar em retornar tool args, fazemos fallback determinístico lendo texto do PDF.
+    // Isso evita que a extração trave em artigos específicos (ex.: art.6) e garante que a extração chegue ao fim.
+    if (!ok && (error_kind === "no_tool_args" || error_kind === "invalid_json")) {
+      console.warn(
+        `AI batch failed without tool args (art.${batchStart}-${batchEnd}). Using PDF fallback extraction...`
+      );
+      const fallback = await buildPdfFallbackDispositivos(pdfBytes, batchStart, batchEnd);
+      if (fallback.length > 0) {
+        dispositivos = fallback;
+        ok = true;
+        retryable = false;
+        retry_after_ms = 0;
+        used_pdf_fallback = true;
+        // Keep model_used for traceability; origin will be marked as fallback.
+        model_used = model_used ?? PRIMARY_MODEL;
+      }
+    }
 
     if (!ok) {
       if (retryable) {
@@ -1060,7 +1159,7 @@ Deno.serve(async (req) => {
       .update({
         texto_extraido: JSON.stringify(estruturaToPersist),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}:batched:${batchStart}-${batchEnd}`,
+        texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}${pdfMaxArticle ? `:pdfmax:${effectiveMaxArticle}` : ""}:batched:${batchStart}-${batchEnd}${used_pdf_fallback ? ":fallback_pdfjs" : ""}`,
         texto_extraido_status: statusToPersist,
         texto_extraido_progresso_atual: progressCurrent,
         texto_extraido_progresso_total: refinedProgressTotal,

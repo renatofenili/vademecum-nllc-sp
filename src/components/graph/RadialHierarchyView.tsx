@@ -496,7 +496,21 @@ export const RadialHierarchyView = ({
     // Build links with explicit types
     const graphLinks: GraphLink[] = [];
     
-    // 1. Hierarchy links (from ring differences)
+    // Build a map of regulatory relationships from edges data first
+    // This tells us which nodes actually regulate which (based on extracted references)
+    const regulatoryTargets = new Map<string, string[]>(); // nodeId -> list of target act IDs it regulates
+    if (data.edges) {
+      data.edges.forEach((edge) => {
+        if (edge.relation_type === "regulates" || edge.relation_type === "implements") {
+          const existing = regulatoryTargets.get(edge.from_act) || [];
+          if (!existing.includes(edge.to_act)) {
+            regulatoryTargets.set(edge.from_act, [...existing, edge.to_act]);
+          }
+        }
+      });
+    }
+    
+    // 1. Hierarchy links - prefer actual regulatory relationships over angle proximity
     result.forEach((node) => {
       if (node.ring === 0) return;
       
@@ -505,19 +519,23 @@ export const RadialHierarchyView = ({
       const parentsInRing = result.filter((n) => n.ring === parentRing);
       
       if (parentsInRing.length > 0) {
-        // Connect to nearest parent by angle
-        const nearest = parentsInRing.reduce((a, b) => {
+        // First, check if this node has a regulatory relationship with any parent in the previous ring
+        const regulatedTargets = regulatoryTargets.get(node.id) || [];
+        const regulatedParent = parentsInRing.find((p) => regulatedTargets.includes(p.id));
+        
+        // Use regulatory parent if found, otherwise fall back to nearest by angle
+        const parent = regulatedParent || parentsInRing.reduce((a, b) => {
           const distA = Math.abs(a.angle - node.angle);
           const distB = Math.abs(b.angle - node.angle);
           return distA < distB ? a : b;
         });
         
         graphLinks.push({
-          fromId: nearest.id,
+          fromId: parent.id,
           toId: node.id,
           type: "hierarquia",
-          fromX: nearest.x,
-          fromY: nearest.y,
+          fromX: parent.x,
+          fromY: parent.y,
           toX: node.x,
           toY: node.y,
         });

@@ -626,6 +626,13 @@ const BackofficeNormaForm = () => {
       let emptyStreak = 0;
       let nextBatchStart: number | null = options?.reset ? 1 : null;
       let retryCount = 0;
+      // Track skipped batches due to repeated failures
+      const skippedBatches: { start: number; end: number }[] = [];
+      // Track which batch we're currently retrying
+      let currentBatchStart: number | null = null;
+      let currentBatchEnd: number | null = null;
+      // Max retries before skipping a problematic batch
+      const maxRetriesPerBatch = 3;
 
       let done = false;
       for (let i = 0; i < maxBatches; i++) {
@@ -665,9 +672,23 @@ const BackofficeNormaForm = () => {
 
         await refreshExtractionMeta(normaId);
 
+        const batchStart = (data as any)?.batch_start as number | undefined;
+        const batchEnd = (data as any)?.batch_end as number | undefined;
+
         const retryable = Boolean((data as any)?.retryable);
         if (retryable) {
-          retryCount += 1;
+          // Check if this is the same batch we've been retrying
+          const isSameBatch = currentBatchStart === batchStart && currentBatchEnd === batchEnd;
+          
+          if (isSameBatch) {
+            retryCount += 1;
+          } else {
+            // New batch, reset retry counter
+            retryCount = 1;
+            currentBatchStart = batchStart ?? null;
+            currentBatchEnd = batchEnd ?? null;
+          }
+
           const retryAfter = Number((data as any)?.retry_after_ms ?? 900);
           const suggestedBatchSize = Number((data as any)?.suggested_batch_size ?? NaN);
 
@@ -677,26 +698,46 @@ const BackofficeNormaForm = () => {
             batchSize = Math.max(1, Math.floor(batchSize / 2));
           }
 
-          console.warn('Retryable batch failure; retrying same batch...', {
+          console.warn('Retryable batch failure', {
             normaId,
             retryCount,
+            maxRetriesPerBatch,
             retryAfter,
-            batchStart: (data as any)?.batch_start,
-            batchEnd: (data as any)?.batch_end,
+            batchStart,
+            batchEnd,
             batchSize,
           });
 
-          if (retryCount >= 4) {
-            throw new Error(
-              'Falha repetida ao extrair este lote. Tente novamente em alguns minutos.'
-            );
+          // If we've exceeded max retries for this batch, skip it and move on
+          if (retryCount >= maxRetriesPerBatch) {
+            console.warn(`Skipping problematic batch art.${batchStart}-${batchEnd} after ${retryCount} failures`);
+            
+            if (batchStart != null && batchEnd != null) {
+              skippedBatches.push({ start: batchStart, end: batchEnd });
+            }
+            
+            // Reset for next batch
+            retryCount = 0;
+            currentBatchStart = null;
+            currentBatchEnd = null;
+            batchSize = baseBatchSize;
+            
+            // Skip to next batch (advance past the problematic one)
+            nextBatchStart = (batchEnd ?? batchStart ?? 1) + 1;
+            
+            // Small delay before trying next batch
+            await sleep(500);
+            continue;
           }
 
           await sleep(Math.max(700, Math.min(5000, retryAfter)));
           continue;
         }
 
+        // Successful batch - reset retry tracking
         retryCount = 0;
+        currentBatchStart = null;
+        currentBatchEnd = null;
 
         // Se o lote foi concluído, volta gradualmente ao tamanho padrão.
         if (batchSize < baseBatchSize) {
@@ -721,10 +762,20 @@ const BackofficeNormaForm = () => {
       await refreshExtractionMeta(normaId);
 
       if (done) {
-        toast({
-          title: 'Texto extraído!',
-          description: 'O texto do PDF foi extraído e estruturado com sucesso.',
-        });
+        if (skippedBatches.length > 0) {
+          const skippedDesc = skippedBatches
+            .map((b) => `art.${b.start}-${b.end}`)
+            .join(', ');
+          toast({
+            title: 'Extração concluída com ressalvas',
+            description: `Alguns artigos não puderam ser extraídos (${skippedDesc}). O restante foi processado com sucesso.`,
+          });
+        } else {
+          toast({
+            title: 'Texto extraído!',
+            description: 'O texto do PDF foi extraído e estruturado com sucesso.',
+          });
+        }
       } else {
         toast({
           title: 'Extração em andamento',

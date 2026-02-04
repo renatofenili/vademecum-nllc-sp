@@ -1,13 +1,16 @@
-import { useState, useEffect } from "react";
-import { TreeDeciduous } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { TreeDeciduous, Maximize2, Minimize2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { RadialHierarchyView } from "@/components/graph/RadialHierarchyView";
 import { ActsGraphData } from "@/components/graph/types";
+import { cn } from "@/lib/utils";
 
 const MapasTab = () => {
   const [actsData, setActsData] = useState<ActsGraphData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Load acts graph on mount - CF/88 is always root
   useEffect(() => {
@@ -30,6 +33,72 @@ const MapasTab = () => {
     loadActsGraph();
   }, []);
 
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener("keydown", handleKeyDown);
+      // Prevent body scroll when fullscreen
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
+
+  // Fullscreen view
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        {/* Fullscreen header */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <TreeDeciduous className="h-5 w-5 text-primary" />
+            <span className="font-semibold text-foreground">Mapa Conceitual Normativo</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleFullscreen}
+            className="gap-2"
+          >
+            <Minimize2 className="h-4 w-4" />
+            Sair da Tela Cheia
+          </Button>
+        </div>
+        
+        {/* Fullscreen map */}
+        <div className="flex-1 overflow-hidden">
+          <RadialHierarchyView
+            data={actsData}
+            isLoading={isLoading}
+          />
+        </div>
+        
+        {/* Fullscreen footer */}
+        <div className="flex justify-center py-2 border-t border-border bg-muted/30">
+          <span className="text-sm text-muted-foreground">
+            🖱️ Arraste para navegar • Scroll para zoom • Hover para detalhes • ESC para sair
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal view
   return (
     <div className="space-y-6">
       {/* Hero Section */}
@@ -48,7 +117,18 @@ const MapasTab = () => {
       </div>
 
       {/* Map container */}
-      <Card className="min-h-[700px] flex flex-col overflow-hidden">
+      <Card className="min-h-[700px] flex flex-col overflow-hidden relative">
+        {/* Fullscreen button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleFullscreen}
+          className="absolute top-3 right-3 z-10 gap-2 bg-background/80 backdrop-blur-sm"
+        >
+          <Maximize2 className="h-4 w-4" />
+          Tela Cheia
+        </Button>
+        
         <CardContent className="flex-1 flex flex-col p-0">
           <RadialHierarchyView
             data={actsData}

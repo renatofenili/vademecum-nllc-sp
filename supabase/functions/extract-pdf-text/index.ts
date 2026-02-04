@@ -28,6 +28,7 @@ type GatewayBatchResult = {
   ok: boolean;
   retryable: boolean;
   retry_after_ms: number;
+  model_used?: string;
   error_kind?:
     | "gateway_http"
     | "no_tool_args"
@@ -63,6 +64,59 @@ function messageContentToText(content: unknown): string {
       .trim();
   }
   return "";
+}
+
+function extractToolArgsDeep(aiResult: any): ToolArgs | null {
+  const visited = new WeakSet<object>();
+
+  const tryParseArgs = (name: unknown, argsRaw: unknown): ToolArgs | null => {
+    const toolName = typeof name === "string" ? name : null;
+    if (toolName && toolName !== "extract_dispositivos") return null;
+    if (!argsRaw) return null;
+    const parsed = safeJsonParse<ToolArgs>(argsRaw);
+    if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
+    return null;
+  };
+
+  const walk = (node: any): ToolArgs | null => {
+    if (node == null) return null;
+    if (typeof node !== "object") return null;
+
+    if (visited.has(node)) return null;
+    visited.add(node);
+
+    // Shapes we know about:
+    // - { function: { name, arguments } }
+    // - { name, arguments }
+    // - { tool_calls: [...] }
+    const maybe1 = tryParseArgs(node?.function?.name, node?.function?.arguments);
+    if (maybe1) return maybe1;
+    const maybe2 = tryParseArgs(node?.name, node?.arguments);
+    if (maybe2) return maybe2;
+
+    if (Array.isArray((node as any)?.tool_calls)) {
+      for (const c of (node as any).tool_calls) {
+        const found = walk(c);
+        if (found) return found;
+      }
+    }
+
+    // Search recursively
+    if (Array.isArray(node)) {
+      for (const v of node) {
+        const found = walk(v);
+        if (found) return found;
+      }
+      return null;
+    }
+    for (const v of Object.values(node)) {
+      const found = walk(v);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  return walk(aiResult);
 }
 
 function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
@@ -105,12 +159,17 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
     }
   }
 
+  // Some gateways nest tool calls under annotations/metadata; do a deep scan.
+  const deep = extractToolArgsDeep(aiResult);
+  if (deep?.dispositivos && Array.isArray(deep.dispositivos)) return deep;
+
   return null;
 }
 
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_ARTICLES = 300; // safety cap
-const MODEL = "google/gemini-3-flash-preview";
+const PRIMARY_MODEL = "google/gemini-3-flash-preview";
+const FALLBACK_MODEL = "google/gemini-2.5-pro";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 function parseArticleNumberFromAnchor(anchor: unknown): number | null {
@@ -169,7 +228,8 @@ function dedupeByAnchor(
   return out;
 }
 
-async function callGatewayBatch(
+async function callGatewayBatchWithModel(
+  model: string,
   lovableApiKey: string,
   base64Pdf: string,
   batchStart: number,
@@ -250,7 +310,7 @@ Não omita nenhum artigo do intervalo solicitado.`,
   ];
 
   const body = {
-    model: MODEL,
+    model,
     messages: messagesPayload,
     tools: toolsPayload,
     tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
@@ -285,6 +345,7 @@ Não omita nenhum artigo do intervalo solicitado.`,
       retry_after_ms: retryable ? 1500 : 0,
       error_kind: "gateway_http",
       http_status: status,
+      model_used: model,
     };
   }
 
@@ -294,6 +355,7 @@ Não omita nenhum artigo do intervalo solicitado.`,
   const msg = aiResult?.choices?.[0]?.message;
   console.log(
     JSON.stringify({
+      model,
       batch: `${batchStart}-${batchEnd}`,
       has_tool_args: Boolean(toolArgs),
       tool_calls_count: Array.isArray(msg?.tool_calls) ? msg.tool_calls.length : 0,
@@ -308,18 +370,33 @@ Não omita nenhum artigo do intervalo solicitado.`,
       ok: true,
       retryable: false,
       retry_after_ms: 0,
+      model_used: model,
     };
   }
 
   // No tool args: usually transient model behavior; treat as retryable.
-  const msgContent = aiResult?.choices?.[0]?.message?.content;
-  const contentText = messageContentToText(msgContent);
+  const msgObj = aiResult?.choices?.[0]?.message;
+  const contentText = messageContentToText(msgObj?.content);
+  const refusalText = messageContentToText((msgObj as any)?.refusal);
+  const annotations = (msgObj as any)?.annotations;
+  const annotations_summary = Array.isArray(annotations)
+    ? annotations
+        .slice(0, 3)
+        .map((a: any) => ({
+          type: a?.type ?? null,
+          keys: a && typeof a === "object" ? Object.keys(a).slice(0, 8) : [],
+        }))
+    : null;
   console.warn(
     JSON.stringify({
+      model,
       batch: `${batchStart}-${batchEnd}`,
       issue: "no_tool_args",
       content_preview: contentText ? contentText.slice(0, 300) : null,
       content_len: contentText?.length ?? 0,
+      refusal_preview: refusalText ? refusalText.slice(0, 300) : null,
+      refusal_len: refusalText?.length ?? 0,
+      annotations_summary,
     })
   );
   return {
@@ -328,7 +405,46 @@ Não omita nenhum artigo do intervalo solicitado.`,
     retryable: true,
     retry_after_ms: 900,
     error_kind: "no_tool_args",
+    model_used: model,
   };
+}
+
+async function callGatewayBatch(
+  lovableApiKey: string,
+  base64Pdf: string,
+  batchStart: number,
+  batchEnd: number
+): Promise<GatewayBatchResult> {
+  const primary = await callGatewayBatchWithModel(
+    PRIMARY_MODEL,
+    lovableApiKey,
+    base64Pdf,
+    batchStart,
+    batchEnd
+  );
+  if (primary.ok) return primary;
+
+  // If the primary returns without tool args, try a stronger model once.
+  if (primary.error_kind === "no_tool_args" || primary.error_kind === "invalid_json") {
+    const fallback = await callGatewayBatchWithModel(
+      FALLBACK_MODEL,
+      lovableApiKey,
+      base64Pdf,
+      batchStart,
+      batchEnd
+    );
+    if (fallback.ok) return fallback;
+
+    // Keep the most actionable failure.
+    return {
+      ...primary,
+      retry_after_ms: Math.max(primary.retry_after_ms ?? 0, fallback.retry_after_ms ?? 0),
+      http_status: fallback.http_status ?? primary.http_status,
+      model_used: fallback.model_used ?? primary.model_used,
+    };
+  }
+
+  return primary;
 }
 
 Deno.serve(async (req) => {
@@ -446,23 +562,23 @@ Deno.serve(async (req) => {
     }
     const batchEnd = Math.min(MAX_ARTICLES, batchStart + batchSize - 1);
 
-    // Mark as pending before starting this batch
+     // Mark as pending before starting this batch
     {
       const { error: pendErr } = await supabase
         .from("normas")
         .update({
           texto_extraido_status: "pendente",
           texto_extraido_em: new Date().toISOString(),
-          texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
+           texto_extraido_origem: `lovable-ai:${PRIMARY_MODEL}:batched`,
           ...(reset ? { texto_extraido: JSON.stringify([]) } : {}),
         })
         .eq("id", norma_id);
       if (pendErr) console.error("Failed to set pending status:", pendErr);
     }
 
-     console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
-     const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
-     const { dispositivos, ok, retryable, retry_after_ms, error_kind } = batchResult;
+      console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
+      const batchResult = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
+      const { dispositivos, ok, retryable, retry_after_ms, error_kind, model_used } = batchResult;
 
     if (!ok) {
        if (retryable) {
@@ -472,7 +588,7 @@ Deno.serve(async (req) => {
            .update({
              texto_extraido_status: "pendente",
              texto_extraido_em: new Date().toISOString(),
-             texto_extraido_origem: `lovable-ai:${MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+              texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:retryable:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
            })
            .eq("id", norma_id);
          if (pendErr2) console.error("Failed to keep pending status:", pendErr2);
@@ -499,7 +615,7 @@ Deno.serve(async (req) => {
          .update({
            texto_extraido_status: "erro",
            texto_extraido_em: new Date().toISOString(),
-           texto_extraido_origem: `lovable-ai:${MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
+            texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:error:${batchStart}-${batchEnd}:${error_kind ?? "unknown"}`,
          })
          .eq("id", norma_id);
        if (errUpd) console.error("Failed to set error status:", errUpd);
@@ -525,7 +641,7 @@ Deno.serve(async (req) => {
       .update({
         texto_extraido: JSON.stringify(nextEstrutura),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: `lovable-ai:${MODEL}:batched:${batchStart}-${batchEnd}`,
+        texto_extraido_origem: `lovable-ai:${model_used ?? PRIMARY_MODEL}:batched:${batchStart}-${batchEnd}`,
         texto_extraido_status: statusToPersist,
       })
       .eq("id", norma_id);

@@ -216,10 +216,102 @@ function dedupeByAnchor(
   return out;
 }
 
-function inferSearchTermFromStoragePath(path: string): string {
+function inferSearchTermsFromPathOrName(pathOrName: string): string[] {
   // Most uploads are saved as `${timestamp}_${sanitizedName}`.
   // If the timestamp prefix becomes stale, we can search by sanitizedName.
-  return String(path || "").replace(/^\d+_/, "").trim();
+  const raw = String(pathOrName || "").trim();
+  const baseName = raw.split("/").pop() ?? raw;
+  const noTs = baseName.replace(/^\d+_/, "").trim();
+  const noExt = noTs.replace(/\.[a-z0-9]+$/i, "").trim();
+
+  const out = [noTs, noExt]
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 3);
+  return Array.from(new Set(out));
+}
+
+function dirname(path: string): string {
+  const s = String(path || "").trim();
+  const idx = s.lastIndexOf("/");
+  if (idx <= 0) return "";
+  return s.slice(0, idx);
+}
+
+function joinPath(dir: string, name: string): string {
+  const d = String(dir || "").replace(/^\/+|\/+$/g, "");
+  const n = String(name || "").replace(/^\/+|\/+$/g, "");
+  if (!d) return n;
+  if (!n) return d;
+  return `${d}/${n}`;
+}
+
+async function listTopLevelFolders(storage: any): Promise<string[]> {
+  try {
+    const { data, error } = await storage.list("", {
+      limit: 200,
+      sortBy: { column: "updated_at", order: "desc" },
+    } as any);
+    if (error || !Array.isArray(data)) return [];
+
+    // In storage list(), folders usually come back without an id.
+    const folders = data
+      .filter((item: any) => item && !item.id && typeof item.name === "string")
+      .map((item: any) => String(item.name))
+      // Heuristic: ignore obvious files.
+      .filter((name: string) => !name.toLowerCase().endsWith(".pdf"))
+      .slice(0, 50);
+
+    return Array.from(new Set(folders));
+  } catch {
+    return [];
+  }
+}
+
+async function findPdfBySearch(
+  storage: any,
+  searchTerms: string[],
+  prefixes: string[]
+): Promise<{ blob: Blob; path: string } | null> {
+  const seenCandidates = new Set<string>();
+
+  for (const prefix of prefixes) {
+    for (const term of searchTerms) {
+      console.log(`Searching storage in '${prefix || "(root)"}' for: ${term}`);
+      const { data: listed, error: listError } = await storage.list(prefix, {
+        search: term,
+        limit: 50,
+        sortBy: { column: "updated_at", order: "desc" },
+      } as any);
+
+      if (listError) {
+        console.error("Storage list error:", listError);
+        continue;
+      }
+
+      if (!Array.isArray(listed) || listed.length === 0) continue;
+
+      for (const item of listed) {
+        const name = typeof item?.name === "string" ? item.name : "";
+        if (!name) continue;
+
+        // Skip folders.
+        if (!item?.id) continue;
+
+        const candidate = joinPath(prefix, name);
+        if (seenCandidates.has(candidate)) continue;
+        seenCandidates.add(candidate);
+
+        console.log(`Trying matched path from search: ${candidate}`);
+        const { data: pickedDownload, error: pickedError } = await storage.download(candidate);
+        if (!pickedError && pickedDownload) {
+          return { blob: pickedDownload, path: candidate };
+        }
+        console.error("Error downloading matched path:", pickedError);
+      }
+    }
+  }
+
+  return null;
 }
 
 async function storageErrorToMessage(err: any): Promise<string> {
@@ -505,92 +597,99 @@ Deno.serve(async (req) => {
     }
 
     // Download PDF from storage
+    const bucket = "normas-pdf";
+    const storage = supabase.storage.from(bucket);
     let pdfData: Blob | null = null;
     let actualStoragePath = pdf_storage_path;
+    let lastStorageError: any = null;
 
-    const { data: pdfDownload, error: downloadError } = await supabase.storage
-      .from("normas-pdf")
-      .download(pdf_storage_path);
+    const tryDownload = async (path: string): Promise<Blob | null> => {
+      const safePath = String(path || "").trim();
+      if (!safePath) return null;
+      const { data, error } = await storage.download(safePath);
+      if (error) {
+        lastStorageError = error;
+        return null;
+      }
+      if (data) {
+        actualStoragePath = safePath;
+        return data;
+      }
+      return null;
+    };
 
-    if (downloadError) {
-      console.error("Error downloading PDF from provided path:", downloadError);
-      
-      // Path in the request may be stale. Check if there's a newer path in the normas table.
-      const { data: normaRow, error: normaRowError } = await supabase
+    // 1) Direct path from request
+    pdfData = await tryDownload(pdf_storage_path);
+    if (!pdfData && lastStorageError) {
+      console.error("Error downloading PDF from provided path:", lastStorageError);
+    }
+
+    // 2) Path in DB (may be fresher)
+    let normaRow: any = null;
+    if (!pdfData) {
+      const { data, error } = await supabase
         .from("normas")
         .select("pdf_storage_path, pdf_nome_arquivo")
         .eq("id", norma_id)
         .maybeSingle();
+      if (!error) normaRow = data;
 
       const freshPath = normaRow?.pdf_storage_path;
-      if (!normaRowError && freshPath && freshPath !== pdf_storage_path) {
+      if (freshPath && freshPath !== pdf_storage_path) {
         console.log(`Trying fresh path from DB: ${freshPath}`);
-        const { data: freshDownload, error: freshError } = await supabase.storage
-          .from("normas-pdf")
-          .download(freshPath);
+        pdfData = await tryDownload(freshPath);
+      }
+    }
 
-        if (!freshError && freshDownload) {
-          pdfData = freshDownload;
-          actualStoragePath = freshPath;
+    // 3) Search by filename, including possible subfolders
+    if (!pdfData) {
+      const searchTerms = inferSearchTermsFromPathOrName(
+        (normaRow?.pdf_nome_arquivo as string | undefined) || pdf_storage_path
+      );
+
+      const prefixes = new Set<string>();
+      prefixes.add("");
+      const reqDir = dirname(pdf_storage_path);
+      if (reqDir) prefixes.add(reqDir);
+      const dbDir = normaRow?.pdf_storage_path ? dirname(String(normaRow.pdf_storage_path)) : "";
+      if (dbDir) prefixes.add(dbDir);
+
+      // If file is inside a top-level folder, list() with search only works within that folder.
+      // So we enumerate likely folders (bounded) and search within them.
+      const topFolders = await listTopLevelFolders(storage);
+      for (const f of topFolders) prefixes.add(f);
+
+      if (searchTerms.length > 0) {
+        const found = await findPdfBySearch(storage, searchTerms, Array.from(prefixes));
+        if (found) {
+          pdfData = found.blob;
+          actualStoragePath = found.path;
         }
       }
+    }
 
-      // Last resort: search by filename (strip timestamp prefix).
-      // This handles cases where the DB path was manually edited or an older upload was deleted.
-      if (!pdfData) {
-        const searchTerm = inferSearchTermFromStoragePath(
-          (normaRow?.pdf_nome_arquivo as string | undefined) || pdf_storage_path
-        );
-        if (searchTerm) {
-          console.log(`Searching storage for matching PDF: ${searchTerm}`);
-          const { data: listed, error: listError } = await supabase.storage
-            .from("normas-pdf")
-            .list("", {
-              search: searchTerm,
-              limit: 20,
-              sortBy: { column: "updated_at", order: "desc" },
-            } as any);
-
-          if (listError) {
-            console.error("Storage list error:", listError);
-          } else if (Array.isArray(listed) && listed.length > 0) {
-            const picked = listed[0]?.name;
-            if (picked) {
-              console.log(`Trying matched path from search: ${picked}`);
-              const { data: pickedDownload, error: pickedError } = await supabase.storage
-                .from("normas-pdf")
-                .download(picked);
-
-              if (!pickedError && pickedDownload) {
-                pdfData = pickedDownload;
-                actualStoragePath = picked;
-              } else {
-                console.error("Error downloading matched path:", pickedError);
-              }
-            }
-          }
-        }
-      }
-
-      if (!pdfData) {
-        await supabase.from("normas").update({
+    if (!pdfData) {
+      await supabase
+        .from("normas")
+        .update({
           texto_extraido_status: "erro",
           texto_extraido_em: new Date().toISOString(),
-        }).eq("id", norma_id);
+        })
+        .eq("id", norma_id);
 
-        const msg = await storageErrorToMessage(downloadError);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error_kind: "unknown",
-            error_message: `Falha ao baixar o PDF do armazenamento. ${msg}`,
-            pdf_storage_path: actualStoragePath,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    } else {
-      pdfData = pdfDownload;
+      const msg = await storageErrorToMessage(lastStorageError);
+      const isNotFound = msg.toLowerCase().includes("not_found") || msg.includes("404");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error_kind: isNotFound ? "storage_not_found" : "storage_error",
+          error_message: isNotFound
+            ? `PDF não encontrado no armazenamento. Reenvie o arquivo e tente novamente. (${msg})`
+            : `Falha ao baixar o PDF do armazenamento. ${msg}`,
+          pdf_storage_path: actualStoragePath,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const arrayBuffer = await pdfData!.arrayBuffer();

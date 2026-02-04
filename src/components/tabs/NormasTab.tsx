@@ -93,8 +93,9 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // Must be preceded by whitespace or start of line, and have actual roman numerals
     formatted = formatted.replace(/(?<=\s|^)((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g, '\n$1');
     
-    // 3. Paragraphs "§" start new line
-    formatted = formatted.replace(/(?<!^)\s*(§\s*\d|§\s*único)/gi, '\n$1');
+    // 3. Paragraphs "§" start new line - but NOT when it's a reference like "o § 3º", "do § 2º"
+    // Only match § at start of sentence (after period/newline) or preceded by colon
+    formatted = formatted.replace(/(?<=[.:\n])\s*(§\s*\d+º?|§\s*único)/gi, '\n$1');
     
     // 4. Alíneas "a)", "b)", etc. start new line (must be preceded by space)
     formatted = formatted.replace(/(?<=\s)([a-z]\))/gi, '\n$1');

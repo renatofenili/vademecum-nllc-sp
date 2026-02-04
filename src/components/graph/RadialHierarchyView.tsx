@@ -431,11 +431,20 @@ export const RadialHierarchyView = ({
 
     const cx = dimensions.width / 2;
     const cy = dimensions.height / 2;
-    const maxRadius = Math.min(cx, cy) - 40;
     
-    // Base ring radii - more spread out to avoid overlapping
-    // Ring 0 = center (CF), Ring 1 = Laws, Ring 2 = Decrees, Ring 3 = Others
-    const baseRadii = [0, maxRadius * 0.28, maxRadius * 0.52, maxRadius * 0.76, maxRadius * 1.0];
+    // Calculate dynamic ring spacing based on container size
+    // Ensure minimum 120px between rings to prevent node overlap
+    const minRingSpacing = 140;
+    const numRings = 4; // 0=CF, 1=Laws, 2=Decrees, 3=Others
+    const minTotalRadius = minRingSpacing * (numRings - 1);
+    
+    // Use the larger of: proportional to container OR minimum spacing
+    const containerRadius = Math.min(cx, cy) - 40;
+    const effectiveRadius = Math.max(containerRadius, minTotalRadius);
+    
+    // Calculate ring radii with guaranteed spacing
+    const ringSpacing = effectiveRadius / (numRings - 1);
+    const baseRadii = [0, ringSpacing, ringSpacing * 2, ringSpacing * 3];
     
     
     // Apply expansion offset to rings beyond the expanded one

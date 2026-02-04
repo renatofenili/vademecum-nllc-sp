@@ -924,15 +924,16 @@ export const RadialHierarchyView = ({
                           >
                             <circle
                               r={14}
-                              fill={color}
-                              stroke="white"
-                              strokeWidth={1.5}
-                              className="transition-all duration-200 hover:brightness-110"
+                              fill="white"
+                              stroke={color}
+                              strokeWidth={2}
+                              strokeOpacity={0.6}
+                              className="transition-all duration-200 hover:brightness-95"
                             />
                             <text
                               textAnchor="middle"
                               dominantBaseline="central"
-                              className="fill-white font-semibold pointer-events-none"
+                              className="fill-foreground font-semibold pointer-events-none"
                               style={{ fontSize: 7 }}
                             >
                               {group.artigo.anchor.replace(/^art\.?/i, "").trim() || `A${idx + 1}`}

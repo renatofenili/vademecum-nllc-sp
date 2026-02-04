@@ -85,11 +85,12 @@ const ringLabels: Record<number, string> = {
   3: "Portarias / Resoluções / INs",
 };
 
+// Softer, institutional palette
 const ringColors: Record<number, string> = {
-  0: "hsl(0, 72%, 51%)",      // Red for CF
-  1: "hsl(221, 83%, 53%)",    // Blue for Laws
-  2: "hsl(142, 71%, 45%)",    // Green for Decrees
-  3: "hsl(262, 83%, 58%)",    // Purple for others
+  0: "hsl(0, 45%, 45%)",       // Muted burgundy for CF
+  1: "hsl(215, 40%, 50%)",     // Slate blue for Laws
+  2: "hsl(160, 35%, 45%)",     // Sage green for Decrees
+  3: "hsl(250, 30%, 55%)",     // Soft purple for others
 };
 
 const tipoLabels: Record<string, string> = {
@@ -849,7 +850,9 @@ export const RadialHierarchyView = ({
               {/* Nodes */}
               {nodes.map((node) => {
                 const isCenter = node.ring === 0;
-                const nodeRadius = isCenter ? 40 : 24;
+                // Larger nodes: ellipse for full name display
+                const nodeWidth = isCenter ? 90 : 110;
+                const nodeHeight = isCenter ? 45 : 36;
                 const color = ringColors[node.ring];
                 const hasExpandedDispositivos = expandedDispositivos?.actId === node.id && expandedDispositivos.artigoGroups.length > 0;
                 const artigoGroups = hasExpandedDispositivos ? expandedDispositivos.artigoGroups : [];
@@ -857,6 +860,11 @@ export const RadialHierarchyView = ({
                 // Theme mode highlighting
                 const isHighlighted = !highlightedNormaIds || highlightedNormaIds.has(node.id) || isCenter;
                 const nodeOpacity = highlightedNormaIds ? (isHighlighted ? 1 : 0.15) : 1;
+                
+                // Full label without truncation
+                const fullLabel = isCenter 
+                  ? "CF/1988" 
+                  : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
 
                 return (
                   <g key={node.id} style={{ opacity: nodeOpacity }} className="transition-opacity duration-300">
@@ -871,33 +879,36 @@ export const RadialHierarchyView = ({
                       }}
                       className="cursor-pointer"
                     >
-                      {/* Node circle */}
-                      <circle
-                        r={nodeRadius}
+                      {/* Node as rounded rectangle for full name */}
+                      <rect
+                        x={-nodeWidth / 2}
+                        y={-nodeHeight / 2}
+                        width={nodeWidth}
+                        height={nodeHeight}
+                        rx={nodeHeight / 2}
+                        ry={nodeHeight / 2}
                         fill={color}
-                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : isHighlighted && highlightedNormaIds ? "hsl(45, 93%, 47%)" : "white"}
-                        strokeWidth={selectedNode?.id === node.id ? 4 : isHighlighted && highlightedNormaIds ? 3 : 2}
-                        className="transition-all duration-300 hover:opacity-80"
+                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : isHighlighted && highlightedNormaIds ? "hsl(45, 70%, 50%)" : "hsl(0, 0%, 95%)"}
+                        strokeWidth={selectedNode?.id === node.id ? 3 : isHighlighted && highlightedNormaIds ? 2 : 1.5}
+                        className="transition-all duration-300"
                         style={{
-                          filter: hoveredNode?.id === node.id ? "brightness(1.2)" : isHighlighted && highlightedNormaIds ? "brightness(1.1)" : "none",
+                          filter: hoveredNode?.id === node.id ? "brightness(1.15) drop-shadow(0 2px 4px rgba(0,0,0,0.2))" : "none",
                         }}
                       />
                       
-                      {/* Node label */}
+                      {/* Node label - full name */}
                       <text
                         textAnchor="middle"
                         dominantBaseline="central"
-                        className="fill-white font-semibold pointer-events-none select-none"
-                        style={{ fontSize: isCenter ? 14 : 9 }}
+                        className="fill-white font-medium pointer-events-none select-none"
+                        style={{ fontSize: isCenter ? 13 : 10 }}
                       >
-                        {isCenter ? "CF/88" : node.label.length > 12 
-                          ? node.label.slice(0, 10) + "…" 
-                          : node.label}
+                        {fullLabel}
                       </text>
                       
                       {/* Loading indicator for dispositivos */}
                       {expandedDispositivos?.actId === node.id && expandedDispositivos.isLoading && (
-                        <g transform="translate(20, -20)">
+                        <g transform="translate(50, -15)">
                           <circle r={8} fill="hsl(var(--background))" stroke="hsl(var(--border))" />
                           <text
                             textAnchor="middle"
@@ -919,7 +930,7 @@ export const RadialHierarchyView = ({
                       const indexInRing = idx % maxPerRing;
                       const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
                       
-                      const baseRadius = nodeRadius + 45;
+                      const baseRadius = 75; // Adjusted for larger pill nodes
                       const ringSpacing = 35;
                       const artigoRadius = baseRadius + ringIndex * ringSpacing;
                       

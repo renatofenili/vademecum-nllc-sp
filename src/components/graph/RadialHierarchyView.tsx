@@ -431,10 +431,12 @@ export const RadialHierarchyView = ({
 
     const cx = dimensions.width / 2;
     const cy = dimensions.height / 2;
-    const maxRadius = Math.min(cx, cy) - 60;
+    const maxRadius = Math.min(cx, cy) - 40;
     
-    // Base ring radii - will be adjusted if there's expansion
-    const baseRadii = [0, maxRadius * 0.35, maxRadius * 0.65, maxRadius * 0.95];
+    // Base ring radii - more spread out to avoid overlapping
+    // Ring 0 = center (CF), Ring 1 = Laws, Ring 2 = Decrees, Ring 3 = Others
+    const baseRadii = [0, maxRadius * 0.28, maxRadius * 0.52, maxRadius * 0.76, maxRadius * 1.0];
+    
     
     // Apply expansion offset to rings beyond the expanded one
     const radii = baseRadii.map((r, ringIdx) => {

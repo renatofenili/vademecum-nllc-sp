@@ -304,19 +304,42 @@ const BackofficeNormaForm = () => {
       return;
     }
 
-    if (autoResumeAttemptedRef.current) return;
-    autoResumeAttemptedRef.current = true;
+    // Tenta retomar automaticamente ao carregar a página
+    if (!autoResumeAttemptedRef.current) {
+      autoResumeAttemptedRef.current = true;
 
-    const t = window.setTimeout(() => {
-      if (!isMountedRef.current) return;
-      if (document.visibilityState !== 'visible') {
-        autoResumeAttemptedRef.current = false;
-        return;
-      }
-      triggerTextExtraction(pdfData.pdf_storage_path!, id);
-    }, 800);
+      const t = window.setTimeout(() => {
+        if (!isMountedRef.current) return;
+        if (document.visibilityState !== 'visible') {
+          autoResumeAttemptedRef.current = false;
+          return;
+        }
+        console.log('Auto-resuming extraction on page load...');
+        triggerTextExtraction(pdfData.pdf_storage_path!, id);
+      }, 800);
 
-    return () => window.clearTimeout(t);
+      return () => window.clearTimeout(t);
+    }
+  }, [isEditing, id, pdfData.pdf_storage_path, extractionStatus, isExtractingText]);
+
+  // Listener de visibilidade: retoma extração pendente quando o usuário volta para a aba
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!id) return;
+    if (!pdfData.pdf_storage_path) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (isExtractingText) return;
+      if (extractionStatus !== 'pendente') return;
+
+      console.log('Tab became visible with pending extraction, resuming...');
+      // Reset para permitir novo auto-resume
+      autoResumeAttemptedRef.current = false;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isEditing, id, pdfData.pdf_storage_path, extractionStatus, isExtractingText]);
 
   const fetchNorma = async () => {

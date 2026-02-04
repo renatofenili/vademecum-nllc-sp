@@ -57,7 +57,155 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
     if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
   }
 
+  // Fallback: try to parse from content (JSON in markdown code block)
+  const contentStr = typeof msg?.content === "string" ? msg.content : "";
+  if (contentStr) {
+    // Remove markdown code block wrappers
+    let cleaned = contentStr.trim();
+    const codeBlockMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    if (codeBlockMatch) cleaned = codeBlockMatch[1].trim();
+    // Try parsing as JSON with dispositivos
+    const parsed = safeJsonParse<ToolArgs>(cleaned);
+    if (parsed?.dispositivos && Array.isArray(parsed.dispositivos)) return parsed;
+    // Try as array directly
+    const arrParsed = safeJsonParse<any[]>(cleaned);
+    if (Array.isArray(arrParsed) && arrParsed.length > 0 && arrParsed[0].anchor) {
+      return { dispositivos: arrParsed };
+    }
+  }
+
   return null;
+}
+
+const BATCH_SIZE = 30; // number of articles per batch
+const MODEL = "google/gemini-3-flash-preview";
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callGatewayBatch(
+  lovableApiKey: string,
+  base64Pdf: string,
+  batchStart: number,
+  batchEnd: number
+): Promise<{ dispositivos: ToolArgs["dispositivos"]; ok: boolean }> {
+  const toolsPayload = [
+    {
+      type: "function",
+      function: {
+        name: "extract_dispositivos",
+        description:
+          "Extrai dispositivos de uma norma jurídica brasileira (artigos, incisos, parágrafos e alíneas)",
+        parameters: {
+          type: "object",
+          properties: {
+            dispositivos: {
+              type: "array",
+              description: "Lista dos dispositivos extraídos",
+              items: {
+                type: "object",
+                properties: {
+                  anchor: {
+                    type: "string",
+                    description:
+                      "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)",
+                  },
+                  nivel: {
+                    type: "string",
+                    enum: ["artigo", "inciso", "paragrafo", "alinea"],
+                    description: "Tipo do dispositivo",
+                  },
+                  texto: {
+                    type: "string",
+                    description: "Texto completo do dispositivo",
+                  },
+                },
+                required: ["anchor", "nivel", "texto"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["dispositivos"],
+          additionalProperties: false,
+        },
+      },
+    },
+  ];
+
+  const userPrompt =
+    batchStart === 1 && batchEnd === BATCH_SIZE
+      ? `Extraia os artigos 1 até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos.`
+      : `Extraia os artigos ${batchStart} até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos.`;
+
+  const messagesPayload = [
+    {
+      role: "system",
+      content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
+Extraia apenas os artigos solicitados (e seus incisos, parágrafos e alíneas).
+Para cada dispositivo, identifique:
+- anchor: identificador no formato art.X, art.X.I, art.X§Y, art.X.a, etc.
+- nivel: artigo | inciso | paragrafo | alinea
+- texto: texto completo do dispositivo.
+Não omita nenhum artigo do intervalo solicitado.`,
+    },
+    {
+      role: "user",
+      content: [
+        {
+          type: "file",
+          file: {
+            filename: "norma.pdf",
+            file_data: `data:application/pdf;base64,${base64Pdf}`,
+          },
+        },
+        {
+          type: "text",
+          text: userPrompt,
+        },
+      ],
+    },
+  ];
+
+  const body = {
+    model: MODEL,
+    messages: messagesPayload,
+    tools: toolsPayload,
+    tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
+    temperature: 0.1,
+    max_tokens: 32000,
+  };
+
+  const resp = await fetch(GATEWAY_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lovableApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`AI API error (batch ${batchStart}-${batchEnd}):`, resp.status, errorText?.slice(0, 1000));
+    return { dispositivos: [], ok: false };
+  }
+
+  const aiResult = await resp.json();
+  const toolArgs = extractToolArgsFromAiResult(aiResult);
+
+  const msg = aiResult?.choices?.[0]?.message;
+  console.log(
+    JSON.stringify({
+      batch: `${batchStart}-${batchEnd}`,
+      has_tool_args: Boolean(toolArgs),
+      tool_calls_count: Array.isArray(msg?.tool_calls) ? msg.tool_calls.length : 0,
+      message_keys: msg ? Object.keys(msg) : [],
+      dispositivos_count: toolArgs?.dispositivos?.length ?? 0,
+    })
+  );
+
+  if (toolArgs?.dispositivos && toolArgs.dispositivos.length > 0) {
+    return { dispositivos: toolArgs.dispositivos, ok: true };
+  }
+  return { dispositivos: [], ok: false };
 }
 
 Deno.serve(async (req) => {
@@ -90,217 +238,84 @@ Deno.serve(async (req) => {
 
     if (downloadError) {
       console.error("Error downloading PDF:", downloadError);
-      
-      // Update status to error
       await supabase.from("normas").update({
         texto_extraido_status: "erro",
         texto_extraido_em: new Date().toISOString(),
       }).eq("id", norma_id);
-      
       return new Response(
         JSON.stringify({ error: `Failed to download PDF: ${downloadError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Convert PDF to base64 for AI processing (using Deno std library to avoid stack overflow)
     const arrayBuffer = await pdfData.arrayBuffer();
     const base64Pdf = base64Encode(new Uint8Array(arrayBuffer));
 
     console.log(`PDF downloaded, size: ${arrayBuffer.byteLength} bytes`);
 
-    // Use Lovable AI to extract and structure text
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    
     if (!lovableApiKey) {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    // Set status to "processando"
+    await supabase.from("normas").update({
+      texto_extraido_status: "processando",
+      texto_extraido_em: new Date().toISOString(),
+    }).eq("id", norma_id);
 
-    const toolsPayload = [
-      {
-        type: "function",
-        function: {
-          name: "extract_dispositivos",
-          description: "Extrai todos os dispositivos de uma norma jurídica brasileira",
-          parameters: {
-            type: "object",
-            properties: {
-              dispositivos: {
-                type: "array",
-                description: "Lista de todos os dispositivos extraídos do documento",
-                items: {
-                  type: "object",
-                  properties: {
-                    anchor: {
-                      type: "string",
-                      description: "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)",
-                    },
-                    nivel: {
-                      type: "string",
-                      enum: ["artigo", "inciso", "paragrafo", "alinea"],
-                      description: "Tipo do dispositivo",
-                    },
-                    texto: {
-                      type: "string",
-                      description: "Texto completo do dispositivo",
-                    },
-                  },
-                  required: ["anchor", "nivel", "texto"],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ["dispositivos"],
-            additionalProperties: false,
-          },
-        },
-      },
-    ];
+    // === Batch extraction logic ===
+    const allDispositivos: ToolArgs["dispositivos"] = [];
+    let batchStart = 1;
+    let consecutiveEmptyBatches = 0;
+    const MAX_CONSECUTIVE_EMPTY = 2;
+    const MAX_ARTICLES = 300; // safety cap
 
-    const messagesPayload = [
-      {
-        role: "system",
-        content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
-Extraia TODOS os dispositivos do documento: artigos, incisos, parágrafos e alíneas.
-Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1.a) e o texto completo.
-É CRÍTICO extrair TODOS os artigos do documento, sem omitir nenhum.`,
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "file",
-            file: {
-              filename: "norma.pdf",
-              file_data: `data:application/pdf;base64,${base64Pdf}`,
-            },
-          },
-          {
-            type: "text",
-            text:
-              "Extraia TODOS os dispositivos desta norma jurídica usando a função extract_dispositivos. Não omita nenhum artigo.",
-          },
-        ],
-      },
-    ];
+    while (batchStart <= MAX_ARTICLES && consecutiveEmptyBatches < MAX_CONSECUTIVE_EMPTY) {
+      const batchEnd = batchStart + BATCH_SIZE - 1;
+      console.log(`Extracting batch: art.${batchStart} - art.${batchEnd}`);
 
-    const buildGatewayBody = (model: string) => ({
-      model,
-      messages: messagesPayload,
-      tools: toolsPayload,
-      tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
-      temperature: 0.1,
-      max_tokens: 64000,
-    });
+      const { dispositivos, ok } = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
 
-    const callGateway = async (model: string) => {
-      const resp = await fetch(gatewayUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(buildGatewayBody(model)),
-      });
-
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error("AI API error:", resp.status, errorText?.slice(0, 2000));
-        throw new Error(`AI API error: ${resp.status}`);
+      if (!ok || dispositivos.length === 0) {
+        consecutiveEmptyBatches++;
+        console.warn(`Batch ${batchStart}-${batchEnd} returned 0 items. Consecutive empty: ${consecutiveEmptyBatches}`);
+      } else {
+        consecutiveEmptyBatches = 0;
+        allDispositivos.push(...dispositivos);
+        console.log(`Batch ${batchStart}-${batchEnd} extracted ${dispositivos.length} dispositivos.`);
       }
 
-      return await resp.json();
-    };
-
-    // 1) Tenta um modelo mais novo por padrão; 2) fallback para pro; 3) fallback para o flash antigo
-    const candidateModels = [
-      "google/gemini-3-flash-preview",
-      "google/gemini-2.5-pro",
-      "google/gemini-2.5-flash",
-    ];
-
-    let aiResult: any = null;
-    let usedModel = candidateModels[0];
-    let toolArgs: ToolArgs | null = null;
-
-    for (const m of candidateModels) {
-      usedModel = m;
-      aiResult = await callGateway(m);
-      toolArgs = extractToolArgsFromAiResult(aiResult);
-
-      const msg = aiResult?.choices?.[0]?.message;
-      const toolCallsCount = Array.isArray(msg?.tool_calls) ? msg.tool_calls.length : 0;
-      const hasLegacyFunctionCall = Boolean(msg?.function_call);
-      const contentLen =
-        typeof msg?.content === "string" ? msg.content.length : Array.isArray(msg?.content) ? msg.content.length : 0;
-
-      console.log(
-        JSON.stringify({
-          ai_model: m,
-          has_tool_args: Boolean(toolArgs),
-          tool_calls_count: toolCallsCount,
-          has_legacy_function_call: hasLegacyFunctionCall,
-          message_keys: msg ? Object.keys(msg) : [],
-          content_len: contentLen,
-        })
-      );
-
-      if (toolArgs?.dispositivos?.length) break;
-      console.warn(`No tool args extracted for model ${m}; retrying with next model...`);
+      batchStart += BATCH_SIZE;
     }
 
-    console.log("AI response received, extracting tool call...");
+    console.log(`Finished batch extraction. Total dispositivos: ${allDispositivos.length}`);
 
-    // Parse the tool call response
-    let estrutura: ExtractedArticle[];
-    let parsedOk = false;
-    try {
-      if (!toolArgs?.dispositivos || !Array.isArray(toolArgs.dispositivos) || toolArgs.dispositivos.length === 0) {
-        throw new Error("No valid tool args in response");
-      }
+    const parsedOk = allDispositivos.length > 0;
 
-      const dispositivos = toolArgs.dispositivos;
+    const estrutura: ExtractedArticle[] = allDispositivos.map((item) => ({
+      document_id: norma_id,
+      anchor: item.anchor || "texto",
+      nivel: item.nivel || "artigo",
+      texto: item.texto || "",
+    }));
 
-      if (!Array.isArray(dispositivos) || dispositivos.length === 0) {
-        throw new Error("No dispositivos in tool call response");
-      }
-
-      // Map to our format with document_id
-      estrutura = dispositivos.map((item: any) => ({
-        document_id: norma_id,
-        anchor: item.anchor || "texto",
-        nivel: item.nivel || "artigo",
-        texto: item.texto || "",
-      }));
-
-      parsedOk = true;
-      console.log(`Extracted ${estrutura.length} dispositivos via tool-calling`);
-    } catch (parseError) {
-      console.error("Failed to parse tool call response:", parseError);
-      
-      // Fallback: try to get content from message
-      const content = aiResult?.choices?.[0]?.message?.content || "";
-      console.log("Fallback content preview:", content.slice(0, 200));
-      
-      estrutura = [{
+    // If no items, add a placeholder error entry
+    if (estrutura.length === 0) {
+      estrutura.push({
         document_id: norma_id,
         anchor: "texto",
         nivel: "artigo",
-        texto: content.substring(0, 50000),
-      }];
+        texto: "(Falha na extração em lotes)",
+      });
     }
 
-    console.log(`Structure parsed, items: ${estrutura.length}`);
-
-    // Update norma with extracted text
     const { error: updateError } = await supabase
       .from("normas")
       .update({
         texto_extraido: JSON.stringify(estrutura),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: `lovable-ai:${usedModel}`,
+        texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
         texto_extraido_status: parsedOk ? "extraido" : "erro",
       })
       .eq("id", norma_id);
@@ -319,20 +334,19 @@ Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1
       JSON.stringify({
         success: true,
         items_extraidos: estrutura.length,
+        batches_processed: Math.ceil((batchStart - 1) / BATCH_SIZE),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("Error in extract-pdf-text:", error);
-    
-    // Try to update status to error
+
     try {
       const { norma_id } = await req.clone().json();
       if (norma_id) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        
         await supabase.from("normas").update({
           texto_extraido_status: "erro",
           texto_extraido_em: new Date().toISOString(),
@@ -341,7 +355,7 @@ Para cada dispositivo, identifique o anchor (ex: art.1, art.1.I, art.1§1, art.1
     } catch (_) {
       // Ignore errors in error handler
     }
-    
+
     return new Response(
       JSON.stringify({ error: error.message || "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

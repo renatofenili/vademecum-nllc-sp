@@ -77,9 +77,66 @@ function extractToolArgsFromAiResult(aiResult: any): ToolArgs | null {
   return null;
 }
 
-const BATCH_SIZE = 30; // number of articles per batch
+const DEFAULT_BATCH_SIZE = 10;
+const MAX_ARTICLES = 300; // safety cap
 const MODEL = "google/gemini-3-flash-preview";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+function parseArticleNumberFromAnchor(anchor: unknown): number | null {
+  if (!anchor) return null;
+  const s = String(anchor)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Prefer our canonical "art.12" format
+  const m1 = s.match(/\bart\.?\s*(\d{1,3})\b/);
+  if (m1?.[1]) return Number(m1[1]);
+
+  // Some models may output "artigo 12"
+  const m2 = s.match(/\bartigo\s*(\d{1,3})\b/);
+  if (m2?.[1]) return Number(m2[1]);
+
+  return null;
+}
+
+function filterDispositivosByRange(
+  dispositivos: ToolArgs["dispositivos"],
+  batchStart: number,
+  batchEnd: number
+): ToolArgs["dispositivos"] {
+  return (dispositivos || []).filter((d) => {
+    const n = parseArticleNumberFromAnchor(d?.anchor);
+    if (n == null) return false;
+    return n >= batchStart && n <= batchEnd;
+  });
+}
+
+function dedupeByAnchor(
+  existing: ExtractedArticle[],
+  incoming: ToolArgs["dispositivos"],
+  normaId: string
+): ExtractedArticle[] {
+  const seen = new Set<string>();
+  for (const e of existing) {
+    if (e?.anchor) seen.add(String(e.anchor));
+  }
+
+  const out: ExtractedArticle[] = [];
+  for (const item of incoming) {
+    const anchor = String(item?.anchor || "").trim();
+    if (!anchor) continue;
+    if (seen.has(anchor)) continue;
+    seen.add(anchor);
+    out.push({
+      document_id: normaId,
+      anchor,
+      nivel: (item?.nivel || "artigo") as ExtractedArticle["nivel"],
+      texto: String(item?.texto || ""),
+    });
+  }
+  return out;
+}
 
 async function callGatewayBatch(
   lovableApiKey: string,
@@ -130,10 +187,7 @@ async function callGatewayBatch(
     },
   ];
 
-  const userPrompt =
-    batchStart === 1 && batchEnd === BATCH_SIZE
-      ? `Extraia os artigos 1 até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos.`
-      : `Extraia os artigos ${batchStart} até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos.`;
+  const userPrompt = `Extraia SOMENTE os artigos ${batchStart} até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos. Se algum dispositivo não pertencer ao intervalo, ignore.`;
 
   const messagesPayload = [
     {
@@ -170,7 +224,7 @@ Não omita nenhum artigo do intervalo solicitado.`,
     tools: toolsPayload,
     tool_choice: { type: "function", function: { name: "extract_dispositivos" } },
     temperature: 0.1,
-    max_tokens: 32000,
+    max_tokens: 9000,
   };
 
   const resp = await fetch(GATEWAY_URL, {
@@ -215,7 +269,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { pdf_storage_path, norma_id } = await req.json();
+    const reqBody = await req.json();
+    const { pdf_storage_path, norma_id } = reqBody;
 
     if (!pdf_storage_path || !norma_id) {
       return new Response(
@@ -230,6 +285,23 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Auth guard (default: required)
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Download PDF from storage
     const { data: pdfData, error: downloadError } = await supabase.storage
@@ -258,65 +330,104 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    // Set status to "processando"
-    await supabase.from("normas").update({
-      texto_extraido_status: "processando",
-      texto_extraido_em: new Date().toISOString(),
-    }).eq("id", norma_id);
+    // === Single-batch, resumable extraction ===
+    const requestedBatchStart =
+      typeof reqBody?.batch_start === "number" ? Math.max(1, Math.floor(reqBody.batch_start)) : null;
+    const batchSize =
+      typeof reqBody?.batch_size === "number"
+        ? Math.min(30, Math.max(1, Math.floor(reqBody.batch_size)))
+        : DEFAULT_BATCH_SIZE;
+    const emptyStreak =
+      typeof reqBody?.empty_streak === "number" ? Math.max(0, Math.floor(reqBody.empty_streak)) : 0;
+    const reset = Boolean(reqBody?.reset);
 
-    // === Batch extraction logic ===
-    const allDispositivos: ToolArgs["dispositivos"] = [];
-    let batchStart = 1;
-    let consecutiveEmptyBatches = 0;
-    const MAX_CONSECUTIVE_EMPTY = 2;
-    const MAX_ARTICLES = 300; // safety cap
+    // Load existing extraction (for resume)
+    let existingEstrutura: ExtractedArticle[] = [];
+    if (!reset) {
+      const { data: normaRow, error: normaRowError } = await supabase
+        .from("normas")
+        .select("texto_extraido")
+        .eq("id", norma_id)
+        .single();
 
-    while (batchStart <= MAX_ARTICLES && consecutiveEmptyBatches < MAX_CONSECUTIVE_EMPTY) {
-      const batchEnd = batchStart + BATCH_SIZE - 1;
-      console.log(`Extracting batch: art.${batchStart} - art.${batchEnd}`);
-
-      const { dispositivos, ok } = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
-
-      if (!ok || dispositivos.length === 0) {
-        consecutiveEmptyBatches++;
-        console.warn(`Batch ${batchStart}-${batchEnd} returned 0 items. Consecutive empty: ${consecutiveEmptyBatches}`);
-      } else {
-        consecutiveEmptyBatches = 0;
-        allDispositivos.push(...dispositivos);
-        console.log(`Batch ${batchStart}-${batchEnd} extracted ${dispositivos.length} dispositivos.`);
+      if (!normaRowError && (normaRow as any)?.texto_extraido) {
+        try {
+          const parsed = JSON.parse((normaRow as any).texto_extraido);
+          if (Array.isArray(parsed)) {
+            existingEstrutura = parsed as ExtractedArticle[];
+          }
+        } catch {
+          // ignore parse errors
+        }
       }
-
-      batchStart += BATCH_SIZE;
     }
 
-    console.log(`Finished batch extraction. Total dispositivos: ${allDispositivos.length}`);
+    const maxExisting = existingEstrutura.reduce((acc, cur) => {
+      const n = parseArticleNumberFromAnchor(cur?.anchor);
+      if (n != null && n > acc) return n;
+      return acc;
+    }, 0);
 
-    const parsedOk = allDispositivos.length > 0;
+    const batchStart = requestedBatchStart ?? (maxExisting > 0 ? maxExisting + 1 : 1);
+    if (batchStart > MAX_ARTICLES) {
+      return new Response(
+        JSON.stringify({ success: true, done: true, reason: "max_articles_reached" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const batchEnd = Math.min(MAX_ARTICLES, batchStart + batchSize - 1);
 
-    const estrutura: ExtractedArticle[] = allDispositivos.map((item) => ({
-      document_id: norma_id,
-      anchor: item.anchor || "texto",
-      nivel: item.nivel || "artigo",
-      texto: item.texto || "",
-    }));
-
-    // If no items, add a placeholder error entry
-    if (estrutura.length === 0) {
-      estrutura.push({
-        document_id: norma_id,
-        anchor: "texto",
-        nivel: "artigo",
-        texto: "(Falha na extração em lotes)",
-      });
+    // Mark as pending before starting this batch
+    {
+      const { error: pendErr } = await supabase
+        .from("normas")
+        .update({
+          texto_extraido_status: "pendente",
+          texto_extraido_em: new Date().toISOString(),
+          texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
+          ...(reset ? { texto_extraido: JSON.stringify([]) } : {}),
+        })
+        .eq("id", norma_id);
+      if (pendErr) console.error("Failed to set pending status:", pendErr);
     }
 
+    console.log(`Extracting single batch: art.${batchStart} - art.${batchEnd}`);
+    const { dispositivos, ok } = await callGatewayBatch(lovableApiKey, base64Pdf, batchStart, batchEnd);
+
+    if (!ok) {
+      const { error: errUpd } = await supabase
+        .from("normas")
+        .update({
+          texto_extraido_status: "erro",
+          texto_extraido_em: new Date().toISOString(),
+          texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
+        })
+        .eq("id", norma_id);
+      if (errUpd) console.error("Failed to set error status:", errUpd);
+
+      return new Response(
+        JSON.stringify({ success: false, error: "AI did not return tool args" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const filtered = filterDispositivosByRange(dispositivos, batchStart, batchEnd);
+    const deduped = dedupeByAnchor(existingEstrutura, filtered, norma_id);
+
+    const artigosAdded = deduped.filter((d) => String(d.nivel).toLowerCase() === "artigo").length;
+    const nextEstrutura = reset ? deduped : [...existingEstrutura, ...deduped];
+
+    const isEmptyBatch = artigosAdded === 0;
+    const done = isEmptyBatch && emptyStreak >= 1 && nextEstrutura.length > 0;
+
+    const statusToPersist = done ? "extraido" : "pendente";
     const { error: updateError } = await supabase
       .from("normas")
       .update({
-        texto_extraido: JSON.stringify(estrutura),
+        texto_extraido: JSON.stringify(nextEstrutura),
         texto_extraido_em: new Date().toISOString(),
-        texto_extraido_origem: `lovable-ai:${MODEL}:batched`,
-        texto_extraido_status: parsedOk ? "extraido" : "erro",
+        texto_extraido_origem: `lovable-ai:${MODEL}:batched:${batchStart}-${batchEnd}`,
+        texto_extraido_status: statusToPersist,
       })
       .eq("id", norma_id);
 
@@ -333,8 +444,13 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        items_extraidos: estrutura.length,
-        batches_processed: Math.ceil((batchStart - 1) / BATCH_SIZE),
+        done,
+        batch_start: batchStart,
+        batch_end: batchEnd,
+        items_added: deduped.length,
+        artigos_added: artigosAdded,
+        next_batch_start: done ? null : batchEnd + 1,
+        empty_batch: isEmptyBatch,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

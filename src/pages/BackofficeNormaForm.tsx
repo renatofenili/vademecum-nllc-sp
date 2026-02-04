@@ -154,6 +154,15 @@ const BackofficeNormaForm = () => {
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const [extractionStats, setExtractionStats] = useState<{ artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const computeExtractionStats = (textoExtraido: unknown) => {
     if (!textoExtraido || typeof textoExtraido !== 'string') return null;
@@ -487,7 +496,11 @@ const BackofficeNormaForm = () => {
     });
   };
 
-  const triggerTextExtraction = async (storagePath: string, normaId: string) => {
+  const triggerTextExtraction = async (
+    storagePath: string,
+    normaId: string,
+    options?: { reset?: boolean }
+  ) => {
     setIsExtractingText(true);
     setExtractionStatus('pendente');
     setExtractionStats(null);
@@ -495,27 +508,61 @@ const BackofficeNormaForm = () => {
     try {
       console.log('Triggering text extraction for:', normaId, storagePath);
       
-      const { error } = await supabase.functions.invoke('extract-pdf-text', {
-        body: { 
-          pdf_storage_path: storagePath, 
-          norma_id: normaId 
-        },
-      });
+      const batchSize = 10;
+      const maxBatches = 60; // safety guard
+      let emptyStreak = 0;
+      let nextBatchStart: number | null = options?.reset ? 1 : null;
 
-      if (error) {
-        console.error('Extraction error:', error);
-        setExtractionStatus('erro');
-        toast({
-          title: 'Erro na extração',
-          description: 'Não foi possível extrair o texto do PDF.',
-          variant: 'destructive',
+      let done = false;
+      for (let i = 0; i < maxBatches; i++) {
+        if (!isMountedRef.current) break;
+
+        const { data, error } = await supabase.functions.invoke('extract-pdf-text', {
+          body: {
+            pdf_storage_path: storagePath,
+            norma_id: normaId,
+            batch_start: nextBatchStart ?? undefined,
+            batch_size: batchSize,
+            empty_streak: emptyStreak,
+            reset: Boolean(options?.reset) && i === 0,
+          },
         });
-      } else {
-        // Refresh status+stats from DB (without overwriting unsaved form fields)
+
+        if (error) {
+          console.error('Extraction error:', error);
+          // Pode ser timeout/transiente; tenta refletir o que o backend já salvou
+          await refreshExtractionMeta(normaId);
+          throw error;
+        }
+
         await refreshExtractionMeta(normaId);
+
+        const emptyBatch = Boolean((data as any)?.empty_batch);
+        const batchDone = Boolean((data as any)?.done);
+        const next = (data as any)?.next_batch_start as number | null | undefined;
+
+        emptyStreak = emptyBatch ? emptyStreak + 1 : 0;
+        done = batchDone;
+
+        if (done) break;
+        if (!next) break;
+        nextBatchStart = next;
+
+        // Pequena pausa para reduzir risco de rate-limit
+        await sleep(350);
+      }
+
+      await refreshExtractionMeta(normaId);
+
+      if (done) {
         toast({
           title: 'Texto extraído!',
           description: 'O texto do PDF foi extraído e estruturado com sucesso.',
+        });
+      } else {
+        toast({
+          title: 'Extração em andamento',
+          description: 'A extração foi iniciada/atualizada. Reabra esta norma para ver o status final.',
         });
       }
     } catch (error: any) {
@@ -1129,7 +1176,7 @@ const BackofficeNormaForm = () => {
                               size="sm"
                               onClick={() => {
                                 if (pdfData.pdf_storage_path && id) {
-                                  triggerTextExtraction(pdfData.pdf_storage_path, id);
+                                  triggerTextExtraction(pdfData.pdf_storage_path, id, { reset: true });
                                 }
                               }}
                               className="shrink-0"

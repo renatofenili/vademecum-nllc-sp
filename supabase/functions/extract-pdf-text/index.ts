@@ -582,6 +582,11 @@ Deno.serve(async (req) => {
 
     if (!ok) {
        if (retryable) {
+         const suggestedBatchSize =
+           error_kind === "no_tool_args" && batchSize > 1
+             ? Math.max(1, Math.floor(batchSize / 2))
+             : batchSize;
+
          // Keep as pending; let the frontend retry the SAME batch.
          const { error: pendErr2 } = await supabase
            .from("normas")
@@ -599,6 +604,9 @@ Deno.serve(async (req) => {
              done: false,
              retryable: true,
              retry_after_ms: retry_after_ms ?? 900,
+              suggested_batch_size: suggestedBatchSize,
+              error_kind: error_kind ?? "unknown",
+              model_used: model_used ?? PRIMARY_MODEL,
              batch_start: batchStart,
              batch_end: batchEnd,
              items_added: 0,

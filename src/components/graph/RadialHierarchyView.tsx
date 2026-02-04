@@ -1200,31 +1200,80 @@ export const RadialHierarchyView = ({
               </DialogHeader>
               
               <ScrollArea className="flex-1 -mx-6 px-6">
-                <div className="space-y-4 py-2">
-                  {/* Artigo principal */}
-                  <div className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
-                    {selectedArtigo.artigo.texto}
-                  </div>
-                  
-                  {/* Dispositivos filhos (parágrafos, incisos, alíneas) */}
-                  {selectedArtigo.children.length > 0 && (
-                    <div className="space-y-2 mt-4">
-                      {selectedArtigo.children.map((child, idx) => {
-                        // Indent based on level
-                        const indentClass = child.nivel === "alinea" ? "ml-8" : child.nivel === "inciso" ? "ml-4" : "";
-                        
-                        return (
-                          <p
-                            key={idx}
-                            className={`text-sm text-foreground leading-relaxed ${indentClass}`}
-                            style={{ textAlign: "justify" }}
-                          >
-                            {child.texto}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  )}
+                <div className="py-2">
+                  {/* Render formatted article text */}
+                  {(() => {
+                    // Combine artigo text with children texts
+                    let fullText = selectedArtigo.artigo.texto;
+                    if (selectedArtigo.children.length > 0) {
+                      fullText += " " + selectedArtigo.children.map(c => c.texto).join(" ");
+                    }
+                    
+                    // Apply formal formatting (same logic as NormasTab)
+                    const applyFormatting = (text: string): string => {
+                      let formatted = text;
+                      
+                      // Normalize line breaks that don't start new dispositivos
+                      formatted = formatted.replace(
+                        /\n+(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
+                        ' '
+                      );
+                      formatted = formatted.replace(/\s{2,}/g, ' ');
+                      
+                      // Roman numeral incisos (I –, II –, etc.)
+                      formatted = formatted.replace(
+                        /([.;:])\s+([IVXLCDM]+)\s*[-–—]\s*/g,
+                        '$1\n\n$2 – '
+                      );
+                      
+                      // Letter alíneas (a), b), etc.)
+                      formatted = formatted.replace(
+                        /([.;:])\s+([a-z])\)\s*/g,
+                        '$1\n\n    $2) '
+                      );
+                      
+                      // Paragraphs (§)
+                      formatted = formatted.replace(
+                        /\s+(§\s*\d+[º°]?\.?)/g,
+                        '\n\n$1'
+                      );
+                      formatted = formatted.replace(
+                        /\s+(§\s*[Úú]nico\.?)/gi,
+                        '\n\n$1'
+                      );
+                      
+                      return formatted.trim();
+                    };
+                    
+                    const formattedText = applyFormatting(fullText);
+                    const paragraphs = formattedText.split(/\n\n+/);
+                    
+                    return (
+                      <div className="space-y-3">
+                        {paragraphs.map((para, idx) => {
+                          const trimmed = para.trim();
+                          if (!trimmed) return null;
+                          
+                          // Determine indentation
+                          const isAlinea = /^[a-z]\)/.test(trimmed);
+                          const isInciso = /^[IVXLCDM]+\s*[-–—]/.test(trimmed);
+                          const isParagrafo = /^§/.test(trimmed);
+                          
+                          const indentClass = isAlinea ? "ml-8" : isInciso ? "ml-4" : isParagrafo ? "ml-2" : "";
+                          
+                          return (
+                            <p
+                              key={idx}
+                              className={`text-sm text-foreground leading-relaxed ${indentClass}`}
+                              style={{ textAlign: "justify" }}
+                            >
+                              {trimmed}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </ScrollArea>
             </>

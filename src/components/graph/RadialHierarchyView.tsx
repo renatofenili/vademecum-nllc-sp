@@ -1208,33 +1208,19 @@ export const RadialHierarchyView = ({
                   
                   {/* Dispositivos filhos (parágrafos, incisos, alíneas) */}
                   {selectedArtigo.children.length > 0 && (
-                    <div className="space-y-3 border-l-2 border-amber-300 pl-4 mt-4">
+                    <div className="space-y-2 mt-4">
                       {selectedArtigo.children.map((child, idx) => {
-                        const nivelStyles: Record<string, { bg: string; border: string; label: string }> = {
-                          paragrafo: { bg: "bg-cyan-50 dark:bg-cyan-900/20", border: "border-cyan-300", label: "§" },
-                          inciso: { bg: "bg-pink-50 dark:bg-pink-900/20", border: "border-pink-300", label: "" },
-                          alinea: { bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-300", label: "" },
-                        };
-                        const style = nivelStyles[child.nivel] || nivelStyles.inciso;
-                        
-                        // Format anchor for display
-                        const displayAnchor = child.anchor.replace(/^art\.\d+/i, "").trim();
+                        // Indent based on level
+                        const indentClass = child.nivel === "alinea" ? "ml-8" : child.nivel === "inciso" ? "ml-4" : "";
                         
                         return (
-                          <div
+                          <p
                             key={idx}
-                            className={`p-3 rounded-lg ${style.bg} border-l-2 ${style.border}`}
-                            style={{ marginLeft: child.nivel === "alinea" ? "16px" : child.nivel === "inciso" ? "8px" : "0" }}
+                            className={`text-sm text-foreground leading-relaxed ${indentClass}`}
+                            style={{ textAlign: "justify" }}
                           >
-                            <div className="flex items-baseline gap-2 mb-1">
-                              <span className="font-semibold text-sm text-muted-foreground">
-                                {style.label}{displayAnchor}
-                              </span>
-                            </div>
-                            <p className="text-sm text-foreground leading-relaxed" style={{ textAlign: "justify" }}>
-                              {child.texto}
-                            </p>
-                          </div>
+                            {child.texto}
+                          </p>
                         );
                       })}
                     </div>

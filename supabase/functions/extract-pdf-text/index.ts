@@ -12,14 +12,14 @@ const corsHeaders = {
 interface ExtractedArticle {
   document_id: string;
   anchor: string;
-  nivel: "artigo" | "inciso" | "paragrafo" | "alinea";
+  nivel: "ementa" | "preambulo" | "artigo" | "inciso" | "paragrafo" | "alinea";
   texto: string;
 }
 
 type ToolArgs = {
   dispositivos: {
     anchor: string;
-    nivel: "artigo" | "inciso" | "paragrafo" | "alinea";
+    nivel: "ementa" | "preambulo" | "artigo" | "inciso" | "paragrafo" | "alinea";
     texto: string;
   }[];
 };
@@ -298,7 +298,9 @@ function filterDispositivosByRange(
 function normalizePdfExtractedText(s: string): string {
   return String(s || "")
     .replace(/\r\n/g, "\n")
-    .replace(/[\t\u00A0]+/g, " ")
+    // Normalize various Unicode spaces (non-breaking, thin, etc.) to regular space
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, " ")
+    .replace(/[\t]+/g, " ")
     .replace(/[ ]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -312,13 +314,14 @@ function extractFallbackArticlesFromText(
   const text = `\n${normalizePdfExtractedText(fullText)}\n`;
   
   // Multiple regex patterns to catch different formatting styles used in Brazilian laws
-  // Pattern 1: "Art. 6º" or "Art. 6" or "Art.6" at start of line
-  // Pattern 2: "Artigo 6" or "ARTIGO 6" 
-  // Pattern 3: Variations with "Art " (space)
+  // Key: use \s+ to match multiple/weird spaces, and be flexible with ordinal markers
+  // Pattern 1: "Art. 6º" or "Art. 6" or "Art.6" anywhere (most common format)
+  // Pattern 2: "Artigo 6" or "ARTIGO 6"
   const headingPatterns = [
-    /^\s*(?:art\.?\s*)(\d{1,4})\s*(?:º|°|o|\.)?(?:\s*[-–—])?\s*/gim,
-    /^\s*(?:artigo)\s+(\d{1,4})\s*(?:º|°|o|\.)?(?:\s*[-–—])?\s*/gim,
-    /(?:^|\n)\s*Art\.?\s*(\d{1,4})\s*(?:º|°|o|\.)?/gim,
+    // Most flexible: Art followed by optional dot, spaces, number, optional ordinal
+    /\bArt\.?\s*(\d{1,4})\s*(?:º|°|o|\.)?(?:\s|$)/gi,
+    // Artigo spelled out
+    /\bArtigo\s+(\d{1,4})\s*(?:º|°|o|\.)?(?:\s|$)/gi,
   ];
   
   const headings: { n: number; index: number }[] = [];
@@ -575,7 +578,7 @@ async function callGatewayBatchWithModel(
       function: {
         name: "extract_dispositivos",
         description:
-          "Extrai dispositivos de uma norma jurídica brasileira (artigos, incisos, parágrafos e alíneas)",
+          "Extrai dispositivos de uma norma jurídica brasileira (ementa, artigos, incisos, parágrafos e alíneas)",
         parameters: {
           type: "object",
           properties: {
@@ -588,11 +591,11 @@ async function callGatewayBatchWithModel(
                   anchor: {
                     type: "string",
                     description:
-                      "Identificador do dispositivo (ex: art.1, art.1.I, art.1§1, art.1.a)",
+                      "Identificador do dispositivo (ex: ementa, preambulo, art.1, art.1.I, art.1§1, art.1.a)",
                   },
                   nivel: {
                     type: "string",
-                    enum: ["artigo", "inciso", "paragrafo", "alinea"],
+                    enum: ["ementa", "preambulo", "artigo", "inciso", "paragrafo", "alinea"],
                     description: "Tipo do dispositivo",
                   },
                   texto: {
@@ -612,18 +615,38 @@ async function callGatewayBatchWithModel(
     },
   ];
 
-  const userPrompt = `Extraia SOMENTE os artigos ${batchStart} até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos. Se algum dispositivo não pertencer ao intervalo, ignore.`;
+  // Special handling for first batch: include ementa and preambulo
+  const includeEmenta = batchStart === 1;
+  const userPrompt = includeEmenta
+    ? `Extraia a EMENTA (texto que descreve o que a norma institui), o PREÂMBULO (autoridade que assina e fundamento legal), e os artigos ${batchStart} até ${batchEnd} (com seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos.`
+    : `Extraia SOMENTE os artigos ${batchStart} até ${batchEnd} (e seus incisos/parágrafos/alíneas) desta norma jurídica usando a função extract_dispositivos. Se algum dispositivo não pertencer ao intervalo, ignore.`;
 
-  const messagesPayload = [
-    {
-      role: "system",
-      content: `Você é um extrator de texto jurídico especializado em normas brasileiras.
+  const systemPrompt = includeEmenta
+    ? `Você é um extrator de texto jurídico especializado em normas brasileiras.
+Extraia EXATAMENTE o texto do PDF, sem modificar ou resumir.
+Para o primeiro lote, extraia:
+1. EMENTA: o texto que descreve o que a norma institui (geralmente logo após o número da lei)
+2. PREÂMBULO: autoridade que assina e fundamento legal (texto antes do Art. 1º)
+3. Artigos solicitados (e seus incisos, parágrafos e alíneas)
+Para cada dispositivo, identifique:
+- anchor: ementa, preambulo, art.X, art.X.I, art.X§Y, art.X.a
+- nivel: ementa | preambulo | artigo | inciso | paragrafo | alinea
+- texto: texto COMPLETO e EXATO do dispositivo, copiado do PDF.
+NÃO INVENTE TEXTO. Copie exatamente do documento.`
+    : `Você é um extrator de texto jurídico especializado em normas brasileiras.
+Extraia EXATAMENTE o texto do PDF, sem modificar ou resumir.
 Extraia apenas os artigos solicitados (e seus incisos, parágrafos e alíneas).
 Para cada dispositivo, identifique:
 - anchor: identificador no formato art.X, art.X.I, art.X§Y, art.X.a, etc.
 - nivel: artigo | inciso | paragrafo | alinea
-- texto: texto completo do dispositivo.
-Não omita nenhum artigo do intervalo solicitado.`,
+- texto: texto COMPLETO e EXATO do dispositivo, copiado do PDF.
+NÃO INVENTE TEXTO. Copie exatamente do documento.
+Não omita nenhum artigo do intervalo solicitado.`;
+
+  const messagesPayload = [
+    {
+      role: "system",
+      content: systemPrompt,
     },
     {
       role: "user",

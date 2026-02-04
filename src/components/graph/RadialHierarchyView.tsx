@@ -125,6 +125,7 @@ export const RadialHierarchyView = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<RingNode | null>(null);
   const [selectedArtigo, setSelectedArtigo] = useState<ArtigoGroup | null>(null);
+  const [hoveredArtigo, setHoveredArtigo] = useState<{ anchor: string; x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<RingNode | null>(null);
   const [expandedDispositivos, setExpandedDispositivos] = useState<ExpandedDispositivos | null>(null);
   
@@ -709,7 +710,18 @@ export const RadialHierarchyView = ({
           </div>
         )}
 
-        {/* Artigo nodes handled via Dialog, not tooltip */}
+        {/* Small hover tooltip for artigo name */}
+        {hoveredArtigo && (
+          <div
+            className="absolute z-20 bg-popover border border-border rounded px-2 py-1 shadow-md pointer-events-none"
+            style={{
+              left: hoveredArtigo.x * zoom + pan.x + 20,
+              top: hoveredArtigo.y * zoom + pan.y - 10,
+            }}
+          >
+            <span className="text-xs font-medium text-foreground">{hoveredArtigo.anchor}</span>
+          </div>
+        )}
 
         <div
           ref={containerRef}
@@ -902,6 +914,8 @@ export const RadialHierarchyView = ({
                           {/* Artigo node - click to open detail */}
                           <g
                             transform={`translate(${artigoX}, ${artigoY})`}
+                            onMouseEnter={() => setHoveredArtigo({ anchor: group.artigo.anchor, x: artigoX, y: artigoY })}
+                            onMouseLeave={() => setHoveredArtigo(null)}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedArtigo(group);

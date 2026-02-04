@@ -717,21 +717,16 @@ export const RadialHierarchyView = ({
               top: Math.min(hoveredArtigo.y * zoom + pan.y - 10, dimensions.height - 300),
             }}
           >
-            {/* Artigo header */}
+            {/* Artigo header - without count */}
             <div className="flex items-center gap-2 mb-2">
               <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
               <p className="font-semibold text-sm text-foreground">
                 {hoveredArtigo.artigo.artigo.anchor}
               </p>
-              {hoveredArtigo.artigo.children.length > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {hoveredArtigo.artigo.children.length} dispositivos
-                </Badge>
-              )}
             </div>
             
-            {/* Artigo text */}
-            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 mb-2">
+            {/* Artigo text - full, no truncation */}
+            <p className="text-xs text-muted-foreground leading-relaxed mb-2" style={{ textAlign: "justify" }}>
               {hoveredArtigo.artigo.artigo.texto}
             </p>
             
@@ -982,20 +977,7 @@ export const RadialHierarchyView = ({
                               {group.artigo.anchor.replace(/^art\.?/i, "").trim() || `A${idx + 1}`}
                             </text>
                             
-                            {/* Badge with children count */}
-                            {childCount > 0 && (
-                              <g transform="translate(10, -10)">
-                                <circle r={7} fill="hsl(var(--primary))" stroke="white" strokeWidth={1} />
-                                <text
-                                  textAnchor="middle"
-                                  dominantBaseline="central"
-                                  className="fill-white pointer-events-none"
-                                  style={{ fontSize: 6, fontWeight: 600 }}
-                                >
-                                  {childCount}
-                                </text>
-                              </g>
-                            )}
+                            {/* Badge removed - count not needed on map */}
                           </g>
                         </g>
                       );
@@ -1201,7 +1183,7 @@ export const RadialHierarchyView = ({
                                           </Badge>
                                         )}
                                       </div>
-                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2" style={{ textAlign: "justify" }}>
+                                      <p className="text-xs text-muted-foreground mt-1" style={{ textAlign: "justify" }}>
                                         {group.artigo.texto}
                                       </p>
                                     </div>
@@ -1224,7 +1206,7 @@ export const RadialHierarchyView = ({
                                               {child.anchor}
                                             </span>
                                           </div>
-                                          <p className="text-muted-foreground mt-0.5 line-clamp-2" style={{ textAlign: "justify" }}>
+                                          <p className="text-muted-foreground mt-0.5" style={{ textAlign: "justify" }}>
                                             {child.texto}
                                           </p>
                                         </div>

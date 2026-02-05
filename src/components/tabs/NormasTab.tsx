@@ -87,6 +87,25 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
   const applyFormalFormatting = (text: string): string => {
     let formatted = text;
     
+    // === OCR/PDF extraction error corrections ===
+    
+    // Fix "||" -> "II", "|||" -> "III", etc. when they look like roman numeral incisos
+    // (at start of line, after punctuation, or after whitespace)
+    formatted = formatted.replace(
+      /(^|[.;:\s])\|(\|{0,6})(?=\s*[-–—]?\s*[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/gm,
+      (match, prefix, pipes) => {
+        const romanMap: Record<number, string> = { 1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII" };
+        const numPipes = pipes.length + 1; // +1 for the first pipe captured separately
+        return prefix + (romanMap[numPipes] || "I".repeat(numPipes));
+      }
+    );
+    
+    // Fix "0" (zero) -> "o" (article) when followed by a capitalized word
+    // e.g., "admitido 0 Índice" -> "admitido o Índice"
+    formatted = formatted.replace(/\s0\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g, " o $1");
+    
+    // === Formatting rules ===
+    
     // 0. Preserve intentional double newlines (already formatted text)
     const PLACEHOLDER = '<<<DOUBLE_NEWLINE>>>';
     formatted = formatted.replace(/\n\n/g, PLACEHOLDER);
@@ -94,7 +113,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // 1. Normalize unwanted single line breaks from PDF extraction
     // Replace single newlines (not followed by structural markers) with space
     formatted = formatted.replace(
-      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|\|{1,7}\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
+      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
       ' '
     );
     

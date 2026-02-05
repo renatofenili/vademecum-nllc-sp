@@ -11,20 +11,63 @@ const MapasTab = () => {
   const [actsData, setActsData] = useState<ActsGraphData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fallbackMode, setFallbackMode] = useState(false);
 
   // Load acts graph on mount - CF/88 is always root
   useEffect(() => {
     const loadActsGraph = async () => {
       setIsLoading(true);
+      setFallbackMode(false);
+
+      // 1) Prefer backend graph (richer edges)
       try {
         const { data, error } = await supabase.functions.invoke("graph-acts", {
           body: { root: "cf88", depth: 3 },
         });
 
         if (error) throw error;
-        setActsData(data);
+        if (!data || !Array.isArray((data as any).nodes)) {
+          throw new Error("Resposta inválida do backend (nodes ausente)");
+        }
+
+        setActsData(data as ActsGraphData);
+        setIsLoading(false);
+        return;
       } catch (err) {
         console.error("Erro ao carregar mapa normativo:", err);
+      }
+
+      // 2) Fallback: build a minimal graph from database so the UI never stays empty
+      try {
+        const { data: normas, error: normasError } = await supabase
+          .from("normas")
+          .select("id, tipo, numero, ementa, orgao_emissor, data_publicacao, status")
+          .order("data_publicacao", { ascending: false })
+          .limit(1000);
+
+        if (normasError) throw normasError;
+
+        const cfNode: ActsGraphData["nodes"][number] = {
+          id: "cf88",
+          tipo: "constituicao",
+          numero: "CF/1988",
+          ementa: "Constituição da República Federativa do Brasil de 1988",
+          orgao_emissor: "Assembleia Nacional Constituinte",
+          data_publicacao: "1988-10-05",
+          status: "vigente",
+        };
+
+        const nodes = [cfNode, ...((normas as any[]) || [])] as ActsGraphData["nodes"];
+
+        setActsData({
+          root: "cf88",
+          nodes,
+          edges: [],
+        });
+        setFallbackMode(true);
+      } catch (fallbackErr) {
+        console.error("Fallback do mapa também falhou:", fallbackErr);
+        setActsData(null);
       } finally {
         setIsLoading(false);
       }
@@ -128,12 +171,15 @@ const MapasTab = () => {
           <Maximize2 className="h-4 w-4" />
           Tela Cheia
         </Button>
-        
+
+        {fallbackMode && (
+          <div className="absolute left-3 bottom-3 z-10 rounded-md border border-border bg-muted/70 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm">
+            Modo contingência: exibindo hierarquia básica (conexões por referência indisponíveis).
+          </div>
+        )}
+
         <CardContent className="flex-1 flex flex-col p-0">
-          <RadialHierarchyView
-            data={actsData}
-            isLoading={isLoading}
-          />
+          <RadialHierarchyView data={actsData} isLoading={isLoading} />
         </CardContent>
       </Card>
 

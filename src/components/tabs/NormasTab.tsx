@@ -117,10 +117,11 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
       "$1\n\n$2",
     );
     
-    // 4. Paragraph markers "§" start new line only when they start a new paragraph
+    // 4. Paragraph markers "§" ALWAYS start new line (they are distinct legal provisions)
+    // Match § followed by number or "único", ensuring it starts on its own line
     formatted = formatted.replace(
-      /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
-      "$1\n\n$2",
+      /(?<!\n)\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)\s*[-–—]?\s*/gi,
+      "\n\n$1 - ",
     );
     
     // 5. Alíneas "a)", "b)", etc. start new line only when they start a new item

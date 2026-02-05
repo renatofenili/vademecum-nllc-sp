@@ -94,7 +94,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // 1. Normalize unwanted single line breaks from PDF extraction
     // Replace single newlines (not followed by structural markers) with space
     formatted = formatted.replace(
-      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
+      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|\|{1,7}\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
       ' '
     );
     
@@ -112,9 +112,9 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     );
     
     // 3. Roman numeral incisos start new line when they start a new item
-    // (PDFs sometimes lose the dash after the numeral, e.g. "II contratações...")
+    // (PDFs sometimes lose the dash after the numeral, e.g. "II contratações..."; and sometimes "II" becomes "||")
     formatted = formatted.replace(
-      /([.;:])\s+((?:[IVXLCDM]{1,7})(?:\s*[-–—]\s*|\s+))(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/g,
+      /([.;:])\s*((?:[IVXLCDM]{1,7}|\|{1,7})(?:\s*[-–—]\s*|\s+))(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/g,
       "$1\n\n$2",
     );
     

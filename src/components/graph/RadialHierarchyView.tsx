@@ -1987,10 +1987,11 @@ export const RadialHierarchyView = ({
                 </DialogTitle>
               </DialogHeader>
               
-              <ScrollArea className="flex-1 min-h-0 -mx-6 px-6" type="always">
-                <div className="py-2 pr-4">
-                  {/* Render formatted article text */}
-                  {(() => {
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ScrollArea className="h-full" type="always">
+                  <div className="py-2 pr-4">
+                    {/* Render formatted article text */}
+                    {(() => {
                     // Combine artigo text with children texts
                     let fullText = selectedArtigo.artigo.texto;
                     if (selectedArtigo.children.length > 0) {
@@ -2089,8 +2090,9 @@ export const RadialHierarchyView = ({
                       </div>
                     );
                   })()}
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
             </>
           )}
         </DialogContent>

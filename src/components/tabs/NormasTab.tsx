@@ -94,7 +94,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // 1. Normalize unwanted single line breaks from PDF extraction
     // Replace single newlines (not followed by structural markers) with space
     formatted = formatted.replace(
-      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
+      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
       ' '
     );
     
@@ -111,17 +111,24 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
       "$1\n\n$2",
     );
     
-    // 3. Roman numeral incisos start new line only when they start a new item
+    // 3. Roman numeral incisos start new line when they start a new item
+    // (PDFs sometimes lose the dash after the numeral, e.g. "II contratações...")
     formatted = formatted.replace(
-      /([.;:])\s+((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g,
+      /([.;:])\s+((?:[IVXLCDM]{1,7})(?:\s*[-–—]\s*|\s+))(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/g,
       "$1\n\n$2",
     );
     
-    // 4. Paragraph markers "§" ALWAYS start new line (they are distinct legal provisions)
-    // Match § followed by number or "único", ensuring it starts on its own line
+    // 4. Paragraph markers "§" start new line only when they look like a new paragraph
+    // (avoid references like "no § 1º do art. 52").
     formatted = formatted.replace(
-      /(?<!\n)\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)\s*[-–—]?\s*/gi,
-      "\n\n$1 - ",
+      /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*(?:[-–—]\s*)?[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
+      "$1\n\n$2",
+    );
+    
+    // Also handle missing punctuation when it's clearly a new paragraph: "... elevados § 1º - Poderá ..."
+    formatted = formatted.replace(
+      /([a-záàâãéêíóôõúç0-9])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*[-–—]\s*[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
+      "$1\n\n$2",
     );
     
     // 5. Alíneas "a)", "b)", etc. start new line only when they start a new item

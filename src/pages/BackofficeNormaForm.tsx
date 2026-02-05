@@ -73,6 +73,7 @@ const orgaoEmissorOptions = [
 
 const temaOptions = [
   'Aditivos e apostilamentos',
+  'Agentes que atuam no processo de contratação',
   'Análise jurídica',
   'Assinatura de contrato / ata de registro de preços',
   'Aviso de contratação direta',

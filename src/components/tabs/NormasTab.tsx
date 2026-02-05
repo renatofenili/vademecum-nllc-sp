@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateBR } from "@/lib/date";
@@ -302,7 +303,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
           </h2>
 
           {selectedNorma && normaDetalhe ? (
-            <Card className="h-[600px] overflow-hidden">
+            <Card className="h-[600px] overflow-hidden flex flex-col">
               <CardHeader className="border-b border-border bg-muted/30">
                 <div className="flex items-center justify-between">
                   <div>
@@ -326,27 +327,31 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
                   {normaDetalhe.ementa}
                 </p>
               </CardHeader>
-              <CardContent className="p-4 h-[calc(100%-140px)] overflow-y-auto">
-                {normaDetalhe.texto_extraido ? (
-                  <div className="prose prose-sm max-w-none">
-                    {renderTextoExtraido(normaDetalhe.texto_extraido)}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Texto ainda não extraído para esta norma</p>
-                    {normaDetalhe.link_externo && (
-                      <a
-                        href={normaDetalhe.link_externo}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline mt-2 inline-block"
-                      >
-                        Acessar publicação oficial →
-                      </a>
+              <CardContent className="p-0 flex-1 min-h-0">
+                <ScrollArea className="h-full" type="always">
+                  <div className="p-4 pr-6">
+                    {normaDetalhe.texto_extraido ? (
+                      <div className="prose prose-sm max-w-none">
+                        {renderTextoExtraido(normaDetalhe.texto_extraido)}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Texto ainda não extraído para esta norma</p>
+                        {normaDetalhe.link_externo && (
+                          <a
+                            href={normaDetalhe.link_externo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline mt-2 inline-block"
+                          >
+                            Acessar publicação oficial →
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+                </ScrollArea>
               </CardContent>
             </Card>
           ) : (

@@ -1019,19 +1019,6 @@ export const RadialHierarchyView = ({
             {showRegulamentaLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
           </button>
           
-          {/* Remete */}
-          <button
-            onClick={() => setShowRemeteLinks(!showRemeteLinks)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
-              showRemeteLinks 
-                ? "bg-purple-500/20 text-purple-600 dark:text-purple-400" 
-                : "bg-muted text-muted-foreground opacity-50"
-            }`}
-          >
-            <div className="w-4 h-0.5 bg-purple-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 1px, currentColor 1px, currentColor 2px)" }} />
-            <span>Remete</span>
-            {showRemeteLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          </button>
         </div>
         
         <Separator orientation="vertical" className="h-4" />

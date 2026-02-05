@@ -1382,10 +1382,19 @@ export const RadialHierarchyView = ({
                 const style = linkStyles[link.type];
                 
                 // Check if this link type should be visible
-                const isVisible = 
+                let isVisible = 
                   (link.type === "hierarquia" && showHierarchyLinks) ||
                   (link.type === "regulamenta" && showRegulamentaLinks) ||
                   (link.type === "remete" && showRemeteLinks);
+                
+                // When "Regulamenta" is active, hide hierarchy links from validated decrees to Lei 14.133
+                // These decrees will show their specific article connections instead
+                if (showRegulamentaLinks && link.type === "hierarquia" && link.toId === lei14133ActId) {
+                  const validatedDecretoIds = [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId].filter(Boolean);
+                  if (validatedDecretoIds.includes(link.fromId)) {
+                    isVisible = false;
+                  }
+                }
                 
                 if (!isVisible) return null;
                 

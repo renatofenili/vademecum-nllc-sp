@@ -134,6 +134,18 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // 5. Alíneas "a)", "b)", etc. start new line only when they start a new item
     formatted = formatted.replace(/([.;:])\s+([a-z]\))(?=\s)/gi, "$1\n\n$2");
     
+    // 6. Numbered items "1.", "2.", etc. start new line when they look like list items
+    formatted = formatted.replace(
+      /([.;:])\s*(\d{1,2})\.\s+(?=[a-záàâãéêíóôõúç])/gi,
+      "$1\n\n$2. ",
+    );
+    
+    // Also handle when there's no punctuation before the number (common in PDFs)
+    formatted = formatted.replace(
+      /([a-záàâãéêíóôõúç])\s+(\d{1,2})\.\s+(?=[a-záàâãéêíóôõúç])/gi,
+      "$1\n\n$2. ",
+    );
+    
     // Clean up more than 2 consecutive newlines
     formatted = formatted.replace(/\n{3,}/g, '\n\n');
     

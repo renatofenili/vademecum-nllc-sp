@@ -15,6 +15,13 @@ interface ExtractedArticle {
   texto: string;
 }
 
+interface SpecialSection {
+  type: "disposicao_transitoria" | "disposicao_final";
+  anchor: string;
+  index: number;
+  endPattern?: RegExp;
+}
+
 function textContentToText(textContent: any): string {
   const items = Array.isArray(textContent?.items) ? textContent.items : [];
   const parts: string[] = [];
@@ -39,15 +46,167 @@ function normalizePdfText(s: string): string {
 }
 
 function parseArticleNumber(anchor: string): number | null {
+  // Handle special sections first
+  if (anchor.startsWith("disp.trans")) return 9990;
+  if (anchor.startsWith("disp.final")) return 9991;
   const m = anchor.match(/art\.?(\d+)/i);
   return m ? parseInt(m[1], 10) : null;
 }
 
+function extractSpecialSections(
+  fullText: string,
+  documentId: string,
+  requestedAnchors: string[]
+): ExtractedArticle[] {
+  const results: ExtractedArticle[] = [];
+  
+  // Check if any special sections are requested
+  const wantsDispTrans = requestedAnchors.some(a => 
+    a.toLowerCase().includes("disp.trans") || 
+    a.toLowerCase().includes("transitoria") ||
+    a.toLowerCase().includes("transitório")
+  );
+  
+  if (wantsDispTrans) {
+    // Multiple patterns for "Disposição Transitória" - handle various PDF formatting issues
+    const dispTransPatterns = [
+      /\b(Disposi[çc][ãa]o\s+Transit[óo]ria|Disposi[çc][õo]es\s+Transit[óo]rias)\s*\n/gi,
+      /\bDISPOSI[ÇC][ÃA]O\s+TRANSIT[ÓO]RIA\b/gi,
+      /\bDisposi[çc][ãa]o\s*Transit[óo]ria\b/gi,
+      /\bD\s*i\s*s\s*p\s*o\s*s\s*i\s*[çc]\s*[ãa]\s*o\s+T\s*r\s*a\s*n\s*s\s*i\s*t\s*[óo]\s*r\s*i\s*a\b/gi,
+    ];
+    
+    // Log last 3000 chars for debugging
+    console.log(`Last 3000 chars of PDF text:\n${fullText.slice(-3000)}`);
+    
+    let match: RegExpExecArray | null = null;
+    let matchedPattern = -1;
+    
+    for (let i = 0; i < dispTransPatterns.length; i++) {
+      const pattern = dispTransPatterns[i];
+      match = pattern.exec(fullText);
+      if (match) {
+        matchedPattern = i;
+        console.log(`Matched pattern ${i}: "${match[0]}" at position ${match.index}`);
+        break;
+      }
+    }
+    
+    if (match) {
+      const startIdx = match.index;
+      console.log(`Found Disposição Transitória at position ${startIdx}`);
+      
+      // Find the end - typically ends at next major section or end of document
+      // Look for common endings like "Palácio", signature blocks, or end of text
+      const afterSection = fullText.slice(startIdx);
+      
+      // Find "Artigo único" or similar within the transitional provision
+      const artigoUnicoPattern = /\bArtigo\s+[úu]nico\s*[-–—.]?\s*/i;
+      const artigoMatch = artigoUnicoPattern.exec(afterSection);
+      
+      let sectionText = "";
+      
+      if (artigoMatch) {
+        // Extract from "Artigo único" to the end or next section
+        const artigoStart = artigoMatch.index;
+        const remainder = afterSection.slice(artigoStart);
+        
+        // Find end markers: "Palácio", signature lines, dates at end
+        const endMarkers = [
+          /\nPal[áa]cio\s+/i,
+          /\n[A-Z][a-z]+,\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}/,
+          /\n\s*[A-Z]{2,}[\s\S]{0,50}(?:Governador|Secret[áa]rio)/i,
+        ];
+        
+        let endIdx = remainder.length;
+        for (const marker of endMarkers) {
+          const endMatch = marker.exec(remainder);
+          if (endMatch && endMatch.index < endIdx) {
+            endIdx = endMatch.index;
+          }
+        }
+        
+        sectionText = normalizePdfText(remainder.slice(0, endIdx));
+        
+        // Prepend the section header for context
+        sectionText = "Disposição Transitória\n\n" + sectionText;
+      } else {
+        // No "Artigo único" found, extract the whole section
+        const endMarkers = [
+          /\nPal[áa]cio\s+/i,
+          /\n[A-Z][a-z]+,\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}/,
+        ];
+        
+        let endIdx = afterSection.length;
+        for (const marker of endMarkers) {
+          const endMatch = marker.exec(afterSection);
+          if (endMatch && endMatch.index > 50 && endMatch.index < endIdx) {
+            endIdx = endMatch.index;
+          }
+        }
+        
+        sectionText = normalizePdfText(afterSection.slice(0, endIdx));
+      }
+      
+      if (sectionText && sectionText.length > 20) {
+        results.push({
+          document_id: documentId,
+          anchor: "disp.trans.unico",
+          nivel: "artigo",
+          texto: sectionText,
+        });
+        console.log(`Extracted Disposição Transitória: ${sectionText.length} chars`);
+      }
+    } else {
+      console.log("Disposição Transitória pattern not found in PDF");
+      
+      // Try to find "Artigo único" directly as fallback
+      const artigoUnicoFallback = /\bArtigo\s+[úu]nico\s*[-–—.]?\s*/gi;
+      const fallbackMatch = artigoUnicoFallback.exec(fullText);
+      
+      if (fallbackMatch) {
+        console.log(`Found "Artigo único" at position ${fallbackMatch.index}`);
+        const startIdx = fallbackMatch.index;
+        const remainder = fullText.slice(startIdx);
+        
+        // Find end markers
+        const endMarkers = [
+          /\nPal[áa]cio\s+/i,
+          /\n[A-Z][a-z]+,\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}/,
+        ];
+        
+        let endIdx = remainder.length;
+        for (const marker of endMarkers) {
+          const endMatch = marker.exec(remainder);
+          if (endMatch && endMatch.index > 50 && endMatch.index < endIdx) {
+            endIdx = endMatch.index;
+          }
+        }
+        
+        const sectionText = normalizePdfText(remainder.slice(0, endIdx));
+        
+        if (sectionText && sectionText.length > 20) {
+          results.push({
+            document_id: documentId,
+            anchor: "disp.trans.unico",
+            nivel: "artigo",
+            texto: "Disposição Transitória\n\n" + sectionText,
+          });
+          console.log(`Extracted via "Artigo único" fallback: ${sectionText.length} chars`);
+        }
+      }
+    }
+  }
+  
+  return results;
+}
+
 async function extractArticlesFromPdf(
   pdfBytes: Uint8Array,
-  targetArticles: number[]
+  targetArticles: number[],
+  targetAnchors: string[] = []
 ): Promise<Map<number, string>> {
-  console.log(`Extracting articles: ${targetArticles.join(", ")}`);
+  console.log(`Extracting articles: ${targetArticles.join(", ")} and anchors: ${targetAnchors.join(", ")}`);
   
   const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
   const pages = Math.min(doc.numPages || 0, 2500);
@@ -164,16 +323,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { norma_id, missing_articles } = await req.json();
+    const { norma_id, missing_articles, missing_anchors } = await req.json();
     
-    if (!norma_id || !Array.isArray(missing_articles) || missing_articles.length === 0) {
+    const hasArticles = Array.isArray(missing_articles) && missing_articles.length > 0;
+    const hasAnchors = Array.isArray(missing_anchors) && missing_anchors.length > 0;
+    
+    if (!norma_id || (!hasArticles && !hasAnchors)) {
       return new Response(
-        JSON.stringify({ error: "norma_id and missing_articles[] required" }),
+        JSON.stringify({ error: "norma_id and (missing_articles[] or missing_anchors[]) required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Re-extracting articles for norma ${norma_id}: ${missing_articles.join(", ")}`);
+    const articlesList = missing_articles || [];
+    const anchorsList: string[] = missing_anchors || [];
+    
+    console.log(`Re-extracting for norma ${norma_id}: articles=${articlesList.join(", ")}, anchors=${anchorsList.join(", ")}`);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -217,15 +382,30 @@ Deno.serve(async (req) => {
     const pdfBytes = new Uint8Array(await pdfData.arrayBuffer());
     console.log(`Downloaded PDF: ${pdfBytes.length} bytes`);
 
-    // Extract missing articles
-    const extracted = await extractArticlesFromPdf(pdfBytes, missing_articles);
+    // Extract full text for special sections
+    const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
+    const pages = Math.min(doc.numPages || 0, 2500);
+    const parts: string[] = [];
+    for (let pageNum = 1; pageNum <= pages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      parts.push(textContentToText(textContent));
+    }
+    const fullText = "\n" + normalizePdfText(parts.join("\n\n")) + "\n";
     
-    if (extracted.size === 0) {
+    // Extract numbered articles
+    const extracted = await extractArticlesFromPdf(pdfBytes, articlesList, anchorsList);
+    
+    // Extract special sections (like Disposição Transitória)
+    const specialSections = extractSpecialSections(fullText, norma_id, anchorsList);
+    
+    if (extracted.size === 0 && specialSections.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
           message: "No articles could be extracted from PDF",
-          requested: missing_articles,
+          requested_articles: articlesList,
+          requested_anchors: anchorsList,
           found: []
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -252,6 +432,9 @@ Deno.serve(async (req) => {
         texto,
       });
     }
+    
+    // Add special sections
+    newDispositivos.push(...specialSections);
 
     // Merge: add new, avoid duplicates
     const existingAnchors = new Set(existingDispositivos.map(d => d.anchor));
@@ -283,16 +466,23 @@ Deno.serve(async (req) => {
     }
 
     const foundArticles = Array.from(extracted.keys()).sort((a, b) => a - b);
-    const stillMissing = missing_articles.filter(n => !extracted.has(n));
+    const stillMissing = articlesList.filter((n: number) => !extracted.has(n));
+    const foundAnchors = specialSections.map(s => s.anchor);
+    const stillMissingAnchors = anchorsList.filter((a: string) => !foundAnchors.includes(a));
 
-    console.log(`Successfully extracted ${foundArticles.length} articles, still missing: ${stillMissing.join(", ") || "none"}`);
+    console.log(`Successfully extracted ${foundArticles.length} articles + ${specialSections.length} special sections`);
+    console.log(`Still missing articles: ${stillMissing.join(", ") || "none"}`);
+    console.log(`Still missing anchors: ${stillMissingAnchors.join(", ") || "none"}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        requested: missing_articles,
+        requested_articles: articlesList,
+        requested_anchors: anchorsList,
         found: foundArticles,
+        found_anchors: foundAnchors,
         still_missing: stillMissing,
+        still_missing_anchors: stillMissingAnchors,
         total_dispositivos: mergedDispositivos.length,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

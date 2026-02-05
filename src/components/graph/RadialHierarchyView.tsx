@@ -1977,19 +1977,18 @@ export const RadialHierarchyView = ({
 
       {/* Artigo Detail Dialog */}
       <Dialog open={!!selectedArtigo} onOpenChange={(open) => !open && setSelectedArtigo(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
           {selectedArtigo && (
             <>
-              <DialogHeader>
+              <DialogHeader className="p-6 pb-4 flex-shrink-0">
                 <DialogTitle className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500" />
                   {selectedArtigo.artigo.anchor}
                 </DialogTitle>
               </DialogHeader>
               
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <ScrollArea className="h-full" type="always">
-                  <div className="py-2 pr-4">
+              <ScrollArea className="flex-1 overflow-auto" type="always">
+                <div className="px-6 pb-6 pr-4">
                     {/* Render formatted article text */}
                     {(() => {
                     // Combine artigo text with children texts
@@ -2090,9 +2089,8 @@ export const RadialHierarchyView = ({
                       </div>
                     );
                   })()}
-                  </div>
-                </ScrollArea>
-              </div>
+                </div>
+              </ScrollArea>
             </>
           )}
         </DialogContent>

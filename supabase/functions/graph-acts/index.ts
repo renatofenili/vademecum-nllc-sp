@@ -219,7 +219,14 @@ Deno.serve(async (req) => {
     // Add virtual root nodes for CF/88 and Lei 14.133
     const virtualNodes: ActNode[] = [];
     
+    // Check if Lei 14.133 already exists in database nodes
+    const lei14133Exists = nodes.some((n) => 
+      normalizeNumero(n.numero).includes("141332021") || 
+      n.numero.includes("14.133")
+    );
+    
     if (root === "cf88") {
+      // Add CF/88 as root (ring 0)
       virtualNodes.push({
         id: "cf88",
         tipo: "constituicao",
@@ -229,6 +236,20 @@ Deno.serve(async (req) => {
         data_publicacao: "1988-10-05",
         status: "vigente",
       });
+      
+      // CRITICAL: When CF/88 is root, also include Lei 14.133 as intermediate layer (ring 1)
+      // This ensures Decretos (ring 2) have a Law to connect to, never directly to CF/88
+      if (!lei14133Exists) {
+        virtualNodes.push({
+          id: "lei14133",
+          tipo: "lei_federal",
+          numero: "14.133/2021",
+          ementa: "Lei de Licitações e Contratos Administrativos",
+          orgao_emissor: "Governo Federal",
+          data_publicacao: "2021-04-01",
+          status: "vigente",
+        });
+      }
     } else if (root === "lei14133") {
       virtualNodes.push({
         id: "lei14133",

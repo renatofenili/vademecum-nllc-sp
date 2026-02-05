@@ -687,7 +687,7 @@ export const RadialHierarchyView = ({
     // regulatoryTargets already built above for node positioning
     
     // 1. Hierarchy links - STRICT rule: Decretos (ring 2) NEVER connect to CF/88 (ring 0)
-    // Decretos must connect to Laws (ring 1), not directly to Constitution
+    // Only Laws (ring 1) can connect directly to CF/88 (ring 0)
     result.forEach((node) => {
       if (node.ring === 0) return;
       
@@ -695,20 +695,41 @@ export const RadialHierarchyView = ({
       const parentRing = node.ring - 1;
       let parentsInRing = result.filter((n) => n.ring === parentRing);
       
-      // CRITICAL: For Decretos (ring 2), ensure parent is in ring 1 (Laws), never ring 0 (CF/88)
-      // If ring 1 is the previous ring, that's correct. If somehow parents end up being CF, skip.
+      // CRITICAL HIERARCHY RULES:
+      // - Ring 1 (Laws) can connect to Ring 0 (CF/88)
+      // - Ring 2 (Decretos) can ONLY connect to Ring 1 (Laws), NEVER to Ring 0
+      // - Ring 3+ can connect to previous ring
+      
       if (node.ring === 2) {
-        // Filter out any CF/88 nodes - Decretos can ONLY connect to Laws
+        // Decretos: MUST connect to Laws (ring 1), NEVER to CF/88 (ring 0)
+        // Double-check: only use ring 1 parents
         parentsInRing = parentsInRing.filter((p) => p.ring === 1);
         
-        // If no Laws available as parents, look for all Laws in ring 1
+        // If no Laws in ring 1, search for all Laws
         if (parentsInRing.length === 0) {
           parentsInRing = result.filter((n) => n.ring === 1);
+        }
+        
+        // If STILL no Laws available, skip creating a link (don't connect to CF)
+        if (parentsInRing.length === 0) {
+          console.warn(`No Laws found for Decreto ${node.label} - skipping hierarchy link`);
+          return; // Skip this node - no link is better than wrong link to CF
+        }
+      } else if (node.ring === 1) {
+        // Laws: Connect to CF/88 (ring 0)
+        parentsInRing = result.filter((n) => n.ring === 0);
+      }
+      
+      // FINAL SAFETY CHECK: Never allow ring 2+ nodes to connect to ring 0
+      if (node.ring >= 2) {
+        parentsInRing = parentsInRing.filter((p) => p.ring !== 0);
+        if (parentsInRing.length === 0) {
+          return; // Skip - no valid parent
         }
       }
       
       if (parentsInRing.length > 0) {
-        // First, check if this node has a regulatory relationship with any parent in the previous ring
+        // First, check if this node has a regulatory relationship with any parent
         const regulatedTargets = regulatoryTargets.get(node.id) || [];
         const regulatedParent = parentsInRing.find((p) => regulatedTargets.includes(p.id));
         

@@ -57,7 +57,28 @@ const MapasTab = () => {
           status: "vigente",
         };
 
-        const nodes = [cfNode, ...((normas as any[]) || [])] as ActsGraphData["nodes"];
+        // Check if Lei 14.133 exists in the database
+        const lei14133Exists = (normas || []).some(
+          (n: any) => n.numero?.includes("14.133") || n.numero?.includes("14133")
+        );
+
+        // Create virtual Lei 14.133 node if it doesn't exist
+        // CRITICAL: This ensures Decretos have a Law to connect to, never directly to CF
+        const lei14133Node: ActsGraphData["nodes"][number] = {
+          id: "lei14133",
+          tipo: "lei_federal",
+          numero: "14.133/2021",
+          ementa: "Lei de Licitações e Contratos Administrativos",
+          orgao_emissor: "Governo Federal",
+          data_publicacao: "2021-04-01",
+          status: "vigente",
+        };
+
+        const baseNodes = lei14133Exists 
+          ? [cfNode, ...((normas as any[]) || [])]
+          : [cfNode, lei14133Node, ...((normas as any[]) || [])];
+
+        const nodes = baseNodes as ActsGraphData["nodes"];
 
         setActsData({
           root: "cf88",

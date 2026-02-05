@@ -1295,7 +1295,7 @@ export const RadialHierarchyView = ({
               })}
 
               {/* Article-level connection links (from regulating norms to specific articles) */}
-              {/* Show lines from Decreto 68.304 -> arts. 74/75 and Decreto 68.422 -> art. 31 when Regulamenta is enabled */}
+              {/* Show lines from Decreto 68.304 -> arts. 74/75, Decreto 68.422 -> art. 31, and Decreto 68.220 -> art. 8 when Regulamenta is enabled */}
               {showRegulamentaLinks && articleLinks
                 .filter((link) => {
                   if (link.toActId !== lei14133ActId) return false;
@@ -1309,6 +1309,11 @@ export const RadialHierarchyView = ({
                   // Decreto 68.422 -> Lei 14.133 art. 31
                   if (link.fromNodeId === decreto68422ActId) {
                     return normAnchor === "art.31" || normAnchor === "art31";
+                  }
+                  
+                  // Decreto 68.220 -> Lei 14.133 art. 8
+                  if (link.fromNodeId === decreto68220ActId) {
+                    return normAnchor === "art.8" || normAnchor === "art8";
                   }
                   
                   return false;

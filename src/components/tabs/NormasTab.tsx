@@ -87,44 +87,46 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
   const applyFormalFormatting = (text: string): string => {
     let formatted = text;
     
-    // 0. FIRST: Normalize unwanted line breaks from PDF extraction
+    // 0. Preserve intentional double newlines (already formatted text)
+    const PLACEHOLDER = '<<<DOUBLE_NEWLINE>>>';
+    formatted = formatted.replace(/\n\n/g, PLACEHOLDER);
+    
+    // 1. Normalize unwanted single line breaks from PDF extraction
     // Replace single newlines (not followed by structural markers) with space
-    // This fixes cases like "personalidade jurídica de\n\ndireito privado"
     formatted = formatted.replace(
-      /\n+(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
+      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
       ' '
     );
     
-    // Clean up multiple spaces
-    formatted = formatted.replace(/\s{2,}/g, ' ');
+    // Restore intentional double newlines
+    formatted = formatted.replace(new RegExp(PLACEHOLDER, 'g'), '\n\n');
     
-    // 1. "Art." starts new line ONLY when it looks like a new article heading
+    // Clean up multiple spaces (but not newlines)
+    formatted = formatted.replace(/ {2,}/g, ' ');
+    
+    // 2. "Art." starts new line ONLY when it looks like a new article heading
     // (avoid references like "no art. 52 desta Lei").
-    // Heuristic: comes after punctuation and (after the number) the next word starts uppercase.
     formatted = formatted.replace(
       /([.;:])\s+(Art\.?\s*\d{1,4}\s*(?:º|°|o|\.)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g,
       "$1\n\n$2",
     );
     
-    // 2. Roman numeral incisos start new line only when they start a new item
-    // (avoid references like "inciso II do art. ...").
+    // 3. Roman numeral incisos start new line only when they start a new item
     formatted = formatted.replace(
       /([.;:])\s+((?:X{1,3}|X{0,2}(?:IX|IV|V?I{1,3})|V)\s*[-–—]\s)/g,
       "$1\n\n$2",
     );
     
-    // 3. Paragraph markers "§" start new line only when they start a new paragraph
-    // (avoid references like "o § 3º deste artigo").
+    // 4. Paragraph markers "§" start new line only when they start a new paragraph
     formatted = formatted.replace(
       /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
       "$1\n\n$2",
     );
     
-    // 4. Alíneas "a)", "b)", etc. start new line only when they start a new item
-    // (avoid references like "alínea a) do inciso ...").
+    // 5. Alíneas "a)", "b)", etc. start new line only when they start a new item
     formatted = formatted.replace(/([.;:])\s+([a-z]\))(?=\s)/gi, "$1\n\n$2");
     
-    // Clean up multiple consecutive newlines
+    // Clean up more than 2 consecutive newlines
     formatted = formatted.replace(/\n{3,}/g, '\n\n');
     
     return formatted.trim();

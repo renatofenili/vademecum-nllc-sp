@@ -154,6 +154,7 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
               ementa: "text-foreground font-medium italic",
               preambulo: "text-foreground",
               artigo: "text-foreground",
+              secao: "text-foreground font-semibold text-center mt-6 mb-2",
               paragrafo: "text-foreground ml-4",
               inciso: "text-foreground ml-8",
               alinea: "text-foreground ml-12",

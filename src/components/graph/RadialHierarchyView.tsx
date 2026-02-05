@@ -686,13 +686,26 @@ export const RadialHierarchyView = ({
     
     // regulatoryTargets already built above for node positioning
     
-    // 1. Hierarchy links - prefer actual regulatory relationships over angle proximity
+    // 1. Hierarchy links - STRICT rule: Decretos (ring 2) NEVER connect to CF/88 (ring 0)
+    // Decretos must connect to Laws (ring 1), not directly to Constitution
     result.forEach((node) => {
       if (node.ring === 0) return;
       
       // Find parent in previous ring
       const parentRing = node.ring - 1;
-      const parentsInRing = result.filter((n) => n.ring === parentRing);
+      let parentsInRing = result.filter((n) => n.ring === parentRing);
+      
+      // CRITICAL: For Decretos (ring 2), ensure parent is in ring 1 (Laws), never ring 0 (CF/88)
+      // If ring 1 is the previous ring, that's correct. If somehow parents end up being CF, skip.
+      if (node.ring === 2) {
+        // Filter out any CF/88 nodes - Decretos can ONLY connect to Laws
+        parentsInRing = parentsInRing.filter((p) => p.ring === 1);
+        
+        // If no Laws available as parents, look for all Laws in ring 1
+        if (parentsInRing.length === 0) {
+          parentsInRing = result.filter((n) => n.ring === 1);
+        }
+      }
       
       if (parentsInRing.length > 0) {
         // First, check if this node has a regulatory relationship with any parent in the previous ring

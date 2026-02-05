@@ -89,14 +89,15 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     
     // === OCR/PDF extraction error corrections ===
     
-    // Fix "||" -> "II", "|||" -> "III", etc. when they look like roman numeral incisos
+    // Fix "||" -> "II -", "|||" -> "III -", etc. when they look like roman numeral incisos
     // (at start of line, after punctuation, or after whitespace)
+    // Also ensures the dash separator is present
     formatted = formatted.replace(
-      /(^|[.;:\s])\|(\|{0,6})(?=\s*[-–—]?\s*[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/gm,
+      /(^|[.;:\s])\|(\|{0,6})\s*[-–—]?\s*(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/gm,
       (match, prefix, pipes) => {
         const romanMap: Record<number, string> = { 1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII" };
         const numPipes = pipes.length + 1; // +1 for the first pipe captured separately
-        return prefix + (romanMap[numPipes] || "I".repeat(numPipes));
+        return prefix + (romanMap[numPipes] || "I".repeat(numPipes)) + " - ";
       }
     );
     

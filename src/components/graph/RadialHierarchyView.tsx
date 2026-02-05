@@ -1677,7 +1677,7 @@ export const RadialHierarchyView = ({
                           </div>
                         </div>
                         
-                        <ScrollArea className="max-h-[300px]">
+                        <ScrollArea className="h-[300px]" type="always">
                           <div className="space-y-1 pr-3">
                             {artigoGroups.map((group, groupIdx) => (
                               <Collapsible key={groupIdx} defaultOpen={groupIdx === 0}>

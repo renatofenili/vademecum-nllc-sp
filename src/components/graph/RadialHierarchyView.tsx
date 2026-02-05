@@ -561,18 +561,46 @@ export const RadialHierarchyView = ({
       const usedAngles: number[] = [];
       const minAngleSeparation = (2 * Math.PI) / Math.max(count, 8); // Minimum separation
 
+      // Helpers: keep clusters near preferred angles (avoid long chords crossing the center)
+      const normalizeAngle = (a: number) => {
+        const twoPi = 2 * Math.PI;
+        let angle = a % twoPi;
+        if (angle < -Math.PI) angle += twoPi;
+        if (angle > Math.PI) angle -= twoPi;
+        return angle;
+      };
+
+      const angularDistance = (a: number, b: number) => {
+        return Math.abs(normalizeAngle(a - b));
+      };
+
+      const isAngleUsed = (angle: number) =>
+        usedAngles.some((ua) => angularDistance(ua, angle) < minAngleSeparation);
+
+      const findClosestAvailableAngle = (preferred: number) => {
+        const base = normalizeAngle(preferred);
+        if (!isAngleUsed(base)) return base;
+
+        // Search symmetrically around the preferred angle to keep related nodes
+        // near their target (prevents lines that visually look like CF links).
+        for (let step = 1; step < 128; step++) {
+          const delta = step * minAngleSeparation;
+          const candidates = [normalizeAngle(base + delta), normalizeAngle(base - delta)];
+          const free = candidates.find((c) => !isAngleUsed(c));
+          if (free !== undefined) return free;
+        }
+
+        return base;
+      };
+
       // First, assign angles to nodes with preferred positions
       withPreferred.forEach(({ act, preferredAngle }) => {
-        let angle = preferredAngle!;
-        // Adjust if too close to an already used angle
-        while (usedAngles.some((ua) => Math.abs(ua - angle) < minAngleSeparation)) {
-          angle += minAngleSeparation * 0.5;
-        }
+        const angle = findClosestAvailableAngle(preferredAngle!);
         usedAngles.push(angle);
-        
+
         const x = cx + radius * Math.cos(angle);
         const y = cy + radius * Math.sin(angle);
-        
+
         nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
         result.push({
           id: act.id,

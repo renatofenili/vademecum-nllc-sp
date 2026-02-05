@@ -63,7 +63,7 @@ export const DispositivosGraph = ({ data, isLoading, onBack }: DispositivosGraph
             {formatTipo(data.act_info.tipo)} {data.act_info.numero}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {data.nodes.length} dispositivos • {data.edges.length} remissões
+            {data.nodes.filter(n => n.nivel === 'artigo' || n.anchor.startsWith('disp.')).length} artigos • {data.edges.length} remissões
           </p>
         </div>
       </div>

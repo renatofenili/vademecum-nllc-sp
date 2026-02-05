@@ -77,6 +77,7 @@ const temaOptions = [
   'Análise jurídica',
   'Assinatura de contrato / ata de registro de preços',
   'Aviso de contratação direta',
+  'Controle',
   'Contrato de eficiência',
   'Contratações sustentáveis',
   'Credenciamento',
@@ -100,6 +101,7 @@ const temaOptions = [
   'Sanções',
   'Seleção do fornecedor',
   'TR / Projeto Básico',
+  'Transparência',
 ];
 
 const intensidadeOptions: { value: Intensidade; label: string }[] = [

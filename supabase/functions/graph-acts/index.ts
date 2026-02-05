@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+// Graph-acts edge function - builds normative hierarchy graph
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {

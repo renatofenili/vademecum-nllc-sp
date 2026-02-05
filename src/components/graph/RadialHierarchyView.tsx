@@ -1987,8 +1987,8 @@ export const RadialHierarchyView = ({
                 </DialogTitle>
               </DialogHeader>
               
-              <ScrollArea className="flex-1 -mx-6 px-6">
-                <div className="py-2">
+              <ScrollArea className="flex-1 min-h-0 -mx-6 px-6" type="always">
+                <div className="py-2 pr-4">
                   {/* Render formatted article text */}
                   {(() => {
                     // Combine artigo text with children texts
@@ -2001,6 +2001,23 @@ export const RadialHierarchyView = ({
                     const applyFormatting = (text: string): string => {
                       let formatted = text;
                       
+                      // === OCR/PDF extraction error corrections ===
+                      
+                      // Fix "||" -> "II -", "|||" -> "III -", etc.
+                      formatted = formatted.replace(
+                        /(^|[.;:\s])\|(\|{0,6})\s*[-–—]?\s*(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/gm,
+                        (match, prefix, pipes) => {
+                          const romanMap: Record<number, string> = { 1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII" };
+                          const numPipes = pipes.length + 1;
+                          return prefix + (romanMap[numPipes] || "I".repeat(numPipes)) + " - ";
+                        }
+                      );
+                      
+                      // Fix "0" (zero) -> "o" (article) when followed by a capitalized word
+                      formatted = formatted.replace(/\s0\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g, " o $1");
+                      
+                      // === Formatting rules ===
+                      
                       // Normalize line breaks that don't start new dispositivos
                       formatted = formatted.replace(
                         /\n+(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*[-–—]|[a-z]\)|\d+\s*[-–—]))/gi,
@@ -2010,8 +2027,8 @@ export const RadialHierarchyView = ({
                       
                       // Roman numeral incisos (I –, II –, etc.)
                       formatted = formatted.replace(
-                        /([.;:])\s+([IVXLCDM]+)\s*[-–—]\s*/g,
-                        '$1\n\n$2 – '
+                        /([.;:])\s*([IVXLCDM]+)\s*[-–—]?\s*(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/g,
+                        '$1\n\n$2 - '
                       );
                       
                       // Letter alíneas (a), b), etc.)
@@ -2022,13 +2039,22 @@ export const RadialHierarchyView = ({
                       
                       // Paragraphs (§)
                       formatted = formatted.replace(
-                        /\s+(§\s*\d+[º°]?\.?)/g,
-                        '\n\n$1'
+                        /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*(?:[-–—]\s*)?[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
+                        '$1\n\n$2'
                       );
                       formatted = formatted.replace(
-                        /\s+(§\s*[Úú]nico\.?)/gi,
-                        '\n\n$1'
+                        /([a-záàâãéêíóôõúç0-9])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*[-–—]\s*[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
+                        '$1\n\n$2'
                       );
+                      
+                      // Numbered items "1.", "2.", etc.
+                      formatted = formatted.replace(
+                        /([.;:])\s*(\d{1,2})\.\s+(?=[a-záàâãéêíóôõúç])/gi,
+                        "$1\n\n$2. "
+                      );
+                      
+                      // Clean up more than 2 consecutive newlines
+                      formatted = formatted.replace(/\n{3,}/g, '\n\n');
                       
                       return formatted.trim();
                     };
@@ -2046,8 +2072,9 @@ export const RadialHierarchyView = ({
                           const isAlinea = /^[a-z]\)/.test(trimmed);
                           const isInciso = /^[IVXLCDM]+\s*[-–—]/.test(trimmed);
                           const isParagrafo = /^§/.test(trimmed);
+                          const isNumberedItem = /^\d{1,2}\./.test(trimmed);
                           
-                          const indentClass = isAlinea ? "ml-8" : isInciso ? "ml-4" : isParagrafo ? "ml-2" : "";
+                          const indentClass = isAlinea ? "ml-8" : (isInciso || isNumberedItem) ? "ml-4" : isParagrafo ? "ml-2" : "";
                           
                           return (
                             <p

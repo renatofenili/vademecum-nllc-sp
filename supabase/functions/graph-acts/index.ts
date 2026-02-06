@@ -252,6 +252,7 @@ Deno.serve(async (req) => {
     "67.985": ["art.20"],  // Decreto 67.985/2023 -> art. 20 da Lei 14.133
     "67.888": ["art.23"],  // Decreto 67.888/2023 -> art. 23 da Lei 14.133
     "67.689": ["art.12"],  // Decreto 67.689/2023 -> art. 12 da Lei 14.133
+    "68.017": ["art.18"],  // Decreto 68.017/2023 -> art. 18 da Lei 14.133
     "68.220": ["art.8"],   // Decreto 68.220/2023 -> art. 8 da Lei 14.133
     "68.304": ["art.74", "art.75"], // Decreto 68.304/2024 -> arts. 74 e 75
     "68.422": ["art.31"],  // Decreto 68.422/2024 -> art. 31

@@ -246,6 +246,18 @@ Deno.serve(async (req) => {
     }
   }
   
+  // Validated decree -> article mappings (explicit domain knowledge)
+  // These are manually validated regulatory relationships
+  const validatedDecreeArticles: Record<string, string[]> = {
+    "67.985": ["art.20"],  // Decreto 67.985/2023 -> art. 20 da Lei 14.133
+    "67.888": ["art.23"],  // Decreto 67.888/2023 -> art. 23 da Lei 14.133
+    "67.689": ["art.12"],  // Decreto 67.689/2023 -> art. 12 da Lei 14.133
+    "68.220": ["art.8"],   // Decreto 68.220/2023 -> art. 8 da Lei 14.133
+    "68.304": ["art.74", "art.75"], // Decreto 68.304/2024 -> arts. 74 e 75
+    "68.422": ["art.31"],  // Decreto 68.422/2024 -> art. 31
+    "69.233": ["art.174"], // Decreto 69.233/2024 -> art. 174
+  };
+  
   // Force connection for ALL decretos without an existing edge to Lei 14.133
   for (const norma of (normas || [])) {
     if (norma.tipo !== "decreto") continue;
@@ -253,17 +265,40 @@ Deno.serve(async (req) => {
     const hasEdgeToLei14133 = decretosWithLei14133Edge.has(norma.id);
     
     if (!hasEdgeToLei14133) {
-      console.log(`Forcing structural edge: Decreto ${norma.numero} -> Lei 14.133/2021 (domain rule)`);
-      edges.push({
-        from_act: norma.id,
-        to_act: lei14133Id || "lei14133",
-        relation_type: "regulates",
-        evidences: [{
-          from_anchor: "",
-          to_anchor: "",
-          excerpt: "[Conexão estrutural obrigatória - Lei de Licitações]",
-        }],
-      });
+      // Check if this decreto has validated article mappings
+      const numeroKey = Object.keys(validatedDecreeArticles).find(key => 
+        norma.numero?.includes(key)
+      );
+      
+      const articles = numeroKey ? validatedDecreeArticles[numeroKey] : null;
+      
+      if (articles && articles.length > 0) {
+        // Create edges with specific article anchors
+        console.log(`Adding validated article edges: Decreto ${norma.numero} -> Lei 14.133 [${articles.join(", ")}]`);
+        edges.push({
+          from_act: norma.id,
+          to_act: lei14133Id || "lei14133",
+          relation_type: "regulates",
+          evidences: articles.map(art => ({
+            from_anchor: "ementa",
+            to_anchor: art,
+            excerpt: `Regulamenta o ${art} da Lei federal nº 14.133, de 1º de abril de 2021`,
+          })),
+        });
+      } else {
+        // Fallback: generic structural connection
+        console.log(`Forcing structural edge: Decreto ${norma.numero} -> Lei 14.133/2021 (domain rule)`);
+        edges.push({
+          from_act: norma.id,
+          to_act: lei14133Id || "lei14133",
+          relation_type: "regulates",
+          evidences: [{
+            from_anchor: "",
+            to_anchor: "",
+            excerpt: "[Conexão estrutural obrigatória - Lei de Licitações]",
+          }],
+        });
+      }
     }
   }
 

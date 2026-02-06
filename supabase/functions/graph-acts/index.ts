@@ -188,34 +188,84 @@ Deno.serve(async (req) => {
       }
 
       // Create edges for each target document
-      for (const [toDocId, evidences] of targetDocs) {
-        // Infer relation type based on norm types
-        const fromNorma = norma;
-        const toNorma = normaMap.get(toDocId);
-        
-        let relationType: ActEdge["relation_type"] = "refers_to";
-        
-        if (toNorma) {
-          // Simple heuristics for relation type
-          if (fromNorma.tipo === "decreto" && toNorma.tipo === "lei") {
-            relationType = "regulates";
-          } else if (fromNorma.tipo === "portaria" && (toNorma.tipo === "decreto" || toNorma.tipo === "lei")) {
-            relationType = "implements";
-          } else if (fromNorma.tipo === "resolucao" && toNorma.tipo === "lei") {
-            relationType = "regulates";
-          } else if (fromNorma.tipo === "instrucao_normativa" && toNorma.tipo === "lei") {
-            relationType = "regulates";
-          }
-        }
-
-        edges.push({
-          from_act: norma.id,
-          to_act: toDocId,
-          relation_type: relationType,
-          evidences: evidences, // Keep all evidences for article connections
-        });
+    for (const [toDocId, evidences] of targetDocs) {
+      // Infer relation type based on norm types
+      const fromNorma = norma;
+      const toNorma = normaMap.get(toDocId);
+      
+      // DOMAIN RULE: Block DECRETO -> CF edges (structural rule)
+      // Decrees cannot connect directly to CF/88, only textual references allowed
+      if (fromNorma.tipo === "decreto" && (toDocId === "cf88" || toNorma?.tipo === "constituicao")) {
+        console.log(`Blocked structural edge: Decreto ${fromNorma.numero} -> CF/88 (domain rule)`);
+        continue; // Skip this edge entirely
       }
+      
+      let relationType: ActEdge["relation_type"] = "refers_to";
+      
+      if (toNorma) {
+        // Simple heuristics for relation type
+        if (fromNorma.tipo === "decreto" && (toNorma.tipo === "lei" || toNorma.tipo === "lei_federal" || toNorma.tipo === "lei_estadual")) {
+          relationType = "regulates";
+        } else if (fromNorma.tipo === "portaria" && (toNorma.tipo === "decreto" || toNorma.tipo === "lei" || toNorma.tipo === "lei_federal")) {
+          relationType = "implements";
+        } else if (fromNorma.tipo === "resolucao" && (toNorma.tipo === "lei" || toNorma.tipo === "lei_federal")) {
+          relationType = "regulates";
+        } else if (fromNorma.tipo === "instrucao_normativa" && (toNorma.tipo === "lei" || toNorma.tipo === "lei_federal")) {
+          relationType = "regulates";
+        }
+      }
+
+      edges.push({
+        from_act: norma.id,
+        to_act: toDocId,
+        relation_type: relationType,
+        evidences: evidences, // Keep all evidences for article connections
+      });
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DOMAIN RULE: Force all DECRETOs to connect to Lei 14.133/2021
+  // This is a mandatory structural rule - every decreto MUST have this edge
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Find Lei 14.133 node ID (could be virtual "lei14133" or a real DB ID)
+  let lei14133Id: string | null = "lei14133"; // Default virtual ID
+  for (const [normalizedNum, n] of normaByNormalizedNumero) {
+    if (normalizedNum.includes("141332021") || n.numero?.includes("14.133")) {
+      lei14133Id = n.id;
+      break;
+    }
+  }
+  
+  // Track which decretos already have a connection to Lei 14.133
+  const decretosWithLei14133Edge = new Set<string>();
+  for (const edge of edges) {
+    if (edge.to_act === lei14133Id || edge.to_act === "lei14133") {
+      decretosWithLei14133Edge.add(edge.from_act);
+    }
+  }
+  
+  // Force connection for ALL decretos without an existing edge to Lei 14.133
+  for (const norma of (normas || [])) {
+    if (norma.tipo !== "decreto") continue;
+    
+    const hasEdgeToLei14133 = decretosWithLei14133Edge.has(norma.id);
+    
+    if (!hasEdgeToLei14133) {
+      console.log(`Forcing structural edge: Decreto ${norma.numero} -> Lei 14.133/2021 (domain rule)`);
+      edges.push({
+        from_act: norma.id,
+        to_act: lei14133Id || "lei14133",
+        relation_type: "regulates",
+        evidences: [{
+          from_anchor: "",
+          to_anchor: "",
+          excerpt: "[Conexão estrutural obrigatória - Lei de Licitações]",
+        }],
+      });
+    }
+  }
 
     // Add virtual root nodes for CF/88 and Lei 14.133
     const virtualNodes: ActNode[] = [];

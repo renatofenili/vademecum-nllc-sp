@@ -419,6 +419,77 @@ async function buildPdfFallbackDispositivos(
   }
 }
 
+/**
+ * Ensures that the extracted text starts with the proper identifier based on anchor.
+ * This fixes cases where AI omits the article number, inciso number, etc.
+ */
+function ensureDispositivoPrefix(anchor: string, nivel: string, texto: string): string {
+  const trimmedTexto = texto.trim();
+  const lowerNivel = (nivel || "").toLowerCase();
+  
+  // Parse anchor to extract components
+  // Examples: art.1, art.1§1, art.1.I, art.1.I.a, art.5§2
+  const artMatch = anchor.match(/^art\.(\d+)/i);
+  if (!artMatch) return trimmedTexto; // Not an article-based anchor
+  
+  const artNum = artMatch[1];
+  
+  // Check if it's just an article (no inciso, paragraph, or alinea suffix)
+  if (lowerNivel === "artigo" && /^art\.\d+$/i.test(anchor)) {
+    // Should start with "Artigo Xº" or "Art. X"
+    const startsWithArtigo = /^(Artigo|Art\.?)\s*\d+/i.test(trimmedTexto);
+    if (!startsWithArtigo) {
+      return `Artigo ${artNum}º - ${trimmedTexto}`;
+    }
+    return trimmedTexto;
+  }
+  
+  // Check for paragraph (§)
+  const paraMatch = anchor.match(/§(\d+|único)/i);
+  if (paraMatch && lowerNivel === "paragrafo") {
+    const paraNum = paraMatch[1];
+    const startsWithPara = /^§\s*\d+/i.test(trimmedTexto) || /^Parágrafo\s*(único|\d+)/i.test(trimmedTexto);
+    if (!startsWithPara) {
+      if (paraNum.toLowerCase() === "único") {
+        return `Parágrafo único - ${trimmedTexto}`;
+      }
+      return `§ ${paraNum}º - ${trimmedTexto}`;
+    }
+    return trimmedTexto;
+  }
+  
+  // Check for inciso (roman numeral)
+  const incisoMatch = anchor.match(/\.([IVXLCDM]+)(?:$|\.)/i);
+  if (incisoMatch && lowerNivel === "inciso") {
+    const incisoNum = incisoMatch[1].toUpperCase();
+    // Should start with roman numeral followed by space/dash
+    const startsWithRoman = new RegExp(`^${incisoNum}\\s*[-–—]?\\s*`, "i").test(trimmedTexto);
+    if (!startsWithRoman) {
+      return `${incisoNum} - ${trimmedTexto}`;
+    }
+    // Ensure there's a dash after the roman numeral if missing
+    const missingDash = new RegExp(`^${incisoNum}\\s+(?![-–—])`, "i").test(trimmedTexto);
+    if (missingDash) {
+      return trimmedTexto.replace(new RegExp(`^(${incisoNum})\\s+`, "i"), "$1 - ");
+    }
+    return trimmedTexto;
+  }
+  
+  // Check for alinea (lowercase letter)
+  const alineaMatch = anchor.match(/\.([a-z])$/i);
+  if (alineaMatch && lowerNivel === "alinea") {
+    const alineaLetter = alineaMatch[1].toLowerCase();
+    // Should start with "a)" or "a -"
+    const startsWithAlinea = new RegExp(`^${alineaLetter}\\s*[)\\-–—]`, "i").test(trimmedTexto);
+    if (!startsWithAlinea) {
+      return `${alineaLetter}) ${trimmedTexto}`;
+    }
+    return trimmedTexto;
+  }
+  
+  return trimmedTexto;
+}
+
 function dedupeByAnchor(
   existing: ExtractedArticle[],
   incoming: ToolArgs["dispositivos"],
@@ -435,11 +506,16 @@ function dedupeByAnchor(
     if (!anchor) continue;
     if (seen.has(anchor)) continue;
     seen.add(anchor);
+    
+    const nivel = (item?.nivel || "artigo") as ExtractedArticle["nivel"];
+    const rawTexto = String(item?.texto || "");
+    const fixedTexto = ensureDispositivoPrefix(anchor, nivel, rawTexto);
+    
     out.push({
       document_id: normaId,
       anchor,
-      nivel: (item?.nivel || "artigo") as ExtractedArticle["nivel"],
-      texto: String(item?.texto || ""),
+      nivel,
+      texto: fixedTexto,
     });
   }
   return out;

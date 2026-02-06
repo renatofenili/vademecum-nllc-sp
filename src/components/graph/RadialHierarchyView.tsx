@@ -384,6 +384,14 @@ export const RadialHierarchyView = ({
     return node?.id ?? null;
   }, [data?.nodes]);
 
+  const decreto68017ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("68017") && (num.includes("2023") || num.endsWith("23"));
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
   const ensureExpanded = useCallback(
     (actId: string) => {
       const expanded = expandedDispositivosMap.get(actId);
@@ -1159,12 +1167,62 @@ export const RadialHierarchyView = ({
         });
       }
     }
+    // Fallback (validated): Decreto 68.017 -> art.18 da Lei 14.133
+    if (lei14133ActId && decreto68017ActId) {
+      const fromNode = nodes.find((n) => n.id === decreto68017ActId);
+      const targetExpanded = expandedDispositivosMap.get(lei14133ActId);
+      if (fromNode && targetExpanded && !targetExpanded.isLoading && targetExpanded.artigoGroups.length) {
+        const anchors = ["art.18"];
+        anchors.forEach((a) => {
+          const key = `${lei14133ActId}:${a}`;
+          const normKey = `${lei14133ActId}:${normalizeAnchor(a)}`;
+          const pos = artigoPositions.get(key) || artigoPositions.get(normKey);
+
+          if (!pos) return;
+
+          const exists = linksToArticles.some(
+            (l) => l.fromNodeId === fromNode.id && l.toActId === lei14133ActId && normalizeAnchor(l.toAnchor) === normalizeAnchor(a)
+          );
+          if (exists) return;
+
+          linksToArticles.push({
+            fromNodeId: fromNode.id,
+            fromX: fromNode.x,
+            fromY: fromNode.y,
+            toAnchor: a,
+            toX: pos.x,
+            toY: pos.y,
+            toActId: lei14133ActId,
+          });
+        });
+      }
+    }
+
+    // DEBUG: Log regulamenta targets for debugging
+    console.log("[DEBUG] articleLinks built:", linksToArticles.length, "links");
+    linksToArticles.forEach((l) => {
+      console.log(`  - ${l.fromNodeId} -> ${l.toAnchor} (${l.toActId})`);
+    });
     
     return linksToArticles;
-  }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId]);
+  }, [data?.edges, nodes, expandedDispositivosMap, artigoPositions, lei14133ActId, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId]);
 
   // Map of highlighted article keys ("actId:normalizedAnchor") -> source color when Regulamenta is active
   // Highlight arts. 74, 75 from Decreto 68.304, art. 31 from Decreto 68.422, and art. 8 from Decreto 68.220 -> Lei 14.133
+  // Set of validated decree IDs for Regulamenta mode
+  const validatedDecretoIds = useMemo(() => {
+    return [
+      decreto68304ActId, 
+      decreto68422ActId, 
+      decreto68220ActId, 
+      decreto69233ActId, 
+      decreto67689ActId, 
+      decreto67888ActId, 
+      decreto67985ActId,
+      decreto68017ActId,
+    ].filter(Boolean) as string[];
+  }, [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId]);
+
   const highlightedArticlesMap = useMemo(() => {
     const map = new Map<string, string>();
     if (!showRegulamentaLinks) return map;
@@ -1207,6 +1265,11 @@ export const RadialHierarchyView = ({
         if (link.fromNodeId === decreto67985ActId) {
           return normAnchor === "art.20" || normAnchor === "art20";
         }
+
+        // Decreto 68.017 -> art. 18
+        if (link.fromNodeId === decreto68017ActId) {
+          return normAnchor === "art.18" || normAnchor === "art18";
+        }
         
         return false;
       })
@@ -1216,7 +1279,7 @@ export const RadialHierarchyView = ({
         map.set(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`, sourceColor);
       });
     return map;
-  }, [showRegulamentaLinks, articleLinks, nodes, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, lei14133ActId]);
+  }, [showRegulamentaLinks, articleLinks, nodes, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId, lei14133ActId]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);
@@ -1513,7 +1576,6 @@ export const RadialHierarchyView = ({
                 // These decrees will show their specific article connections instead
                 // In hierarchy links: fromId = parent (Lei 14.133), toId = child (Decreto)
                 if (showRegulamentaLinks && link.type === "hierarquia" && link.fromId === lei14133ActId) {
-                  const validatedDecretoIds = [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId].filter(Boolean);
                   if (validatedDecretoIds.includes(link.toId)) {
                     isVisible = false;
                   }
@@ -1582,6 +1644,11 @@ export const RadialHierarchyView = ({
                   // Decreto 67.985 -> Lei 14.133 art. 20
                   if (link.fromNodeId === decreto67985ActId) {
                     return normAnchor === "art.20" || normAnchor === "art20";
+                  }
+
+                  // Decreto 68.017 -> Lei 14.133 art. 18
+                  if (link.fromNodeId === decreto68017ActId) {
+                    return normAnchor === "art.18" || normAnchor === "art18";
                   }
                   
                   return false;

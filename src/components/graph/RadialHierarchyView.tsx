@@ -1513,7 +1513,7 @@ export const RadialHierarchyView = ({
                 // These decrees will show their specific article connections instead
                 // In hierarchy links: fromId = parent (Lei 14.133), toId = child (Decreto)
                 if (showRegulamentaLinks && link.type === "hierarquia" && link.fromId === lei14133ActId) {
-                  const validatedDecretoIds = [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId].filter(Boolean);
+                  const validatedDecretoIds = [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId].filter(Boolean);
                   if (validatedDecretoIds.includes(link.toId)) {
                     isVisible = false;
                   }
@@ -1577,6 +1577,11 @@ export const RadialHierarchyView = ({
                   // Decreto 67.888 -> Lei 14.133 art. 23
                   if (link.fromNodeId === decreto67888ActId) {
                     return normAnchor === "art.23" || normAnchor === "art23";
+                  }
+                  
+                  // Decreto 67.985 -> Lei 14.133 art. 20
+                  if (link.fromNodeId === decreto67985ActId) {
+                    return normAnchor === "art.20" || normAnchor === "art20";
                   }
                   
                   return false;

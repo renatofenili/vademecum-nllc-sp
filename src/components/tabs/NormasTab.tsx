@@ -90,8 +90,14 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     // === OCR/PDF extraction error corrections ===
     
     // Fix broken lines between "Art." and number (e.g., "Art.\n46" → "Art. 46")
-    formatted = formatted.replace(/\b(Art\.?)\s*\n+\s*(\d+)/gi, "$1 $2");
-    formatted = formatted.replace(/\b(Art)\s*\.\s*\n+\s*(\d+)/gi, "$1. $2");
+    // Also handles "Art." at start of text (no word boundary before)
+    formatted = formatted.replace(/(^|\s)(Art\.?)\s*\n+\s*(\d+)/gim, "$1$2 $3");
+    formatted = formatted.replace(/(^|\s)(Art)\s*\.\s*\n+\s*(\d+)/gim, "$1$2. $3");
+    
+    // Fix "Art." followed by newline and then number on separate line
+    // This catches the pattern where "Art." is alone on a line
+    formatted = formatted.replace(/^Art\.\s*$/gm, "Art.");
+    formatted = formatted.replace(/Art\.\s*\n+(\d+)/gm, "Art. $1");
     
     // Fix "||" -> "II -", "|||" -> "III -", etc. when they look like roman numeral incisos
     // (at start of line, after punctuation, or after whitespace)

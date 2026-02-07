@@ -823,6 +823,45 @@ export const RadialHierarchyView = ({
       }
     });
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CORREÇÃO CIRÚRGICA: Validar presença do Decreto 12.807/2025
+    // ═══════════════════════════════════════════════════════════════════════════
+    const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
+    const decreto12807Node = result.find((n) => 
+      n.id === DECRETO_12807_ID || 
+      n.act.numero?.includes("12.807") ||
+      n.act.numero?.includes("12807")
+    );
+    
+    if (decreto12807Node) {
+      console.log(
+        `[CORREÇÃO 12.807] ✅ Decreto nº 12.807 incluído no mapa | ` +
+        `id=${decreto12807Node.id} | ring=${decreto12807Node.ring} | ` +
+        `angle=${decreto12807Node.angle.toFixed(2)}rad | ` +
+        `x=${decreto12807Node.x.toFixed(0)}, y=${decreto12807Node.y.toFixed(0)} | ` +
+        `isolated=${!graphLinks.some(l => l.fromId === decreto12807Node.id || l.toId === decreto12807Node.id)}`
+      );
+    } else {
+      // Verificar se está nos dados originais
+      const inOriginalData = data.nodes.find((n) => 
+        n.id === DECRETO_12807_ID || 
+        n.numero?.includes("12.807") ||
+        n.numero?.includes("12807")
+      );
+      
+      if (inOriginalData) {
+        console.error(
+          `[CORREÇÃO 12.807] ❌ Decreto nº 12.807 encontrado nos dados (id=${inOriginalData.id}) ` +
+          `mas NÃO foi posicionado no mapa! Verificar lógica de ring assignment.`
+        );
+      } else {
+        console.error(
+          `[CORREÇÃO 12.807] ❌ Decreto nº 12.807 NÃO encontrado nos dados do backend! ` +
+          `Verificar graph-acts edge function ou banco de dados.`
+        );
+      }
+    }
+
     return { 
       nodes: result, 
       links: graphLinks, 

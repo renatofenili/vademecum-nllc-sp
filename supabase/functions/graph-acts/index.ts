@@ -257,7 +257,21 @@ Deno.serve(async (req) => {
     "68.304": ["art.74", "art.75"], // Decreto 68.304/2024 -> arts. 74 e 75
     "68.422": ["art.31"],  // Decreto 68.422/2024 -> art. 31
     "69.233": ["art.174"], // Decreto 69.233/2024 -> art. 174
+    "12.807": ["art.182"], // Decreto 12.807/2025 -> art. 182 (atualização de valores)
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CORREÇÃO CIRÚRGICA: Garantir Decreto 12.807/2025 presente nos nodes
+  // ID fixo: 320a1fc8-e325-4bf4-9f0f-b811eb5ce677
+  // ═══════════════════════════════════════════════════════════════════════════
+  const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
+  const decreto12807 = nodes.find((n) => n.id === DECRETO_12807_ID || n.numero?.includes("12.807"));
+  
+  if (decreto12807) {
+    console.log(`[CORREÇÃO 12.807] Decreto nº 12.807 encontrado no banco: id=${decreto12807.id}, numero=${decreto12807.numero}`);
+  } else {
+    console.warn(`[CORREÇÃO 12.807] ATENÇÃO: Decreto nº 12.807 NÃO encontrado nos nodes! Verificar banco de dados.`);
+  }
   
   // Force connection for ALL decretos without an existing edge to Lei 14.133
   for (const norma of (normas || [])) {

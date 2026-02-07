@@ -103,6 +103,7 @@ const temaOptions = [
   'Sistema de Registro de Preços',
   'TR / Projeto Básico',
   'Transparência',
+  'Valores da Lei nº 14.133/21',
 ];
 
 const intensidadeOptions: { value: Intensidade; label: string }[] = [

@@ -111,12 +111,12 @@ const ringLabels: Record<number, string> = {
   3: "Portarias / Resoluções / INs",
 };
 
-// Soft pastel palette - muted and harmonious
+// Institutional blue palette - professional government/legal style
 const ringColors: Record<number, string> = {
-  0: "hsl(0, 40%, 58%)",       // Dusty rose for CF/88
-  1: "hsl(210, 35%, 60%)",     // Soft steel blue for Laws
-  2: "hsl(145, 25%, 55%)",     // Sage green for Decrees
-  3: "hsl(270, 25%, 62%)",     // Lavender for others
+  0: "hsl(215, 50%, 35%)",     // Deep navy for CF/88 - authority
+  1: "hsl(215, 45%, 50%)",     // Medium blue for Laws
+  2: "hsl(210, 35%, 55%)",     // Steel blue for Decrees
+  3: "hsl(205, 25%, 60%)",     // Light slate for others
 };
 
 const tipoLabels: Record<string, string> = {

@@ -627,7 +627,26 @@ export const RadialHierarchyView = ({
 
       // First, assign angles to nodes with preferred positions
       withPreferred.forEach(({ act, preferredAngle }) => {
-        const angle = findClosestAvailableAngle(preferredAngle!);
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO: Decreto 12.807/2025 - forçar ângulo único para evitar sobreposição
+        // O Decreto 12.807 estava sobrepondo o 11.462 porque ambos têm preferredAngle
+        // para a Lei 14.133. Forçamos um ângulo distinto (150° = 5π/6).
+        // ═══════════════════════════════════════════════════════════════════
+        const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
+        const isDecreto12807 = act.id === DECRETO_12807_ID || 
+                                act.numero?.includes("12.807") || 
+                                act.numero?.includes("12807");
+        
+        let angle: number;
+        if (isDecreto12807) {
+          // Forçar ângulo em 150° (quadrante superior-esquerdo) para evitar sobreposição
+          const forcedAngle = (5 * Math.PI) / 6; // 150°
+          angle = findClosestAvailableAngle(forcedAngle);
+          console.log(`[CORREÇÃO 12.807] Forçando ângulo único: ${(angle * 180 / Math.PI).toFixed(0)}° (original: ${((preferredAngle || 0) * 180 / Math.PI).toFixed(0)}°)`);
+        } else {
+          angle = findClosestAvailableAngle(preferredAngle!);
+        }
+        
         usedAngles.push(angle);
 
         const x = cx + radius * Math.cos(angle);

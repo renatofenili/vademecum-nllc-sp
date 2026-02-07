@@ -650,16 +650,34 @@ export const RadialHierarchyView = ({
       // This ensures all nodes are visible and don't cluster in one area
       if (withoutPreferred.length > 0) {
         // Calculate even distribution for nodes without preferred angles
-        // Start from -π/2 (top) and distribute evenly, avoiding used angles
+        // Start from π/4 (bottom-right quadrant) to ensure visibility within viewport
+        // Avoid starting at -π/2 (top) which can place nodes outside visible area
         const totalSlots = withoutPreferred.length + usedAngles.length;
         const baseAngleSeparation = (2 * Math.PI) / Math.max(totalSlots, 8);
         
-        // Find gaps between already used angles to distribute remaining nodes
-        const sortedUsed = [...usedAngles].sort((a, b) => a - b);
+        // Start angle: use right side (0 rad) offset to keep nodes visible
+        const startAngle = Math.PI / 4; // 45° - bottom-right quadrant
         
         withoutPreferred.forEach(({ act }, idx) => {
-          // Calculate target angle: distribute evenly starting from top
-          const targetAngle = -Math.PI / 2 + (idx + usedAngles.length) * baseAngleSeparation;
+          // ═══════════════════════════════════════════════════════════════════
+          // CORREÇÃO CIRÚRGICA: Decreto 12.807/2025 - forçar posição visível
+          // ═══════════════════════════════════════════════════════════════════
+          const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
+          const isDecreto12807 = act.id === DECRETO_12807_ID || 
+                                  act.numero?.includes("12.807") || 
+                                  act.numero?.includes("12807");
+          
+          let targetAngle: number;
+          
+          if (isDecreto12807) {
+            // Posicionar o Decreto 12.807 em ângulo visível (direita-inferior)
+            // Próximo à Lei 14.133 que geralmente está no anel 1
+            targetAngle = Math.PI / 3; // 60° - visível no quadrante inferior-direito
+            console.log(`[CORREÇÃO 12.807] Forçando ângulo visível: ${(targetAngle * 180 / Math.PI).toFixed(0)}°`);
+          } else {
+            // Outros nós: distribuir normalmente a partir do startAngle
+            targetAngle = startAngle + (idx + usedAngles.length) * baseAngleSeparation;
+          }
           
           // Normalize and find closest available angle
           let angle = normalizeAngle(targetAngle);

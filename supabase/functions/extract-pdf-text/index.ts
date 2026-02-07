@@ -623,24 +623,32 @@ function isAnnexReference(anchor: string, texto: string): boolean {
   const normalizedAnchor = String(anchor || "").toLowerCase().trim();
   const normalizedTexto = String(texto || "").trim();
   
-  // Pattern 1: Article anchor contains "caput", "inciso", "parágrafo" - indicates reference, not article definition
-  if (/caput|inciso|alínea/i.test(normalizedAnchor)) {
+  // Pattern 1: Article anchor contains "caput", "inciso", "parágrafo", "alínea" - indicates reference, not article definition
+  // e.g., "art.6,caput, inciso XXII" is a reference to another law
+  if (/caput|inciso|alínea|§\s*\d/i.test(normalizedAnchor)) {
     return true;
   }
   
   // Pattern 2: Article text starts with "Art. Xº, caput" - this is a reference format, not an article definition
-  if (/^Art\.?\s*\d+\s*(?:º|°|o)?\s*,\s*caput/i.test(normalizedTexto)) {
+  if (/^Art\.?\s*\d+\s*(?:º|°|o)?\s*,\s*(?:caput|§|inciso)/i.test(normalizedTexto)) {
     return true;
   }
   
   // Pattern 3: Article text is primarily a monetary value (annex table row)
   // e.g., "Art. 6º, caput, inciso XXII - R$ 261.968.421,04"
-  if (/^Art\.?\s*\d+.*[-–—]\s*R\$\s*[\d.,]+\s*(?:\([^)]+\))?\s*$/i.test(normalizedTexto)) {
+  if (/^Art\.?\s*\d+.*[-–—]\s*R\$\s*[\d.,]+/i.test(normalizedTexto)) {
     return true;
   }
   
-  // Pattern 4: Text is too short for a real article and contains only a reference
-  if (normalizedTexto.length < 100 && /R\$\s*[\d.,]+/.test(normalizedTexto)) {
+  // Pattern 4: Text is too short for a real article and contains monetary values (annex table)
+  if (normalizedTexto.length < 150 && /R\$\s*[\d.,]+/.test(normalizedTexto)) {
+    return true;
+  }
+  
+  // Pattern 5: Anchor doesn't match standard article format (should be art.N, not art.N,caput,inciso)
+  // Valid formats: art.1, art.1§2, art.1.I, art.1.I.a
+  // Invalid (references): art.6,caput, inciso XXII
+  if (/art\.\d+[,\s]*caput/i.test(normalizedAnchor)) {
     return true;
   }
   
@@ -699,9 +707,10 @@ function dedupeByAnchor(
     const nivel = (item?.nivel || "artigo") as ExtractedArticle["nivel"];
     const rawTexto = String(item?.texto || "");
     
-    // Skip annex references (they're not real articles of this norm)
-    if (nivel === "artigo" && isAnnexReference(anchor, rawTexto)) {
-      console.log(`Skipping annex reference: ${anchor}`);
+    // Skip annex references (they're not real articles/incisos of this norm)
+    // Check all nivels because AI might classify annex rows as "inciso" or "artigo"
+    if (isAnnexReference(anchor, rawTexto)) {
+      console.log(`Skipping annex reference: ${anchor} (nivel=${nivel})`);
       continue;
     }
     

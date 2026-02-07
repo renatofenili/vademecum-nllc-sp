@@ -100,6 +100,7 @@ const temaOptions = [
   'Regime de execução',
   'Sanções',
   'Seleção do fornecedor',
+  'Sistema de Registro de Preços',
   'TR / Projeto Básico',
   'Transparência',
 ];

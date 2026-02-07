@@ -217,17 +217,22 @@ function textContentToText(textContent: any): string {
 }
 
 function collectArticleNumbers(text: string, strictSet: Set<number>, looseSet: Set<number>) {
+  // Normalize weird PDF whitespace so regexes work reliably.
+  const normalized = String(text || '')
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
+    .replace(/\s+$/g, '');
+
   // Strict: only headings at line start (reduces false-positives from references)
   const strict = /^\s*(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b/gim;
   let m: RegExpExecArray | null;
-  while ((m = strict.exec(text)) !== null) {
+  while ((m = strict.exec(normalized)) !== null) {
     const n = Number(m[1]);
     if (Number.isFinite(n) && n > 0) strictSet.add(n);
   }
 
   // Loose fallback: anywhere in text (may include references), later tamed via contiguous-from-1 heuristic.
   const loose = /\b(?:art\.?|artigo)\s*(\d{1,4})\s*(?:º|o)?\b/gi;
-  while ((m = loose.exec(text)) !== null) {
+  while ((m = loose.exec(normalized)) !== null) {
     const n = Number(m[1]);
     if (Number.isFinite(n) && n > 0) looseSet.add(n);
   }
@@ -237,6 +242,10 @@ type PdfMaxInference = {
   maxArticle: number | null;
   numPages: number;
   tailTextLen: number;
+  strictMax: number;
+  strictContig: number;
+  looseMax: number;
+  looseContig: number;
 };
 
 async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<PdfMaxInference> {
@@ -304,10 +313,26 @@ async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<PdfMax
       })
     );
 
-    return { maxArticle, numPages: pages, tailTextLen };
+    return {
+      maxArticle,
+      numPages: pages,
+      tailTextLen,
+      strictMax,
+      strictContig,
+      looseMax,
+      looseContig,
+    };
   } catch (e) {
     console.warn("Failed to infer max article from PDF bytes:", e);
-    return { maxArticle: null, numPages: 0, tailTextLen: 0 };
+    return {
+      maxArticle: null,
+      numPages: 0,
+      tailTextLen: 0,
+      strictMax: 0,
+      strictContig: 0,
+      looseMax: 0,
+      looseContig: 0,
+    };
   }
 }
 
@@ -1185,14 +1210,19 @@ Deno.serve(async (req) => {
       const inferred = await inferPdfMaxArticleFromBytes(pdfBytes);
       pdfMaxArticle = inferred.maxArticle;
 
-      // If the PDF tail has no extractable text, pdf.js inference may miss image-only/scanned pages.
-      // In that case, ask the AI (with the PDF attached) for the last article number.
-      if (inferred.numPages >= 10 && inferred.tailTextLen < 20 && (pdfMaxArticle ?? 0) >= 10) {
+      // Heurística de confiabilidade: se o PDF perdeu quebras de linha, o "strict" pode falhar
+      // e subestimar o último artigo (ex.: IN 73 inferiu 51 embora exista Art. 52).
+      const inferenceLooksUnreliable =
+        inferred.numPages >= 5 &&
+        (inferred.strictContig < 3 ||
+          (inferred.maxArticle != null && inferred.looseMax > inferred.maxArticle + 50));
+
+      // Se o PDF tail tem pouco texto, pdf.js pode falhar em páginas escaneadas.
+      const tailLooksScanned = inferred.numPages >= 10 && inferred.tailTextLen < 20;
+
+      if (tailLooksScanned || inferenceLooksUnreliable || !pdfMaxArticle) {
         const aiMax = await inferPdfMaxArticleViaGateway(lovableApiKey, base64Pdf);
         if (aiMax && aiMax > (pdfMaxArticle ?? 0)) pdfMaxArticle = aiMax;
-      } else if (!pdfMaxArticle) {
-        const aiMax = await inferPdfMaxArticleViaGateway(lovableApiKey, base64Pdf);
-        if (aiMax && aiMax > 0) pdfMaxArticle = aiMax;
       }
     }
     const effectiveMaxArticle = pdfMaxArticle && pdfMaxArticle > 0 ? pdfMaxArticle : MAX_ARTICLES;

@@ -485,11 +485,60 @@ async function buildPdfFallbackDispositivos(
 }
 
 /**
+ * Sanitizes extracted text by fixing common PDF extraction issues:
+ * - Broken lines between "Art." and article number
+ * - Pipes incorrectly extracted instead of Roman numerals
+ * - Orphan "o" before capitalized words (OCR artifact for "o" ordinal)
+ * - Ensures structural markers start on new paragraphs
+ */
+function sanitizeExtractedText(texto: string): string {
+  let cleaned = texto;
+
+  // Normalize weird whitespace (NBSP, etc.) to regular space
+  cleaned = cleaned.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, " ");
+
+  // Fix broken lines between "Art." and number (e.g., "Art.\n46." → "Art. 46.")
+  // This handles cases where PDF extraction splits "Art." and number across lines
+  cleaned = cleaned.replace(/\b(Art\.?)\s*\n+\s*(\d+)/gi, "$1 $2");
+
+  // Fix "Art .\n46" pattern (space before dot)
+  cleaned = cleaned.replace(/\b(Art)\s*\.\s*\n+\s*(\d+)/gi, "$1. $2");
+
+  // Fix orphan article numbers on their own line after "Art."
+  // e.g., "Art.\n\n46. Os licitantes" → "Art. 46. Os licitantes"
+  cleaned = cleaned.replace(/\b(Art\.?)\s*\n\s*\n\s*(\d+)/gi, "$1 $2");
+
+  // Fix pipes that should be Roman numerals (OCR artifact)
+  // e.g., "|| -" → "II -", "||| -" → "III -"
+  cleaned = cleaned.replace(/\|\|\|\|(\s*[-–—])/g, "IV$1");
+  cleaned = cleaned.replace(/\|\|\|(\s*[-–—])/g, "III$1");
+  cleaned = cleaned.replace(/\|\|(\s*[-–—])/g, "II$1");
+  cleaned = cleaned.replace(/\|(\s*[-–—])/g, "I$1");
+
+  // Fix orphan "o" before capitalized words (OCR artifact for ordinal marker)
+  // e.g., "Art. 1 o O Presidente" → "Art. 1º O Presidente"
+  cleaned = cleaned.replace(/(\d)\s+o\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ])/g, "$1º $2");
+
+  // Ensure structural markers start on new paragraph
+  // (Art., §, Artigo único, etc.)
+  cleaned = cleaned.replace(/([.;:!?])\s+(Art\.?\s*\d+)/gi, "$1\n\n$2");
+  cleaned = cleaned.replace(/([.;:!?])\s+(§\s*\d+)/gi, "$1\n\n$2");
+  cleaned = cleaned.replace(/([.;:!?])\s+(Parágrafo\s+único)/gi, "$1\n\n$2");
+
+  // Collapse multiple blank lines into one
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
+  return cleaned.trim();
+}
+
+/**
  * Ensures that the extracted text starts with the proper identifier based on anchor.
  * This fixes cases where AI omits the article number, inciso number, etc.
  */
 function ensureDispositivoPrefix(anchor: string, nivel: string, texto: string): string {
-  const trimmedTexto = texto.trim();
+  // First sanitize the text to fix common extraction issues
+  const sanitizedTexto = sanitizeExtractedText(texto);
+  const trimmedTexto = sanitizedTexto.trim();
   const lowerNivel = (nivel || "").toLowerCase();
   
   // Parse anchor to extract components

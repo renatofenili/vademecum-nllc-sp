@@ -1377,7 +1377,10 @@ export const RadialHierarchyView = ({
     <div className="flex-1 flex flex-col">
       {/* Info bar - Row 1: Stats and Link toggles */}
       <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex flex-wrap items-center gap-4">
-        <span>📊 Normas: {data.nodes.length}</span>
+        <span>📊 Backend: {data.nodes.length} | Renderizado: {nodes.length}</span>
+        {data.nodes.length !== nodes.length && (
+          <span className="text-red-500 font-bold">⚠️ DIVERGÊNCIA!</span>
+        )}
         <span>🎯 Raiz: CF/1988</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
         

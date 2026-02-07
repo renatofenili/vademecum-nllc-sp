@@ -284,7 +284,18 @@ async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<PdfMax
     // If strict finds a larger max but the sequence has gaps (common with PDF text extraction quirks),
     // accept the strict max when there's enough tail evidence.
     let inferred = 0;
-    if (strictMax > 0) {
+    
+    // NEW: For short decrees (contiguous <= 15), trust the contiguous count as the real article limit.
+    // This prevents annex references (Art. 6º, caput, inciso XXII of Lei 14.133) from inflating the count.
+    if (strictContig > 0 && strictContig <= 15 && strictMax > strictContig + 5) {
+      // Large gap after contiguous sequence = likely annex references, not real articles
+      console.log(`Short decree detected: contiguous=${strictContig}, max=${strictMax}. Using contiguous as limit.`);
+      inferred = strictContig;
+    } else if (looseContig > 0 && looseContig <= 15 && strictMax === 0 && looseMax > looseContig + 5) {
+      // Same logic for loose detections
+      console.log(`Short decree detected (loose): contiguous=${looseContig}, max=${looseMax}. Using contiguous as limit.`);
+      inferred = looseContig;
+    } else if (strictMax > 0) {
       const strictBeyondCount = strictNums.filter((n) => n > strictContig).length;
       if (strictContig >= 10 && strictBeyondCount >= 2 && strictMax <= strictContig + 300) {
         inferred = strictMax;
@@ -604,6 +615,71 @@ function ensureDispositivoPrefix(anchor: string, nivel: string, texto: string): 
   return trimmedTexto;
 }
 
+/**
+ * Detects if an article text is actually a reference to another law (typically found in annexes).
+ * Examples: "Art. 6º, caput, inciso XXII - R$ 261.968.421,04" (reference to Lei 14.133 in annex)
+ */
+function isAnnexReference(anchor: string, texto: string): boolean {
+  const normalizedAnchor = String(anchor || "").toLowerCase().trim();
+  const normalizedTexto = String(texto || "").trim();
+  
+  // Pattern 1: Article anchor contains "caput", "inciso", "parágrafo" - indicates reference, not article definition
+  if (/caput|inciso|alínea/i.test(normalizedAnchor)) {
+    return true;
+  }
+  
+  // Pattern 2: Article text starts with "Art. Xº, caput" - this is a reference format, not an article definition
+  if (/^Art\.?\s*\d+\s*(?:º|°|o)?\s*,\s*caput/i.test(normalizedTexto)) {
+    return true;
+  }
+  
+  // Pattern 3: Article text is primarily a monetary value (annex table row)
+  // e.g., "Art. 6º, caput, inciso XXII - R$ 261.968.421,04"
+  if (/^Art\.?\s*\d+.*[-–—]\s*R\$\s*[\d.,]+\s*(?:\([^)]+\))?\s*$/i.test(normalizedTexto)) {
+    return true;
+  }
+  
+  // Pattern 4: Text is too short for a real article and contains only a reference
+  if (normalizedTexto.length < 100 && /R\$\s*[\d.,]+/.test(normalizedTexto)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Detects if article content is a duplicate of existing content (hallucinated articles).
+ * This happens when the AI extracts the same content multiple times with different article numbers.
+ */
+function isContentDuplicate(newTexto: string, existingArticles: ExtractedArticle[]): boolean {
+  const normalize = (s: string) => String(s || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/art\.?\s*\d+\s*(?:º|°|o)?\.?\s*/gi, "") // Remove article prefixes
+    .replace(/^[\s\-–—:]+/, "")
+    .trim()
+    .slice(0, 200); // Compare first 200 chars of content
+  
+  const normalizedNew = normalize(newTexto);
+  if (normalizedNew.length < 30) return false; // Too short to compare
+  
+  for (const existing of existingArticles) {
+    if (String(existing.nivel || "").toLowerCase() !== "artigo") continue;
+    const normalizedExisting = normalize(existing.texto);
+    if (normalizedExisting.length < 30) continue;
+    
+    // Check for high similarity (90%+ of the shorter text matches)
+    const shorter = normalizedNew.length < normalizedExisting.length ? normalizedNew : normalizedExisting;
+    const longer = normalizedNew.length < normalizedExisting.length ? normalizedExisting : normalizedNew;
+    
+    if (longer.includes(shorter.slice(0, Math.min(80, shorter.length)))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function dedupeByAnchor(
   existing: ExtractedArticle[],
   incoming: ToolArgs["dispositivos"],
@@ -619,10 +695,23 @@ function dedupeByAnchor(
     const anchor = String(item?.anchor || "").trim();
     if (!anchor) continue;
     if (seen.has(anchor)) continue;
-    seen.add(anchor);
     
     const nivel = (item?.nivel || "artigo") as ExtractedArticle["nivel"];
     const rawTexto = String(item?.texto || "");
+    
+    // Skip annex references (they're not real articles of this norm)
+    if (nivel === "artigo" && isAnnexReference(anchor, rawTexto)) {
+      console.log(`Skipping annex reference: ${anchor}`);
+      continue;
+    }
+    
+    // Skip content duplicates (hallucinated articles)
+    if (nivel === "artigo" && isContentDuplicate(rawTexto, existing)) {
+      console.log(`Skipping duplicate content for: ${anchor}`);
+      continue;
+    }
+    
+    seen.add(anchor);
     const fixedTexto = ensureDispositivoPrefix(anchor, nivel, rawTexto);
     
     out.push({

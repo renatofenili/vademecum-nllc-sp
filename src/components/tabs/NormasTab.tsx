@@ -86,6 +86,12 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
   // Apply formal formatting rules to text
   const applyFormalFormatting = (text: string): string => {
     let formatted = text;
+
+    // Normalize exotic line separators from PDFs (page breaks, line separators, etc.)
+    // so the rules below can reliably detect and fix "Art." + number splits.
+    formatted = formatted
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\f\v\u0085\u2028\u2029]/g, "\n");
     
     // === OCR/PDF extraction error corrections ===
     
@@ -198,9 +204,42 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
         return <p className="text-muted-foreground">Texto sem dispositivos estruturados</p>;
       }
 
+      // Some PDFs split the article prefix and number into separate lines/devices.
+      // Merge "Art." + "21. ..." (presentation-only) so it renders as "Art. 21. ...".
+      const dispositivosMerged = (() => {
+        const merged: typeof dispositivos = [];
+        const norm = (s: string) =>
+          String(s || "")
+            .replace(/\r\n?/g, "\n")
+            .replace(/[\f\v\u0085\u2028\u2029]/g, "\n")
+            .trim();
+
+        for (let i = 0; i < dispositivos.length; i++) {
+          const cur = dispositivos[i];
+          const prev = merged[merged.length - 1];
+
+          if (prev) {
+            const prevNorm = norm(prev.texto);
+            const curNorm = norm(cur.texto);
+
+            if (/^Art\.?$/i.test(prevNorm) && /^\d{1,4}\./.test(curNorm)) {
+              merged[merged.length - 1] = {
+                ...prev,
+                texto: `Art. ${cur.texto.replace(/^[\s\r\n\f\v\u0085\u2028\u2029]+/, "")}`,
+              };
+              continue;
+            }
+          }
+
+          merged.push(cur);
+        }
+
+        return merged;
+      })();
+
       return (
         <div className="space-y-4 text-justify">
-          {dispositivos.map((dispositivo, index) => {
+          {dispositivosMerged.map((dispositivo, index) => {
             const nivelStyles: Record<string, string> = {
               ementa: "text-foreground font-medium italic",
               preambulo: "text-foreground",
@@ -213,10 +252,6 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
 
             const style = nivelStyles[dispositivo.nivel] || "text-foreground";
             const formattedText = applyFormalFormatting(dispositivo.texto);
-            // DEBUG: Log if Art. appears without number on same line
-            if (formattedText.match(/Art\.\s*\n/) || formattedText.match(/\nArt\.\s*$/m)) {
-              console.log('[DEBUG] Art. separated from number:', dispositivo.anchor, formattedText.substring(0, 100));
-            }
 
             return (
               <div key={`${dispositivo.anchor}-${index}`} className="group">

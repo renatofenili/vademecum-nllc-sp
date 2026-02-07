@@ -1637,6 +1637,7 @@ export const RadialHierarchyView = ({
               ))}
 
               {/* Connection links with types - filtered by visibility toggles */}
+              {/* REGRA: Nenhuma linha pode atravessar a CF/88 (centro) */}
               {links.map((link, index) => {
                 const style = linkStyles[link.type];
                 
@@ -1662,6 +1663,70 @@ export const RadialHierarchyView = ({
                 const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toId);
                 const linkHighlighted = fromHighlighted || toHighlighted;
                 
+                // ═══════════════════════════════════════════════════════════════════
+                // CORREÇÃO: Detectar se a linha atravessaria a CF/88 (centro)
+                // Se sim, usar uma curva que contorna pelo lado
+                // ═══════════════════════════════════════════════════════════════════
+                const cx = center.x;
+                const cy = center.y;
+                const cfRadius = 50; // Raio de exclusão ao redor da CF/88
+                
+                // Calcular distância do centro à linha reta entre os dois pontos
+                // Fórmula: |((y2-y1)*cx - (x2-x1)*cy + x2*y1 - y2*x1)| / sqrt((y2-y1)² + (x2-x1)²)
+                const dx = link.toX - link.fromX;
+                const dy = link.toY - link.fromY;
+                const lineLength = Math.sqrt(dx * dx + dy * dy);
+                
+                // Avoid division by zero
+                if (lineLength === 0) return null;
+                
+                const distToCenter = Math.abs(dy * cx - dx * cy + link.toX * link.fromY - link.toY * link.fromX) / lineLength;
+                
+                // Verificar se o centro está "entre" os dois pontos (não atrás de um deles)
+                // Projeção do centro na linha
+                const t = ((cx - link.fromX) * dx + (cy - link.fromY) * dy) / (lineLength * lineLength);
+                const centerIsBetween = t > 0.1 && t < 0.9;
+                
+                const wouldCrossCenter = distToCenter < cfRadius && centerIsBetween;
+                
+                if (wouldCrossCenter) {
+                  // Usar uma curva quadrática que contorna o centro
+                  // Ponto de controle perpendicular à linha, afastado do centro
+                  const midX = (link.fromX + link.toX) / 2;
+                  const midY = (link.fromY + link.toY) / 2;
+                  
+                  // Vetor perpendicular à linha (normalizado)
+                  const perpX = -dy / lineLength;
+                  const perpY = dx / lineLength;
+                  
+                  // Determinar qual lado do centro está o ponto médio
+                  // e mover o ponto de controle para o lado oposto ao centro
+                  const midToCenterX = cx - midX;
+                  const midToCenterY = cy - midY;
+                  
+                  // Produto escalar para determinar direção
+                  const dotProduct = midToCenterX * perpX + midToCenterY * perpY;
+                  
+                  // Mover na direção oposta ao centro
+                  const offset = cfRadius * 2.5; // Distância do desvio
+                  const controlX = midX + (dotProduct > 0 ? -perpX : perpX) * offset;
+                  const controlY = midY + (dotProduct > 0 ? -perpY : perpY) * offset;
+                  
+                  return (
+                    <path
+                      key={`link-${link.fromId}-${link.toId}-${index}`}
+                      d={`M ${link.fromX} ${link.fromY} Q ${controlX} ${controlY} ${link.toX} ${link.toY}`}
+                      fill="none"
+                      stroke={style.stroke}
+                      strokeWidth={style.strokeWidth}
+                      strokeDasharray={style.dashArray}
+                      opacity={highlightedNormaIds ? (linkHighlighted ? 0.8 : 0.1) : 0.6}
+                      className="transition-opacity duration-300"
+                    />
+                  );
+                }
+                
+                // Linha reta normal (não atravessa o centro)
                 return (
                   <line
                     key={`link-${link.fromId}-${link.toId}-${index}`}

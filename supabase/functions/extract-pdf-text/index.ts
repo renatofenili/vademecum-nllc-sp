@@ -233,18 +233,27 @@ function collectArticleNumbers(text: string, strictSet: Set<number>, looseSet: S
   }
 }
 
-async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<number | null> {
+type PdfMaxInference = {
+  maxArticle: number | null;
+  numPages: number;
+  tailTextLen: number;
+};
+
+async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<PdfMaxInference> {
   try {
     const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as any).promise;
     const strictSet = new Set<number>();
     const looseSet = new Set<number>();
 
     const pages = Math.min(doc.numPages || 0, 2500);
+    let tailTextLen = 0;
+
     for (let pageNum = 1; pageNum <= pages; pageNum++) {
       const page = await doc.getPage(pageNum);
       const textContent = await page.getTextContent();
       const pageText = textContentToText(textContent);
       if (pageText) collectArticleNumbers(pageText, strictSet, looseSet);
+      if (pageNum === pages) tailTextLen = String(pageText || "").trim().length;
     }
 
     const toSorted = (s: Set<number>) =>
@@ -255,19 +264,50 @@ async function inferPdfMaxArticleFromBytes(pdfBytes: Uint8Array): Promise<number
 
     const strictNums = toSorted(strictSet);
     const looseNums = toSorted(looseSet);
+
     const strictContig = computeContiguousMaxFrom1(strictNums);
     const looseContig = computeContiguousMaxFrom1(looseNums);
 
-    const contig = Math.max(strictContig, looseContig);
-    const maxFound = Math.max(strictNums.at(-1) ?? 0, looseNums.at(-1) ?? 0);
+    const strictMax = strictNums.at(-1) ?? 0;
+    const looseMax = looseNums.at(-1) ?? 0;
 
-    const inferred = contig >= 10 ? contig : maxFound;
-    if (!Number.isFinite(inferred) || inferred <= 0) return null;
+    // Prefer strict (line-start) detections when available; they are less prone to picking up references.
+    // If strict finds a larger max but the sequence has gaps (common with PDF text extraction quirks),
+    // accept the strict max when there's enough tail evidence.
+    let inferred = 0;
+    if (strictMax > 0) {
+      const strictBeyondCount = strictNums.filter((n) => n > strictContig).length;
+      if (strictContig >= 10 && strictBeyondCount >= 2 && strictMax <= strictContig + 300) {
+        inferred = strictMax;
+      } else if (strictContig >= 10) {
+        inferred = strictContig;
+      } else {
+        inferred = strictMax;
+      }
+    } else {
+      // Fallback to loose detections (may include references, so keep contiguous heuristic).
+      inferred = looseContig >= 10 ? looseContig : looseMax;
+    }
 
-    return Math.min(MAX_ARTICLES, Math.floor(inferred));
+    const maxArticle = inferred > 0 ? Math.min(MAX_ARTICLES, Math.floor(inferred)) : null;
+
+    console.log(
+      JSON.stringify({
+        kind: "pdfmax_infer",
+        num_pages: pages,
+        tail_text_len: tailTextLen,
+        strict_max: strictMax,
+        strict_contig: strictContig,
+        loose_max: looseMax,
+        loose_contig: looseContig,
+        chosen: maxArticle,
+      })
+    );
+
+    return { maxArticle, numPages: pages, tailTextLen };
   } catch (e) {
     console.warn("Failed to infer max article from PDF bytes:", e);
-    return null;
+    return { maxArticle: null, numPages: 0, tailTextLen: 0 };
   }
 }
 
@@ -641,7 +681,81 @@ async function storageErrorToMessage(err: any): Promise<string> {
   }
 }
 
+async function inferPdfMaxArticleViaGateway(
+  lovableApiKey: string,
+  base64Pdf: string
+): Promise<number | null> {
+  try {
+    const systemPrompt = `Você é um analista de normas brasileiras.
+Sua tarefa: identificar o MAIOR número de artigo (Art. N) que aparece como TÍTULO/INÍCIO de artigo no PDF.
+Regras:
+- Considere apenas cabeçalhos de artigo (ex.: "Art. 52", "Artigo 52") como dispositivos.
+- Ignore referências do tipo "no art. 52" dentro do texto.
+- Ignore anexos/quadros/tabelas que não sejam a sequência normativa principal.
+- Responda SOMENTE com JSON no formato: {"pdfmax": 52}.
+- Se não conseguir determinar com segurança, responda: {"pdfmax": null}.
+`;
+
+    const userPrompt = `Qual é o maior número de artigo (Art. N) presente neste PDF?`;
+
+    const body = {
+      model: PRIMARY_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              file: {
+                filename: "norma.pdf",
+                file_data: `data:application/pdf;base64,${base64Pdf}`,
+              },
+            },
+            { type: "text", text: userPrompt },
+          ],
+        },
+      ],
+      temperature: 0,
+      max_tokens: 200,
+    };
+
+    const resp = await fetch(GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const t = await resp.text().catch(() => "");
+      console.warn("pdfmax gateway inference failed:", resp.status, t.slice(0, 500));
+      return null;
+    }
+
+    const aiResult = await resp.json();
+    const msg = aiResult?.choices?.[0]?.message;
+    const contentText = messageContentToText(msg?.content);
+    const cleaned = (contentText || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+
+    const parsed = safeJsonParse<{ pdfmax?: number | null }>(cleaned);
+    const n = parsed?.pdfmax;
+    const pdfmax = typeof n === "number" && Number.isFinite(n) && n > 0
+      ? Math.min(MAX_ARTICLES, Math.floor(n))
+      : null;
+
+    console.log(JSON.stringify({ kind: "pdfmax_gateway", pdfmax }));
+    return pdfmax;
+  } catch (e) {
+    console.warn("pdfmax gateway inference exception:", e);
+    return null;
+  }
+}
+
 async function callGatewayBatchWithModel(
+
   model: string,
   lovableApiKey: string,
   base64Pdf: string,
@@ -1068,7 +1182,18 @@ Deno.serve(async (req) => {
     // This prevents hallucinated articles like "art.232" when the PDF only goes to 194.
     let pdfMaxArticle: number | null = reset ? null : parsePdfMaxFromOrigin(existingOrigin);
     if (!pdfMaxArticle) {
-      pdfMaxArticle = await inferPdfMaxArticleFromBytes(pdfBytes);
+      const inferred = await inferPdfMaxArticleFromBytes(pdfBytes);
+      pdfMaxArticle = inferred.maxArticle;
+
+      // If the PDF tail has no extractable text, pdf.js inference may miss image-only/scanned pages.
+      // In that case, ask the AI (with the PDF attached) for the last article number.
+      if (inferred.numPages >= 10 && inferred.tailTextLen < 20 && (pdfMaxArticle ?? 0) >= 10) {
+        const aiMax = await inferPdfMaxArticleViaGateway(lovableApiKey, base64Pdf);
+        if (aiMax && aiMax > (pdfMaxArticle ?? 0)) pdfMaxArticle = aiMax;
+      } else if (!pdfMaxArticle) {
+        const aiMax = await inferPdfMaxArticleViaGateway(lovableApiKey, base64Pdf);
+        if (aiMax && aiMax > 0) pdfMaxArticle = aiMax;
+      }
     }
     const effectiveMaxArticle = pdfMaxArticle && pdfMaxArticle > 0 ? pdfMaxArticle : MAX_ARTICLES;
 

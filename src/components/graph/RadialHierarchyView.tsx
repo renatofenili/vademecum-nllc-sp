@@ -1637,9 +1637,8 @@ export const RadialHierarchyView = ({
               ))}
 
               {/* Connection links with types - filtered by visibility toggles */}
-              {/* REGRA: Todas as linhas são curvas e nunca se tocam */}
+              {/* REGRA: Todas as linhas são curvas e NUNCA se cruzam */}
               {(() => {
-                // Pré-calcular ângulos médios para cada link para distribuir offsets
                 const visibleLinks = links.filter((link) => {
                   let isVisible = 
                     (link.type === "hierarquia" && showHierarchyLinks) ||
@@ -1654,25 +1653,43 @@ export const RadialHierarchyView = ({
                   return isVisible;
                 });
                 
-                // Agrupar links por nó de origem para calcular offsets únicos
-                const linksBySource = new Map<string, number>();
-                visibleLinks.forEach((link) => {
-                  const count = linksBySource.get(link.fromId) || 0;
-                  linksBySource.set(link.fromId, count + 1);
+                const cx = center.x;
+                const cy = center.y;
+                const cfRadius = 50;
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // ESTRATÉGIA ANTI-CRUZAMENTO:
+                // 1. Ordenar links pelo ângulo do ponto de DESTINO (toX, toY)
+                // 2. Cada link curva SEMPRE para fora do centro
+                // 3. Links adjacentes (por ângulo) têm offsets crescentes
+                // ═══════════════════════════════════════════════════════════════════
+                
+                // Calcular ângulo do destino para cada link
+                const linksWithAngles = visibleLinks.map((link, originalIndex) => {
+                  const toAngle = Math.atan2(link.toY - cy, link.toX - cx);
+                  const fromAngle = Math.atan2(link.fromY - cy, link.fromX - cx);
+                  return { link, originalIndex, toAngle, fromAngle };
                 });
                 
-                const sourceIndexMap = new Map<string, number>();
+                // Ordenar por ângulo do destino para processar links adjacentes juntos
+                linksWithAngles.sort((a, b) => a.toAngle - b.toAngle);
                 
-                return visibleLinks.map((link, index) => {
+                // Agrupar por nó de destino para distribuir offsets
+                const linksByTarget = new Map<string, typeof linksWithAngles>();
+                linksWithAngles.forEach((item) => {
+                  const key = item.link.toId;
+                  const existing = linksByTarget.get(key) || [];
+                  existing.push(item);
+                  linksByTarget.set(key, existing);
+                });
+                
+                return linksWithAngles.map((item, sortedIndex) => {
+                  const { link, originalIndex, toAngle, fromAngle } = item;
                   const style = linkStyles[link.type];
                   
                   const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromId);
                   const toHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.toId);
                   const linkHighlighted = fromHighlighted || toHighlighted;
-                  
-                  const cx = center.x;
-                  const cy = center.y;
-                  const cfRadius = 50;
                   
                   const dx = link.toX - link.fromX;
                   const dy = link.toY - link.fromY;
@@ -1680,53 +1697,50 @@ export const RadialHierarchyView = ({
                   
                   if (lineLength === 0) return null;
                   
-                  // ═══════════════════════════════════════════════════════════════════
-                  // TODAS as linhas são curvas quadráticas de Bézier
-                  // Offset varia para evitar sobreposição
-                  // ═══════════════════════════════════════════════════════════════════
                   const midX = (link.fromX + link.toX) / 2;
                   const midY = (link.fromY + link.toY) / 2;
                   
-                  // Vetor perpendicular à linha (normalizado)
-                  const perpX = -dy / lineLength;
-                  const perpY = dx / lineLength;
+                  // Vetor do centro para o ponto médio (direção radial para fora)
+                  const radialX = midX - cx;
+                  const radialY = midY - cy;
+                  const radialLength = Math.sqrt(radialX * radialX + radialY * radialY);
                   
-                  // Calcular ângulo do ponto médio em relação ao centro
-                  const angleFromCenter = Math.atan2(midY - cy, midX - cx);
+                  // Normalizar vetor radial
+                  const radialNormX = radialLength > 0 ? radialX / radialLength : 0;
+                  const radialNormY = radialLength > 0 ? radialY / radialLength : 1;
                   
-                  // Determinar direção do offset: sempre para fora do centro
-                  const midToCenterX = cx - midX;
-                  const midToCenterY = cy - midY;
-                  const dotProduct = midToCenterX * perpX + midToCenterY * perpY;
-                  const direction = dotProduct > 0 ? -1 : 1;
-                  
-                  // Calcular offset único baseado no índice do link no grupo de origem
-                  const currentIndex = sourceIndexMap.get(link.fromId) || 0;
-                  sourceIndexMap.set(link.fromId, currentIndex + 1);
-                  const totalFromSource = linksBySource.get(link.fromId) || 1;
-                  
-                  // Offset base + variação por índice para evitar sobreposição
-                  // Links do mesmo nó de origem terão offsets diferentes
-                  const baseOffset = 30; // Curvatura mínima
-                  const indexOffset = totalFromSource > 1 ? (currentIndex - (totalFromSource - 1) / 2) * 15 : 0;
-                  
-                  // Verificar se atravessaria o centro - offset maior nesse caso
+                  // Verificar se atravessaria o centro
                   const distToCenter = Math.abs(dy * cx - dx * cy + link.toX * link.fromY - link.toY * link.fromX) / lineLength;
                   const t = ((cx - link.fromX) * dx + (cy - link.fromY) * dy) / (lineLength * lineLength);
                   const centerIsBetween = t > 0.1 && t < 0.9;
                   const wouldCrossCenter = distToCenter < cfRadius && centerIsBetween;
                   
-                  const centerAvoidanceOffset = wouldCrossCenter ? cfRadius * 2 : 0;
+                  // Calcular índice dentro do grupo de mesmo destino
+                  const targetGroup = linksByTarget.get(link.toId) || [];
+                  const indexInGroup = targetGroup.findIndex((g) => g.originalIndex === originalIndex);
+                  const groupSize = targetGroup.length;
                   
-                  // Offset final: sempre curvado para fora do centro
-                  const totalOffset = (baseOffset + indexOffset + centerAvoidanceOffset) * direction;
+                  // ═══════════════════════════════════════════════════════════════════
+                  // OFFSET CALCULATION:
+                  // - Base offset proporcional à distância (links longos curvam mais)
+                  // - Offset adicional por índice no grupo para separar links ao mesmo destino
+                  // - Offset extra se atravessaria o centro
+                  // - SEMPRE curva para FORA do centro (direção radial positiva)
+                  // ═══════════════════════════════════════════════════════════════════
+                  const baseOffset = Math.max(25, lineLength * 0.08);
+                  const groupOffset = groupSize > 1 ? (indexInGroup - (groupSize - 1) / 2) * 20 : 0;
+                  const centerOffset = wouldCrossCenter ? cfRadius * 2.5 : 0;
                   
-                  const controlX = midX + perpX * totalOffset;
-                  const controlY = midY + perpY * totalOffset;
+                  // Offset total - sempre positivo (para fora)
+                  const totalOffset = baseOffset + Math.abs(groupOffset) + centerOffset;
+                  
+                  // Ponto de controle: mover na direção radial (para fora do centro)
+                  const controlX = midX + radialNormX * totalOffset;
+                  const controlY = midY + radialNormY * totalOffset;
                   
                   return (
                     <path
-                      key={`link-${link.fromId}-${link.toId}-${index}`}
+                      key={`link-${link.fromId}-${link.toId}-${originalIndex}`}
                       d={`M ${link.fromX} ${link.fromY} Q ${controlX} ${controlY} ${link.toX} ${link.toY}`}
                       fill="none"
                       stroke={style.stroke}

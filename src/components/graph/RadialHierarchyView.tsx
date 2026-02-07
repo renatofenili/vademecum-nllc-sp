@@ -567,91 +567,27 @@ export const RadialHierarchyView = ({
       
       if (count === 0) continue;
 
-      // For each node, determine its preferred angle based on regulatory target
-      const nodeAngles: { act: ActNode; preferredAngle: number | null }[] = nodesInRing.map((act) => {
-        const targets = regulatoryTargets.get(act.id) || [];
-        // Find a target in an inner ring
-        for (const targetId of targets) {
-          const targetPos = nodePositions.get(targetId);
-          if (targetPos && targetPos.ring < ringIdx) {
-            // This node should be positioned near its regulatory target
-            return { act, preferredAngle: targetPos.angle };
-          }
-        }
-        return { act, preferredAngle: null };
+      // ═══════════════════════════════════════════════════════════════════
+      // REGRA: Nós em cada anel são EQUIDISTANTES (distribuição uniforme)
+      // Começamos do topo (−π/2) e distribuímos no sentido horário
+      // ═══════════════════════════════════════════════════════════════════
+      const angleStep = (2 * Math.PI) / count;
+      const startAngle = -Math.PI / 2; // Topo do círculo (12 horas)
+      
+      // Ordenar nós por número para consistência visual
+      const sortedNodes = [...nodesInRing].sort((a, b) => {
+        // Extrair número para ordenação
+        const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
+        const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+        return numA - numB;
       });
-
-      // Separate nodes with and without preferred angles
-      const withPreferred = nodeAngles.filter((n) => n.preferredAngle !== null);
-      const withoutPreferred = nodeAngles.filter((n) => n.preferredAngle === null);
-
-      // Sort nodes with preferred angles by their preferred angle
-      withPreferred.sort((a, b) => (a.preferredAngle || 0) - (b.preferredAngle || 0));
-
-      // Assign angles - nodes with preferred angles get positioned near their targets
-      // Nodes without preferred angles fill the remaining space
-      const usedAngles: number[] = [];
-      const minAngleSeparation = (2 * Math.PI) / Math.max(count, 8); // Minimum separation
-
-      // Helpers: keep clusters near preferred angles (avoid long chords crossing the center)
-      const normalizeAngle = (a: number) => {
-        const twoPi = 2 * Math.PI;
-        let angle = a % twoPi;
-        if (angle < -Math.PI) angle += twoPi;
-        if (angle > Math.PI) angle -= twoPi;
-        return angle;
-      };
-
-      const angularDistance = (a: number, b: number) => {
-        return Math.abs(normalizeAngle(a - b));
-      };
-
-      const isAngleUsed = (angle: number) =>
-        usedAngles.some((ua) => angularDistance(ua, angle) < minAngleSeparation);
-
-      const findClosestAvailableAngle = (preferred: number) => {
-        const base = normalizeAngle(preferred);
-        if (!isAngleUsed(base)) return base;
-
-        // Search symmetrically around the preferred angle to keep related nodes
-        // near their target (prevents lines that visually look like CF links).
-        for (let step = 1; step < 128; step++) {
-          const delta = step * minAngleSeparation;
-          const candidates = [normalizeAngle(base + delta), normalizeAngle(base - delta)];
-          const free = candidates.find((c) => !isAngleUsed(c));
-          if (free !== undefined) return free;
-        }
-
-        return base;
-      };
-
-      // First, assign angles to nodes with preferred positions
-      withPreferred.forEach(({ act, preferredAngle }) => {
-        // ═══════════════════════════════════════════════════════════════════
-        // CORREÇÃO: Decreto 12.807/2025 - forçar ângulo único para evitar sobreposição
-        // O Decreto 12.807 estava sobrepondo o 11.462 porque ambos têm preferredAngle
-        // para a Lei 14.133. Forçamos um ângulo distinto (150° = 5π/6).
-        // ═══════════════════════════════════════════════════════════════════
-        const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
-        const isDecreto12807 = act.id === DECRETO_12807_ID || 
-                                act.numero?.includes("12.807") || 
-                                act.numero?.includes("12807");
+      
+      sortedNodes.forEach((act, idx) => {
+        const angle = startAngle + idx * angleStep;
         
-        let angle: number;
-        if (isDecreto12807) {
-          // Forçar ângulo em 150° (quadrante superior-esquerdo) para evitar sobreposição
-          const forcedAngle = (5 * Math.PI) / 6; // 150°
-          angle = findClosestAvailableAngle(forcedAngle);
-          console.log(`[CORREÇÃO 12.807] Forçando ângulo único: ${(angle * 180 / Math.PI).toFixed(0)}° (original: ${((preferredAngle || 0) * 180 / Math.PI).toFixed(0)}°)`);
-        } else {
-          angle = findClosestAvailableAngle(preferredAngle!);
-        }
-        
-        usedAngles.push(angle);
-
         const x = cx + radius * Math.cos(angle);
         const y = cy + radius * Math.sin(angle);
-
+        
         nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
         result.push({
           id: act.id,
@@ -664,68 +600,24 @@ export const RadialHierarchyView = ({
           y,
         });
       });
+    }
 
-      // Then, position remaining nodes evenly distributed around the circle
-      // This ensures all nodes are visible and don't cluster in one area
-      if (withoutPreferred.length > 0) {
-        // Calculate even distribution for nodes without preferred angles
-        // Start from π/4 (bottom-right quadrant) to ensure visibility within viewport
-        // Avoid starting at -π/2 (top) which can place nodes outside visible area
-        const totalSlots = withoutPreferred.length + usedAngles.length;
-        const baseAngleSeparation = (2 * Math.PI) / Math.max(totalSlots, 8);
-        
-        // Start angle: use right side (0 rad) offset to keep nodes visible
-        const startAngle = Math.PI / 4; // 45° - bottom-right quadrant
-        
-        withoutPreferred.forEach(({ act }, idx) => {
-          // ═══════════════════════════════════════════════════════════════════
-          // CORREÇÃO CIRÚRGICA: Decreto 12.807/2025 - forçar posição visível
-          // ═══════════════════════════════════════════════════════════════════
-          const DECRETO_12807_ID = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
-          const isDecreto12807 = act.id === DECRETO_12807_ID || 
-                                  act.numero?.includes("12.807") || 
-                                  act.numero?.includes("12807");
-          
-          let targetAngle: number;
-          
-          if (isDecreto12807) {
-            // Posicionar o Decreto 12.807 em ângulo visível (direita-inferior)
-            // Próximo à Lei 14.133 que geralmente está no anel 1
-            targetAngle = Math.PI / 3; // 60° - visível no quadrante inferior-direito
-            console.log(`[CORREÇÃO 12.807] Forçando ângulo visível: ${(targetAngle * 180 / Math.PI).toFixed(0)}°`);
-          } else {
-            // Outros nós: distribuir normalmente a partir do startAngle
-            targetAngle = startAngle + (idx + usedAngles.length) * baseAngleSeparation;
-          }
-          
-          // Normalize and find closest available angle
-          let angle = normalizeAngle(targetAngle);
-          
-          // Adjust to avoid collision with already used angles
-          let attempts = 0;
-          while (isAngleUsed(angle) && attempts < 128) {
-            angle = normalizeAngle(angle + minAngleSeparation * 0.5);
-            attempts++;
-          }
-          
-          usedAngles.push(angle);
-          
-          const x = cx + radius * Math.cos(angle);
-          const y = cy + radius * Math.sin(angle);
-          
-          nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
-          result.push({
-            id: act.id,
-            label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-            tipo: act.tipo,
-            act,
-            ring: ringIdx,
-            angle,
-            x,
-            y,
-          });
-        });
-      }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CORREÇÃO CIRÚRGICA: Validar presença do Decreto 12.807/2025
+    // ═══════════════════════════════════════════════════════════════════════════
+    const DECRETO_12807_ID_CHECK = "320a1fc8-e325-4bf4-9f0f-b811eb5ce677";
+    const decreto12807NodeCheck = result.find((n) => 
+      n.id === DECRETO_12807_ID_CHECK || 
+      n.act.numero?.includes("12.807") ||
+      n.act.numero?.includes("12807")
+    );
+    
+    if (decreto12807NodeCheck) {
+      console.log(
+        `[POSICIONAMENTO 12.807] ✅ Decreto nº 12.807 posicionado | ` +
+        `angle=${(decreto12807NodeCheck.angle * 180 / Math.PI).toFixed(0)}° | ` +
+        `x=${decreto12807NodeCheck.x.toFixed(0)}, y=${decreto12807NodeCheck.y.toFixed(0)}`
+      );
     }
 
     // Build links with explicit types

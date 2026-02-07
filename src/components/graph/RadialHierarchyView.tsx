@@ -733,38 +733,39 @@ export const RadialHierarchyView = ({
     
     // regulatoryTargets already built above for node positioning
     
-    // 1. Hierarchy links - STRICT rule: Decretos (ring 2) NEVER connect to CF/88 (ring 0)
-    // Only Laws (ring 1) can connect directly to CF/88 (ring 0)
+    // 1. Hierarchy links - STRICT NORMATIVE HIERARCHY RULES:
+    // - Ring 0: CF/88 (root)
+    // - Ring 1: Laws connect to CF/88
+    // - Ring 2: Decretos connect to Laws (ring 1), NEVER to CF/88
+    // - Ring 3: Resoluções/Portarias/INs connect to Laws (ring 1), NOT to Decretos
+    //           This reflects that these are administrative acts derived from Law, not from Decrees
     result.forEach((node) => {
       if (node.ring === 0) return;
       
-      // Find parent in previous ring
-      const parentRing = node.ring - 1;
-      let parentsInRing = result.filter((n) => n.ring === parentRing);
+      let parentsInRing: RingNode[] = [];
       
-      // CRITICAL HIERARCHY RULES:
-      // - Ring 1 (Laws) can connect to Ring 0 (CF/88)
-      // - Ring 2 (Decretos) can ONLY connect to Ring 1 (Laws), NEVER to Ring 0
-      // - Ring 3+ can connect to previous ring
-      
-      if (node.ring === 2) {
-        // Decretos: MUST connect to Laws (ring 1), NEVER to CF/88 (ring 0)
-        // Double-check: only use ring 1 parents
-        parentsInRing = parentsInRing.filter((p) => p.ring === 1);
-        
-        // If no Laws in ring 1, search for all Laws
-        if (parentsInRing.length === 0) {
-          parentsInRing = result.filter((n) => n.ring === 1);
-        }
-        
-        // If STILL no Laws available, skip creating a link (don't connect to CF)
-        if (parentsInRing.length === 0) {
-          console.warn(`No Laws found for Decreto ${node.label} - skipping hierarchy link`);
-          return; // Skip this node - no link is better than wrong link to CF
-        }
-      } else if (node.ring === 1) {
+      if (node.ring === 1) {
         // Laws: Connect to CF/88 (ring 0)
         parentsInRing = result.filter((n) => n.ring === 0);
+      } else if (node.ring === 2) {
+        // Decretos: Connect to Laws (ring 1), NEVER to CF/88
+        parentsInRing = result.filter((n) => n.ring === 1);
+        
+        if (parentsInRing.length === 0) {
+          console.warn(`No Laws found for Decreto ${node.label} - skipping hierarchy link`);
+          return;
+        }
+      } else if (node.ring === 3) {
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO: Resoluções, Portarias, INs conectam à Lei 14.133 (anel 1)
+        // Não aos Decretos (anel 2) - são atos administrativos derivados da Lei
+        // ═══════════════════════════════════════════════════════════════════
+        parentsInRing = result.filter((n) => n.ring === 1);
+        
+        if (parentsInRing.length === 0) {
+          console.warn(`No Laws found for ${node.label} - skipping hierarchy link`);
+          return;
+        }
       }
       
       // FINAL SAFETY CHECK: Never allow ring 2+ nodes to connect to ring 0

@@ -1529,7 +1529,7 @@ export const RadialHierarchyView = ({
               ))}
 
               {/* Connection links with types - filtered by visibility toggles */}
-              {/* REGRA: Todas as linhas são curvas e NUNCA se cruzam */}
+              {/* REGRA: Linhas retas quando possível, curvas apenas para evitar cruzamentos */}
               {(() => {
                 const visibleLinks = links.filter((link) => {
                   let isVisible = 
@@ -1550,33 +1550,21 @@ export const RadialHierarchyView = ({
                 const cfRadius = 50;
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // ESTRATÉGIA ANTI-CRUZAMENTO:
-                // 1. Ordenar links pelo ângulo do ponto de DESTINO (toX, toY)
-                // 2. Cada link curva SEMPRE para fora do centro
-                // 3. Links adjacentes (por ângulo) têm offsets crescentes
+                // ESTRATÉGIA: LINHAS RETAS quando possível, CURVAS apenas quando
+                // atravessariam o centro ou quando há múltiplos links ao mesmo destino
                 // ═══════════════════════════════════════════════════════════════════
                 
-                // Calcular ângulo do destino para cada link
-                const linksWithAngles = visibleLinks.map((link, originalIndex) => {
-                  const toAngle = Math.atan2(link.toY - cy, link.toX - cx);
-                  const fromAngle = Math.atan2(link.fromY - cy, link.fromX - cx);
-                  return { link, originalIndex, toAngle, fromAngle };
+                // Agrupar por nó de destino para detectar links múltiplos
+                const linksByTarget = new Map<string, number>();
+                visibleLinks.forEach((link) => {
+                  const count = linksByTarget.get(link.toId) || 0;
+                  linksByTarget.set(link.toId, count + 1);
                 });
                 
-                // Ordenar por ângulo do destino para processar links adjacentes juntos
-                linksWithAngles.sort((a, b) => a.toAngle - b.toAngle);
+                // Contador de índice por destino
+                const linkIndexByTarget = new Map<string, number>();
                 
-                // Agrupar por nó de destino para distribuir offsets
-                const linksByTarget = new Map<string, typeof linksWithAngles>();
-                linksWithAngles.forEach((item) => {
-                  const key = item.link.toId;
-                  const existing = linksByTarget.get(key) || [];
-                  existing.push(item);
-                  linksByTarget.set(key, existing);
-                });
-                
-                return linksWithAngles.map((item, sortedIndex) => {
-                  const { link, originalIndex, toAngle, fromAngle } = item;
+                return visibleLinks.map((link, index) => {
                   const style = linkStyles[link.type];
                   
                   const fromHighlighted = !highlightedNormaIds || highlightedNormaIds.has(link.fromId);
@@ -1589,6 +1577,44 @@ export const RadialHierarchyView = ({
                   
                   if (lineLength === 0) return null;
                   
+                  // Verificar se atravessaria o centro (CF/88)
+                  const distToCenter = Math.abs(dy * cx - dx * cy + link.toX * link.fromY - link.toY * link.fromX) / lineLength;
+                  const t = ((cx - link.fromX) * dx + (cy - link.fromY) * dy) / (lineLength * lineLength);
+                  const centerIsBetween = t > 0.1 && t < 0.9;
+                  const wouldCrossCenter = distToCenter < cfRadius && centerIsBetween;
+                  
+                  // Verificar se há múltiplos links ao mesmo destino
+                  const targetCount = linksByTarget.get(link.toId) || 1;
+                  const currentIndex = linkIndexByTarget.get(link.toId) || 0;
+                  linkIndexByTarget.set(link.toId, currentIndex + 1);
+                  const hasMultipleToSameTarget = targetCount > 1;
+                  
+                  // ═══════════════════════════════════════════════════════════════════
+                  // DECISÃO: RETA ou CURVA?
+                  // - RETA: quando não atravessa o centro E não há múltiplos links ao mesmo destino
+                  // - CURVA: quando atravessa o centro OU há múltiplos links ao mesmo destino
+                  // ═══════════════════════════════════════════════════════════════════
+                  const needsCurve = wouldCrossCenter || hasMultipleToSameTarget;
+                  
+                  if (!needsCurve) {
+                    // Linha reta
+                    return (
+                      <line
+                        key={`link-${link.fromId}-${link.toId}-${index}`}
+                        x1={link.fromX}
+                        y1={link.fromY}
+                        x2={link.toX}
+                        y2={link.toY}
+                        stroke={style.stroke}
+                        strokeWidth={style.strokeWidth}
+                        strokeDasharray={style.dashArray}
+                        opacity={highlightedNormaIds ? (linkHighlighted ? 0.8 : 0.1) : 0.6}
+                        className="transition-opacity duration-300"
+                      />
+                    );
+                  }
+                  
+                  // Linha curva - calcular ponto de controle
                   const midX = (link.fromX + link.toX) / 2;
                   const midY = (link.fromY + link.toY) / 2;
                   
@@ -1601,30 +1627,12 @@ export const RadialHierarchyView = ({
                   const radialNormX = radialLength > 0 ? radialX / radialLength : 0;
                   const radialNormY = radialLength > 0 ? radialY / radialLength : 1;
                   
-                  // Verificar se atravessaria o centro
-                  const distToCenter = Math.abs(dy * cx - dx * cy + link.toX * link.fromY - link.toY * link.fromX) / lineLength;
-                  const t = ((cx - link.fromX) * dx + (cy - link.fromY) * dy) / (lineLength * lineLength);
-                  const centerIsBetween = t > 0.1 && t < 0.9;
-                  const wouldCrossCenter = distToCenter < cfRadius && centerIsBetween;
-                  
-                  // Calcular índice dentro do grupo de mesmo destino
-                  const targetGroup = linksByTarget.get(link.toId) || [];
-                  const indexInGroup = targetGroup.findIndex((g) => g.originalIndex === originalIndex);
-                  const groupSize = targetGroup.length;
-                  
-                  // ═══════════════════════════════════════════════════════════════════
-                  // OFFSET CALCULATION:
-                  // - Base offset proporcional à distância (links longos curvam mais)
-                  // - Offset adicional por índice no grupo para separar links ao mesmo destino
-                  // - Offset extra se atravessaria o centro
-                  // - SEMPRE curva para FORA do centro (direção radial positiva)
-                  // ═══════════════════════════════════════════════════════════════════
-                  const baseOffset = Math.max(25, lineLength * 0.08);
-                  const groupOffset = groupSize > 1 ? (indexInGroup - (groupSize - 1) / 2) * 20 : 0;
-                  const centerOffset = wouldCrossCenter ? cfRadius * 2.5 : 0;
+                  // Calcular offset
+                  const baseOffset = wouldCrossCenter ? cfRadius * 2.5 : 20;
+                  const groupOffset = hasMultipleToSameTarget ? (currentIndex - (targetCount - 1) / 2) * 25 : 0;
                   
                   // Offset total - sempre positivo (para fora)
-                  const totalOffset = baseOffset + Math.abs(groupOffset) + centerOffset;
+                  const totalOffset = baseOffset + Math.abs(groupOffset);
                   
                   // Ponto de controle: mover na direção radial (para fora do centro)
                   const controlX = midX + radialNormX * totalOffset;
@@ -1632,7 +1640,7 @@ export const RadialHierarchyView = ({
                   
                   return (
                     <path
-                      key={`link-${link.fromId}-${link.toId}-${originalIndex}`}
+                      key={`link-${link.fromId}-${link.toId}-${index}`}
                       d={`M ${link.fromX} ${link.fromY} Q ${controlX} ${controlY} ${link.toX} ${link.toY}`}
                       fill="none"
                       stroke={style.stroke}

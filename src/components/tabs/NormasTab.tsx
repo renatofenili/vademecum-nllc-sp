@@ -136,8 +136,9 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     
     // 2. "Art." starts new line ONLY when it looks like a new article heading
     // (avoid references like "no art. 52 desta Lei").
+    // IMPORTANT: The number MUST be captured together with "Art." to avoid splitting them
     formatted = formatted.replace(
-      /([.;:])\s+(Art\.?\s*\d{1,4}\s*(?:º|°|o|\.)?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g,
+      /([.;:])\s+(Art\.?\s*\d{1,4}\s*(?:º|°|o)?\.?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g,
       "$1\n\n$2",
     );
     
@@ -212,6 +213,10 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
 
             const style = nivelStyles[dispositivo.nivel] || "text-foreground";
             const formattedText = applyFormalFormatting(dispositivo.texto);
+            // DEBUG: Log if Art. appears without number on same line
+            if (formattedText.match(/Art\.\s*\n/) || formattedText.match(/\nArt\.\s*$/m)) {
+              console.log('[DEBUG] Art. separated from number:', dispositivo.anchor, formattedText.substring(0, 100));
+            }
 
             return (
               <div key={`${dispositivo.anchor}-${index}`} className="group">

@@ -1760,9 +1760,17 @@ export const RadialHierarchyView = ({
               {/* Nodes */}
               {nodes.map((node) => {
                 const isCenter = node.ring === 0;
-                // Larger nodes: ellipse for full name display
-                const nodeWidth = isCenter ? 90 : 110;
+                
+                // Calculate dynamic width based on label length
+                const fullLabel = isCenter 
+                  ? "CF/1988" 
+                  : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
+                
+                // Estimate width: ~7px per character + padding
+                const estimatedWidth = Math.max(isCenter ? 90 : 130, fullLabel.length * 7 + 24);
+                const nodeWidth = Math.min(estimatedWidth, 200); // Cap at 200px
                 const nodeHeight = isCenter ? 45 : 36;
+                
                 const color = ringColors[node.ring];
                 const nodeExpanded = expandedDispositivosMap.get(node.id);
                 const hasExpandedDispositivos = !!nodeExpanded && !nodeExpanded.isLoading && nodeExpanded.artigoGroups.length > 0;
@@ -1772,11 +1780,6 @@ export const RadialHierarchyView = ({
                 // Theme mode highlighting
                 const isHighlighted = !highlightedNormaIds || highlightedNormaIds.has(node.id) || isCenter;
                 const nodeOpacity = highlightedNormaIds ? (isHighlighted ? 1 : 0.15) : 1;
-                
-                // Full label without truncation
-                const fullLabel = isCenter 
-                  ? "CF/1988" 
-                  : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
 
                 return (
                   <g key={node.id} style={{ opacity: nodeOpacity }} className="transition-opacity duration-300">

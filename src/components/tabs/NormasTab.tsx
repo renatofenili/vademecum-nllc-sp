@@ -89,6 +89,10 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     
     // === OCR/PDF extraction error corrections ===
     
+    // Fix broken lines between "Art." and number (e.g., "Art.\n46" → "Art. 46")
+    formatted = formatted.replace(/\b(Art\.?)\s*\n+\s*(\d+)/gi, "$1 $2");
+    formatted = formatted.replace(/\b(Art)\s*\.\s*\n+\s*(\d+)/gi, "$1. $2");
+    
     // Fix "||" -> "II -", "|||" -> "III -", etc. when they look like roman numeral incisos
     // (at start of line, after punctuation, or after whitespace)
     // Also ensures the dash separator is present

@@ -646,35 +646,29 @@ export const RadialHierarchyView = ({
         });
       });
 
-      // Then, position remaining nodes near their closest parent in the previous ring
-      // This ensures hierarchy lines don't cross the center
+      // Then, position remaining nodes evenly distributed around the circle
+      // This ensures all nodes are visible and don't cluster in one area
       if (withoutPreferred.length > 0) {
-        const parentRing = ringIdx - 1;
-        const parentsInPreviousRing = result.filter((n) => n.ring === parentRing);
+        // Calculate even distribution for nodes without preferred angles
+        // Start from -π/2 (top) and distribute evenly, avoiding used angles
+        const totalSlots = withoutPreferred.length + usedAngles.length;
+        const baseAngleSeparation = (2 * Math.PI) / Math.max(totalSlots, 8);
         
-        withoutPreferred.forEach(({ act }) => {
-          let angle: number;
+        // Find gaps between already used angles to distribute remaining nodes
+        const sortedUsed = [...usedAngles].sort((a, b) => a - b);
+        
+        withoutPreferred.forEach(({ act }, idx) => {
+          // Calculate target angle: distribute evenly starting from top
+          const targetAngle = -Math.PI / 2 + (idx + usedAngles.length) * baseAngleSeparation;
           
-          if (parentsInPreviousRing.length > 0) {
-            // Find the parent with the smallest angular distance to any already used angle
-            // Or if no used angles yet, just use the first parent's angle with offset
-            if (usedAngles.length > 0) {
-              // Find a parent whose angle creates the smallest line crossing
-              // Position near the center of mass of parents
-              const avgParentAngle = parentsInPreviousRing.reduce((sum, p) => sum + p.angle, 0) / parentsInPreviousRing.length;
-              angle = avgParentAngle;
-            } else {
-              // No other nodes positioned yet, use the first parent's angle
-              angle = parentsInPreviousRing[0].angle;
-            }
-            
-            // Adjust to avoid collision with already used angles
-            while (usedAngles.some((ua) => Math.abs(ua - angle) < minAngleSeparation)) {
-              angle += minAngleSeparation;
-            }
-          } else {
-            // No parents (shouldn't happen for rings > 0), distribute evenly
-            angle = -Math.PI / 2 + usedAngles.length * minAngleSeparation;
+          // Normalize and find closest available angle
+          let angle = normalizeAngle(targetAngle);
+          
+          // Adjust to avoid collision with already used angles
+          let attempts = 0;
+          while (isAngleUsed(angle) && attempts < 128) {
+            angle = normalizeAngle(angle + minAngleSeparation * 0.5);
+            attempts++;
           }
           
           usedAngles.push(angle);

@@ -85,9 +85,9 @@ interface GraphLink {
 }
 
 const linkStyles: Record<LinkType, { stroke: string; strokeWidth: number; dashArray: string; label: string }> = {
-  hierarquia: { stroke: "hsl(0, 0%, 15%)", strokeWidth: 2.5, dashArray: "", label: "Hierarquia" },
-  regulamenta: { stroke: "hsl(0, 0%, 25%)", strokeWidth: 2, dashArray: "8 4", label: "Regulamenta" },
-  remete: { stroke: "hsl(0, 0%, 35%)", strokeWidth: 1.5, dashArray: "3 3", label: "Remete" },
+  hierarquia: { stroke: "hsl(0, 0%, 15%)", strokeWidth: 1.5, dashArray: "", label: "Hierarquia" },
+  regulamenta: { stroke: "hsl(0, 0%, 25%)", strokeWidth: 1.5, dashArray: "8 4", label: "Regulamenta" },
+  remete: { stroke: "hsl(0, 0%, 35%)", strokeWidth: 1, dashArray: "3 3", label: "Remete" },
 };
 
 // Ring assignments by normative type

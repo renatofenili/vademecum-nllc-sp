@@ -83,111 +83,119 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
     return tipos[tipo] || tipo;
   };
 
-  // Apply formal formatting rules to text
+  // Apply formal formatting rules to text (IN73 typographic corrections)
   const applyFormalFormatting = (text: string): string => {
-    let formatted = text;
-
-    // Normalize exotic line separators from PDFs (page breaks, line separators, etc.)
-    // so the rules below can reliably detect and fix "Art." + number splits.
-    formatted = formatted
-      .replace(/\r\n?/g, "\n")
-      .replace(/[\f\v\u0085\u2028\u2029]/g, "\n");
+    if (!text) return "";
     
-    // === OCR/PDF extraction error corrections ===
+    // Normalize line endings
+    let formatted = text.replace(/\r\n?/g, "\n");
     
-    // Fix broken lines between "Art." and number (e.g., "Art.\n46" → "Art. 46")
-    // Also handles "Art." at start of text (no word boundary before)
-    formatted = formatted.replace(/(^|\s)(Art\.?)\s*\n+\s*(\d+)/gim, "$1$2 $3");
-    formatted = formatted.replace(/(^|\s)(Art)\s*\.\s*\n+\s*(\d+)/gim, "$1$2. $3");
+    // === RULE E: Hyphenation at end-of-line ===
+    // "eletrô-\nnico" => "eletrônico" (hyphen + newline + lowercase = join without space)
+    formatted = formatted.replace(/-\n([a-záàâãéêíóôõúç])/gi, "$1");
     
-    // Fix "Art." followed by newline and then number on separate line
-    // This catches the pattern where "Art." is alone on a line
-    formatted = formatted.replace(/^Art\.\s*$/gm, "Art.");
-    formatted = formatted.replace(/Art\.\s*\n+(\d+)/gm, "Art. $1");
+    // === RULE F: Word split without hyphen ===
+    // "la\nnces", "sis\ntema" => "lances", "sistema"
+    // Detect: lowercase letter + newline + lowercase letter (mid-word break)
+    formatted = formatted.replace(/([a-záàâãéêíóôõúç])\n([a-záàâãéêíóôõúç])/gi, "$1$2");
     
-    // Fix "||" -> "II -", "|||" -> "III -", etc. when they look like roman numeral incisos
-    // (at start of line, after punctuation, or after whitespace)
-    // Also ensures the dash separator is present
+    // === OCR artifact corrections ===
+    // Fix "||" -> "II -", "|||" -> "III -", etc.
     formatted = formatted.replace(
       /(^|[.;:\s])\|(\|{0,6})\s*[-–—]?\s*(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/gm,
       (match, prefix, pipes) => {
         const romanMap: Record<number, string> = { 1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII" };
-        const numPipes = pipes.length + 1; // +1 for the first pipe captured separately
+        const numPipes = pipes.length + 1;
         return prefix + (romanMap[numPipes] || "I".repeat(numPipes)) + " - ";
       }
     );
     
-    // Fix "0" (zero) -> "o" (article) when followed by a capitalized word
-    // e.g., "admitido 0 Índice" -> "admitido o Índice"
+    // Fix "0" (zero) -> "o" (article) before capitalized word
     formatted = formatted.replace(/\s0\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g, " o $1");
     
-    // === Formatting rules ===
+    // === RULE C/D/G: Merge lines that are NOT new dispositivos ===
+    // Pattern for new dispositivo start (must NOT be joined):
+    // - Art. / Artigo
+    // - §
+    // - Parágrafo único
+    // - Roman numerals: I, II, III, IV, V, VI, VII, VIII, IX, X (followed by -, ., ), or space+letter)
+    // - Alíneas: a), b), c)...
+    // - Numbered items: 1., 2., 3....
     
-    // 0. Preserve intentional double newlines (already formatted text)
-    const PLACEHOLDER = '<<<DOUBLE_NEWLINE>>>';
-    formatted = formatted.replace(/\n\n/g, PLACEHOLDER);
+    const lines = formatted.split("\n");
+    const result: string[] = [];
     
-    // 1. Normalize unwanted single line breaks from PDF extraction
-    // Replace single newlines (not followed by structural markers) with space
-    formatted = formatted.replace(
-      /\n(?!\s*(?:Art\.?|§|[IVXLCDM]+\s*(?:[-–—]\s*|\s+)|[a-z]\)|\d+\s*[-–—]))/gi,
-      ' '
-    );
+    const isNewDispositivo = (line: string): boolean => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      
+      // Art. or Artigo
+      if (/^Art(igo)?\.?\s*\d/i.test(trimmed)) return true;
+      
+      // § (paragraph marker)
+      if (/^§/.test(trimmed)) return true;
+      
+      // Parágrafo único
+      if (/^Parágrafo\s+único/i.test(trimmed)) return true;
+      
+      // Roman numerals at start (I, II, III... up to X) followed by separator
+      if (/^(X{0,1}I{1,3}|IV|VI{0,3}|IX|X)\s*[-–—.)\s]/i.test(trimmed)) return true;
+      
+      // Alíneas: a), b), c)...
+      if (/^[a-z]\)\s/i.test(trimmed)) return true;
+      
+      // Numbered items: 1., 2., 3.
+      if (/^\d{1,2}\.\s/.test(trimmed)) return true;
+      
+      return false;
+    };
     
-    // Restore intentional double newlines
-    formatted = formatted.replace(new RegExp(PLACEHOLDER, 'g'), '\n\n');
+    const endsWithStrongPunctuation = (line: string): boolean => {
+      const trimmed = line.trim();
+      return /[.;:?!]$/.test(trimmed);
+    };
     
-    // Clean up multiple spaces (but not newlines)
-    formatted = formatted.replace(/ {2,}/g, ' ');
+    for (let i = 0; i < lines.length; i++) {
+      const currentLine = lines[i];
+      const nextLine = lines[i + 1];
+      
+      if (result.length === 0) {
+        result.push(currentLine);
+        continue;
+      }
+      
+      const prevLine = result[result.length - 1];
+      
+      // RULE G: If current line starts a new dispositivo, keep it on new line
+      if (isNewDispositivo(currentLine)) {
+        result.push(currentLine);
+        continue;
+      }
+      
+      // RULE D: If previous line does NOT end with strong punctuation
+      // and current line is NOT a new dispositivo, join with space
+      if (!endsWithStrongPunctuation(prevLine) && currentLine.trim()) {
+        result[result.length - 1] = prevLine.trimEnd() + " " + currentLine.trimStart();
+      } else {
+        result.push(currentLine);
+      }
+    }
     
-    // 2. "Art." starts new line ONLY when it looks like a new article heading
-    // (avoid references like "no art. 52 desta Lei").
-    // IMPORTANT: The number MUST be captured together with "Art." to avoid splitting them
-    formatted = formatted.replace(
-      /([.;:])\s+(Art\.?\s*\d{1,4}\s*(?:º|°|o)?\.?)(?=\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/g,
-      "$1\n\n$2",
-    );
+    formatted = result.join("\n");
     
-    // 3. Roman numeral incisos start new line when they start a new item
-    // (PDFs sometimes lose the dash after the numeral, e.g. "II contratações..."; and sometimes "II" becomes "||")
-    formatted = formatted.replace(
-      /([.;:])\s*((?:[IVXLCDM]{1,7}|\|{1,7})(?:\s*[-–—]\s*|\s+))(?=[A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç])/g,
-      "$1\n\n$2",
-    );
+    // === Fix "Art." separated from number ===
+    // "Art.\n46" or "Art. \n 46" => "Art. 46"
+    formatted = formatted.replace(/\bArt\.?\s*\n+\s*(\d+)/gi, "Art. $1");
     
-    // 4. Paragraph markers "§" start new line only when they look like a new paragraph
-    // (avoid references like "no § 1º do art. 52").
-    formatted = formatted.replace(
-      /([.;:])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*(?:[-–—]\s*)?[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
-      "$1\n\n$2",
-    );
-    
-    // Also handle missing punctuation when it's clearly a new paragraph: "... elevados § 1º - Poderá ..."
-    formatted = formatted.replace(
-      /([a-záàâãéêíóôõúç0-9])\s*(§\s*(?:\d+|único)\s*(?:º|°|o)?)(?=\s*[-–—]\s*[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/gi,
-      "$1\n\n$2",
-    );
-    
-    // 5. Alíneas "a)", "b)", etc. start new line only when they start a new item
-    formatted = formatted.replace(/([.;:])\s+([a-z]\))(?=\s)/gi, "$1\n\n$2");
-    
-    // 6. Numbered items "1.", "2.", etc. start new line when they look like list items
-    formatted = formatted.replace(
-      /([.;:])\s*(\d{1,2})\.\s+(?=[a-záàâãéêíóôõúç])/gi,
-      "$1\n\n$2. ",
-    );
-    
-    // Also handle when there's no punctuation before the number (common in PDFs)
-    formatted = formatted.replace(
-      /([a-záàâãéêíóôõúç])\s+(\d{1,2})\.\s+(?=[a-záàâãéêíóôõúç])/gi,
-      "$1\n\n$2. ",
-    );
+    // Clean up multiple spaces
+    formatted = formatted.replace(/ {2,}/g, " ");
     
     // Clean up more than 2 consecutive newlines
-    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    formatted = formatted.replace(/\n{3,}/g, "\n\n");
     
     return formatted.trim();
   };
+
 
   // Parse texto_extraido JSON to render formatted text
   const renderTextoExtraido = (textoExtraido: string | null) => {

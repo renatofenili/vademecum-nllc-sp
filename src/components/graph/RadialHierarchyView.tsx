@@ -1766,10 +1766,10 @@ export const RadialHierarchyView = ({
                   ? "CF/1988" 
                   : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
                 
-                // Estimate width: ~7px per character + padding
-                const estimatedWidth = Math.max(isCenter ? 90 : 130, fullLabel.length * 7 + 24);
-                const nodeWidth = Math.min(estimatedWidth, 200); // Cap at 200px
-                const nodeHeight = isCenter ? 45 : 36;
+                // Estimate width: ~6px per character + padding
+                const estimatedWidth = Math.max(isCenter ? 85 : 100, fullLabel.length * 6 + 16);
+                const nodeWidth = Math.min(estimatedWidth, 160); // Cap at 160px
+                const nodeHeight = isCenter ? 42 : 32;
                 
                 const color = ringColors[node.ring];
                 const nodeExpanded = expandedDispositivosMap.get(node.id);

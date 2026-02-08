@@ -429,6 +429,22 @@ export const RadialHierarchyView = ({
     return node?.id ?? null;
   }, [data?.nodes]);
 
+  const decreto68021ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("68021");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const decreto68185ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("68185");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
   const ensureExpanded = useCallback(
     (actId: string) => {
       const expanded = expandedDispositivosMap.get(actId);
@@ -1330,8 +1346,10 @@ export const RadialHierarchyView = ({
       decreto11878ActId,
       decreto11462ActId,
       decreto68861ActId,
+      decreto68021ActId,
+      decreto68185ActId,
     ].filter(Boolean) as string[];
-  }, [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId, decreto12807ActId, decreto11878ActId, decreto11462ActId, decreto68861ActId]);
+  }, [decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId, decreto12807ActId, decreto11878ActId, decreto11462ActId, decreto68861ActId, decreto68021ActId, decreto68185ActId]);
 
   const highlightedArticlesMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -1406,6 +1424,17 @@ export const RadialHierarchyView = ({
                  normAnchor === "art.60" || normAnchor === "art60" ||
                  normAnchor === "art.156" || normAnchor === "art156";
         }
+
+        // Decreto 68.021 -> art. 19
+        if (link.fromNodeId === decreto68021ActId) {
+          return normAnchor === "art.19" || normAnchor === "art19";
+        }
+
+        // Decreto 68.185 -> arts. 6 e 40
+        if (link.fromNodeId === decreto68185ActId) {
+          return normAnchor === "art.6" || normAnchor === "art6" ||
+                 normAnchor === "art.40" || normAnchor === "art40";
+        }
         
         return false;
       })
@@ -1415,7 +1444,7 @@ export const RadialHierarchyView = ({
         map.set(`${link.toActId}:${normalizeAnchor(link.toAnchor)}`, sourceColor);
       });
     return map;
-  }, [showRegulamentaLinks, articleLinks, nodes, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId, decreto12807ActId, decreto11878ActId, decreto11462ActId, decreto68861ActId, lei14133ActId]);
+  }, [showRegulamentaLinks, articleLinks, nodes, decreto68304ActId, decreto68422ActId, decreto68220ActId, decreto69233ActId, decreto67689ActId, decreto67888ActId, decreto67985ActId, decreto68017ActId, decreto12807ActId, decreto11878ActId, decreto11462ActId, decreto68861ActId, decreto68021ActId, decreto68185ActId, lei14133ActId]);
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
       setIsDragging(true);

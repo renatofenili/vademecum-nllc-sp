@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, FileText, ChevronRight, Filter } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { FileText, ChevronRight, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateBR } from "@/lib/date";
+import SmartSearch from "@/components/normas/SmartSearch";
 
 const tiposNorma = [
   { value: "all", label: "Todos os tipos" },
@@ -16,6 +15,8 @@ const tiposNorma = [
   { value: "resolucao", label: "Resolução" },
   { value: "portaria", label: "Portaria" },
   { value: "lei", label: "Lei" },
+  { value: "lei_federal", label: "Lei Federal" },
+  { value: "lei_estadual", label: "Lei Estadual" },
   { value: "instrucao_normativa", label: "Instrução Normativa" },
 ];
 
@@ -43,11 +44,12 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
         .order("data_publicacao", { ascending: false });
 
       if (searchTerm) {
-        query = query.or(`numero.ilike.%${searchTerm}%,ementa.ilike.%${searchTerm}%`);
+        // Search across all metadata fields
+        query = query.or(`numero.ilike.%${searchTerm}%,ementa.ilike.%${searchTerm}%,orgao_emissor.ilike.%${searchTerm}%,observacoes.ilike.%${searchTerm}%,analise_norma.ilike.%${searchTerm}%,texto_extraido.ilike.%${searchTerm}%`);
       }
 
       if (tipoFilter !== "all") {
-        query = query.eq("tipo", tipoFilter as "decreto" | "resolucao" | "portaria" | "lei" | "instrucao_normativa" | "outro");
+        query = query.eq("tipo", tipoFilter as "decreto" | "resolucao" | "portaria" | "lei" | "lei_federal" | "lei_estadual" | "instrucao_normativa" | "outro");
       }
 
       const { data, error } = await query.limit(50);
@@ -302,16 +304,13 @@ const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
       {/* Search and Filters */}
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar por número ou assunto..."
-              className="pl-10 h-12"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          <SmartSearch
+            value={searchTerm}
+            onChange={setSearchTerm}
+            onSelectNorma={setSelectedNorma}
+            placeholder="Buscar em todos os campos (número, ementa, análise, texto...)..."
+            className="flex-1"
+          />
           <Select value={tipoFilter} onValueChange={setTipoFilter}>
             <SelectTrigger className="w-full md:w-[200px] h-12">
               <Filter className="h-4 w-4 mr-2" />

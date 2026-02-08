@@ -524,37 +524,60 @@ export const RadialHierarchyView = ({
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ANTI-COLISÃO: Constantes e funções auxiliares
+    // Layout de 2 linhas: linha1=tipo, linha2=número → nós verticais (pílula vertical)
     // ═══════════════════════════════════════════════════════════════════════════
-    const MIN_GAP = 18;
+    const MIN_GAP = 12; // Gap mínimo horizontal (priorizado)
+    const MIN_GAP_V = 8; // Gap vertical menor
 
-    const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number }> = {
-      0: { minWidth: 130, maxWidth: 220, height: 52 },   // Lei central (maior)
-      1: { minWidth: 90, maxWidth: 170, height: 36 },    // Decretos
-      2: { minWidth: 80, maxWidth: 155, height: 32 },    // INs/Resoluções
+    // Tamanhos para nós VERTICAIS (mais altos e bem mais estreitos)
+    const nodeSizeByRing: Record<number, { width: number; height: number }> = {
+      0: { width: 90, height: 60 },   // Lei central (maior)
+      1: { width: 70, height: 50 },   // Decretos
+      2: { width: 75, height: 48 },   // INs/Resoluções (IN pode ser longo)
     };
 
-    const getNodeLabel = (act: ActNode, ring: number): string => {
-      if (
-        act.tipo === "lei" ||
-        act.tipo === "lei_federal" ||
-        act.tipo === "lei_estadual" ||
-        act.tipo === "lei_complementar"
-      ) {
-        return `Lei nº ${act.numero}`;
+    // Estrutura do label de 2 linhas
+    interface TwoLineLabel {
+      line1: string;
+      line2: string;
+    }
+
+    const getTwoLineLabel = (act: ActNode): TwoLineLabel => {
+      const numero = act.numero || "";
+      
+      if (act.tipo === "constituicao") {
+        return { line1: "CF", line2: "1988" };
       }
-      return `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`;
+      if (act.tipo === "lei" || act.tipo === "lei_federal" || act.tipo === "lei_estadual" || act.tipo === "lei_complementar") {
+        return { line1: "Lei nº", line2: numero };
+      }
+      if (act.tipo === "decreto") {
+        return { line1: "Decreto", line2: numero };
+      }
+      if (act.tipo === "instrucao_normativa") {
+        return { line1: "Instrução", line2: `Normativa ${numero}` };
+      }
+      if (act.tipo === "resolucao") {
+        return { line1: "Resolução", line2: numero };
+      }
+      if (act.tipo === "portaria") {
+        return { line1: "Portaria", line2: numero };
+      }
+      return { line1: tipoLabels[act.tipo] || act.tipo, line2: numero };
+    };
+
+    // Para compatibilidade com código existente
+    const getNodeLabel = (act: ActNode, ring: number): string => {
+      const twoLine = getTwoLineLabel(act);
+      return `${twoLine.line1} ${twoLine.line2}`;
     };
 
     const estimateNodeSize = (act: ActNode, ring: number): { w: number; h: number } => {
-      const label = getNodeLabel(act, ring);
       const cfg = nodeSizeByRing[ring] || nodeSizeByRing[2];
-      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6.5 + 28);
-      return {
-        w: Math.min(estimatedWidth, cfg.maxWidth),
-        h: cfg.height,
-      };
+      return { w: cfg.width, h: cfg.height };
     };
 
+    // Colisão priorizada por largura (horizontal)
     const rectsOverlap = (
       x1: number, y1: number, w1: number, h1: number,
       x2: number, y2: number, w2: number, h2: number
@@ -562,15 +585,21 @@ export const RadialHierarchyView = ({
       return !(
         x1 + w1 / 2 + MIN_GAP < x2 - w2 / 2 ||
         x2 + w2 / 2 + MIN_GAP < x1 - w1 / 2 ||
-        y1 + h1 / 2 + MIN_GAP < y2 - h2 / 2 ||
-        y2 + h2 / 2 + MIN_GAP < y1 - h1 / 2
+        y1 + h1 / 2 + MIN_GAP_V < y2 - h2 / 2 ||
+        y2 + h2 / 2 + MIN_GAP_V < y1 - h1 / 2
       );
     };
 
     const degToRad = (deg: number) => (deg * Math.PI) / 180;
 
+    // Não precisamos mais de variantes de label - sempre usamos 2 linhas completas
+    const estimateSizeForLabel = (label: string, ring: number): { w: number; h: number } => {
+      const cfg = nodeSizeByRing[ring] || nodeSizeByRing[2];
+      return { w: cfg.width, h: cfg.height };
+    };
+
     // ═══════════════════════════════════════════════════════════════════════════
-    // CENTRO: Lei 14.133 (ring 0 conceptualmente, mas é o centro fixo)
+    // CENTRO: Lei 14.133 (ring 0 - centro fixo)
     // ═══════════════════════════════════════════════════════════════════════════
     const lei14133 = leiNodes.find(n => 
       n.numero?.includes("14.133") || n.numero?.includes("14133")
@@ -580,10 +609,11 @@ export const RadialHierarchyView = ({
 
     if (lei14133) {
       const { w, h } = estimateNodeSize(lei14133, 0);
+      const twoLine = getTwoLineLabel(lei14133);
       nodePositions.set(lei14133.id, { x: cx, y: cy, ring: 0, angle: 0 });
       result.push({
         id: lei14133.id,
-        label: `Lei nº ${lei14133.numero}`,
+        label: `${twoLine.line1} ${twoLine.line2}`,
         tipo: lei14133.tipo,
         act: lei14133,
         ring: 0,
@@ -595,14 +625,8 @@ export const RadialHierarchyView = ({
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 1 (Decretos) + ANEL 2 (INs/Resoluções)
-    // Regras:
-    // - raio BASE fixo por nível (não cresce)
-    // - resolver colisões LOCALMENTE: jitter angular (±2°..±10°) e offset radial pequeno
-    // - se necessário, encurtar label (tooltip já mostra o nome completo)
-    // - não invadir o setor do vizinho (cada nó fica dentro da sua fatia angular)
+    // FUNÇÕES DE ORDENAÇÃO
     // ═══════════════════════════════════════════════════════════════════════════
-
     const sortByNumero = (a: ActNode, b: ActNode) => {
       const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
       const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
@@ -623,80 +647,10 @@ export const RadialHierarchyView = ({
       return sortByNumero(a, b);
     };
 
-    const unique = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
-
-    const shortYear = (numero: string) => {
-      const n = numero || "";
-      // "68.422/2024" -> "68.422/24"
-      if (n.includes("/")) return n.replace(/\/\d{2}(\d{2})$/, "/$1");
-      // fallback: "...2024" -> "...24"
-      return n.replace(/(19|20)\d{2}$/, (m) => m.slice(-2));
-    };
-
-    const labelVariantsFor = (act: ActNode, ring: number): string[] => {
-      const full = getNodeLabel(act, ring);
-      const nShort = shortYear(act.numero);
-      const onlyNum = act.numero ? shortYear(act.numero) : full;
-
-      if (act.tipo === "decreto") {
-        return unique([
-          full,
-          `Dec. ${nShort}`,
-          `Dec. ${onlyNum}`,
-          onlyNum,
-          "•",
-        ]);
-      }
-      if (act.tipo === "instrucao_normativa") {
-        return unique([
-          full,
-          `IN ${nShort}`,
-          onlyNum,
-          "•",
-        ]);
-      }
-      if (act.tipo === "resolucao") {
-        return unique([
-          full,
-          `Res. ${nShort}`,
-          onlyNum,
-          "•",
-        ]);
-      }
-      if (act.tipo === "portaria") {
-        return unique([
-          full,
-          `Port. ${nShort}`,
-          onlyNum,
-          "•",
-        ]);
-      }
-
-      const tipoShort = (tipoLabels[act.tipo] || act.tipo).replace(/\b(Instrução Normativa)\b/i, "IN");
-      return unique([full, `${tipoShort} ${nShort}`, onlyNum, "•"]);
-    };
-
-    const estimateSizeForLabel = (label: string, ring: number): { w: number; h: number } => {
-      const cfg = nodeSizeByRing[ring] || nodeSizeByRing[2];
-      // Ajuste leve de largura por caracteres (mantém determinístico)
-      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6.2 + 26);
-
-      // Se encurtou muito, permitir um nó mais estreito (ajuda a evitar colisão)
-      const minW = label.length <= 6
-        ? 44
-        : label.length <= 10
-          ? 60
-          : cfg.minWidth;
-
-      return {
-        w: Math.min(Math.max(estimatedWidth, minW), cfg.maxWidth),
-        h: cfg.height,
-      };
-    };
-
-    const BASE_JITTER_DEG = [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8, 10, -10];
-    const BASE_RADIAL_OFFSETS = [0, 8, -8, 16, -16, 24, -24];
-    const RADIAL_BAND_PX = 24; // faixa estreita ao redor do raio do nível
+    // Anti-colisão: mais passos de jitter angular e offset radial para garantir zero sobreposição
+    const BASE_JITTER_DEG = [0, 3, -3, 6, -6, 9, -9, 12, -12, 15, -15, 18, -18, 21, -21, 24, -24];
+    const BASE_RADIAL_OFFSETS = [0, 12, -12, 24, -24, 36, -36, 48, -48];
+    const RADIAL_BAND_PX = 50; // faixa radial mais ampla para garantir espaço
 
     const placeRing = (opts: {
       acts: ActNode[];
@@ -711,66 +665,61 @@ export const RadialHierarchyView = ({
       if (count === 0) return;
 
       const slotSpanDeg = 360 / count;
-      const maxJitterDeg = Math.min(12, slotSpanDeg * 0.48);
+      // Permitir até 50% do slot para jitter (sem invadir vizinho)
+      const maxJitterDeg = Math.min(30, slotSpanDeg * 0.5);
       const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= maxJitterDeg + 0.01);
 
-      // Greedy placement: para cada nó, testar variantes de label + jitter + offset até achar posição livre
+      // Greedy placement com fallback de push radial
       sorted.forEach((act, idx) => {
         const baseAngle = degToRad(startDeg + (idx / count) * 360);
-        const variants = labelVariantsFor(act, ring);
+        const { w, h } = estimateNodeSize(act, ring);
+        const twoLine = getTwoLineLabel(act);
+        const fullLabel = `${twoLine.line1} ${twoLine.line2}`;
 
         let placed: { x: number; y: number; angle: number; r: number; w: number; h: number; label: string } | null = null;
 
-        // Tenta cada variante de label (da mais completa à mais curta)
-        outer: for (const label of variants) {
-          const { w, h } = estimateSizeForLabel(label, ring);
+        // 1. Tentar posições dentro da faixa radial normal
+        outer: for (const deltaDeg of jitterDeltas) {
+          const angle = baseAngle + degToRad(deltaDeg);
 
-          // Tenta cada jitter angular
-          for (const deltaDeg of jitterDeltas) {
-            const angle = baseAngle + degToRad(deltaDeg);
+          for (const ro of BASE_RADIAL_OFFSETS) {
+            const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
+            const x = cx + r * Math.cos(angle);
+            const y = cy + r * Math.sin(angle);
 
-            // Tenta cada offset radial
-            for (const ro of BASE_RADIAL_OFFSETS) {
-              const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
+            const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
+            if (!collides) {
+              placed = { x, y, angle, r, w, h, label: fullLabel };
+              break outer;
+            }
+          }
+        }
+
+        // 2. Se ainda colidir, fazer push radial para fora (até 100px além)
+        if (!placed) {
+          const pushSteps = [60, 72, 84, 96, 108, 120];
+          pushLoop: for (const push of pushSteps) {
+            for (const deltaDeg of jitterDeltas) {
+              const angle = baseAngle + degToRad(deltaDeg);
+              const r = baseRadius + push;
               const x = cx + r * Math.cos(angle);
               const y = cy + r * Math.sin(angle);
 
               const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
               if (!collides) {
-                placed = { x, y, angle, r, w, h, label };
-                break outer;
+                placed = { x, y, angle, r, w, h, label: fullLabel };
+                break pushLoop;
               }
             }
           }
         }
 
-        // Se nenhuma combinação funcionou, usar marca mínima "•"
+        // 3. Último recurso: posição no ângulo base com raio muito afastado
         if (!placed) {
-          const label = "•";
-          const { w, h } = estimateSizeForLabel(label, ring);
-
-          outer2: for (const deltaDeg of jitterDeltas) {
-            const angle = baseAngle + degToRad(deltaDeg);
-            for (const ro of BASE_RADIAL_OFFSETS) {
-              const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
-              const x = cx + r * Math.cos(angle);
-              const y = cy + r * Math.sin(angle);
-              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
-              if (!collides) {
-                placed = { x, y, angle, r, w, h, label };
-                break outer2;
-              }
-            }
-          }
-        }
-
-        // Último recurso: colocar no ângulo base com label mínimo (não deveria acontecer)
-        if (!placed) {
-          const label = "•";
-          const { w, h } = estimateSizeForLabel(label, ring);
-          const x = cx + baseRadius * Math.cos(baseAngle);
-          const y = cy + baseRadius * Math.sin(baseAngle);
-          placed = { x, y, angle: baseAngle, r: baseRadius, w, h, label };
+          const r = baseRadius + 140;
+          const x = cx + r * Math.cos(baseAngle);
+          const y = cy + r * Math.sin(baseAngle);
+          placed = { x, y, angle: baseAngle, r, w, h, label: fullLabel };
         }
 
         placedObstacles.push({ x: placed.x, y: placed.y, w: placed.w, h: placed.h });
@@ -1860,24 +1809,49 @@ export const RadialHierarchyView = ({
               {/* Nodes */}
               {nodes.map((node) => {
                 const isCenter = node.ring === 0;
-                const label = node.label;
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // HIERARQUIA VISUAL: Lei (centro) → Decretos → INs/Resoluções
-                // (medidas precisam bater com o cálculo do layout para evitar overlap)
+                // LAYOUT VERTICAL: Nós em forma de pílula vertical (mais alto, mais estreito)
+                // Labels de 2 linhas: linha1=tipo, linha2=número
                 // ═══════════════════════════════════════════════════════════════════
-                const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number; fontSize: number }> = {
-                  0: { minWidth: 130, maxWidth: 220, height: 52, fontSize: 14 }, // Lei (centro)
-                  1: { minWidth: 90, maxWidth: 170, height: 36, fontSize: 10 },  // Decretos
-                  2: { minWidth: 80, maxWidth: 155, height: 32, fontSize: 9 },   // INs/Resoluções
+                const nodeSizeByRingRender: Record<number, { width: number; height: number; fontSize: number; lineSpacing: number }> = {
+                  0: { width: 90, height: 60, fontSize: 11, lineSpacing: 14 },  // Lei (centro)
+                  1: { width: 70, height: 50, fontSize: 9, lineSpacing: 12 },   // Decretos
+                  2: { width: 75, height: 48, fontSize: 8, lineSpacing: 11 },   // INs/Resoluções
                 };
                 
-                const sizeConfig = nodeSizeByRing[node.ring] || nodeSizeByRing[2];
-                const estimatedWidth = Math.max(sizeConfig.minWidth, label.length * 6.2 + 26);
-                const minW = label.length <= 6 ? 44 : label.length <= 10 ? 60 : sizeConfig.minWidth;
-                const nodeWidth = Math.min(Math.max(estimatedWidth, minW), sizeConfig.maxWidth);
+                const sizeConfig = nodeSizeByRingRender[node.ring] || nodeSizeByRingRender[2];
+                const nodeWidth = sizeConfig.width;
                 const nodeHeight = sizeConfig.height;
                 const fontSize = sizeConfig.fontSize;
+                const lineSpacing = sizeConfig.lineSpacing;
+                
+                // Calcular label de 2 linhas
+                const getTwoLineLabelRender = (act: ActNode): { line1: string; line2: string } => {
+                  const numero = act.numero || "";
+                  
+                  if (act.tipo === "constituicao") {
+                    return { line1: "CF", line2: "1988" };
+                  }
+                  if (act.tipo === "lei" || act.tipo === "lei_federal" || act.tipo === "lei_estadual" || act.tipo === "lei_complementar") {
+                    return { line1: "Lei nº", line2: numero };
+                  }
+                  if (act.tipo === "decreto") {
+                    return { line1: "Decreto", line2: numero };
+                  }
+                  if (act.tipo === "instrucao_normativa") {
+                    return { line1: "Instrução", line2: `Norm. ${numero}` };
+                  }
+                  if (act.tipo === "resolucao") {
+                    return { line1: "Resolução", line2: numero };
+                  }
+                  if (act.tipo === "portaria") {
+                    return { line1: "Portaria", line2: numero };
+                  }
+                  return { line1: tipoLabels[act.tipo] || act.tipo, line2: numero };
+                };
+                
+                const twoLineLabel = getTwoLineLabelRender(node.act);
                 
                 const color = ringColors[node.ring];
                 const textColor = ringTextColors[node.ring];
@@ -1903,14 +1877,14 @@ export const RadialHierarchyView = ({
                       }}
                       className="cursor-pointer"
                     >
-                      {/* Node as rounded rectangle for full name */}
+                      {/* Node as vertical rounded rectangle (pílula vertical) */}
                       <rect
                         x={-nodeWidth / 2}
                         y={-nodeHeight / 2}
                         width={nodeWidth}
                         height={nodeHeight}
-                        rx={nodeHeight / 2}
-                        ry={nodeHeight / 2}
+                        rx={12}
+                        ry={12}
                         fill={color}
                         stroke={selectedNode?.id === node.id ? "hsl(210, 70%, 50%)" : isHighlighted && highlightedNormaIds ? "hsl(45, 70%, 50%)" : node.ring === 3 ? "hsl(220, 15%, 50%)" : "transparent"}
                         strokeWidth={selectedNode?.id === node.id ? 3 : isHighlighted && highlightedNormaIds ? 2 : node.ring === 3 ? 1.5 : 0}
@@ -1924,19 +1898,23 @@ export const RadialHierarchyView = ({
                         }}
                       />
                       
-                      {/* Node label (encurtado quando necessário para evitar overlap; nome completo no tooltip) */}
+                      {/* Label de 2 linhas: tipo na linha1, número na linha2 */}
                       <text
                         textAnchor="middle"
-                        dominantBaseline="central"
                         className="font-medium pointer-events-none select-none"
                         style={{ fontSize, fill: textColor, fontWeight: isCenter ? 600 : 500 }}
                       >
-                        {label}
+                        <tspan x="0" dy={-lineSpacing / 2}>
+                          {twoLineLabel.line1}
+                        </tspan>
+                        <tspan x="0" dy={lineSpacing}>
+                          {twoLineLabel.line2}
+                        </tspan>
                       </text>
                       
                       {/* Loading indicator for dispositivos */}
                       {isLoadingDispositivos && (
-                        <g transform="translate(50, -15)">
+                        <g transform="translate(40, -20)">
                           <circle r={8} fill="hsl(var(--background))" stroke="hsl(var(--border))" />
                           <text
                             textAnchor="middle"

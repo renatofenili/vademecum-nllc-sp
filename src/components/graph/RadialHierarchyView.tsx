@@ -1265,7 +1265,7 @@ export const RadialHierarchyView = ({
         {data.nodes.length !== nodes.length && (
           <span className="text-red-500 font-bold">⚠️ DIVERGÊNCIA!</span>
         )}
-        <span>🎯 Raiz: CF/1988</span>
+        <span>🎯 Raiz: Lei 14.133/2021</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
         
         <Separator orientation="vertical" className="h-4" />
@@ -1736,7 +1736,7 @@ export const RadialHierarchyView = ({
                 
                 // Calculate dynamic width based on label length
                 const fullLabel = isCenter 
-                  ? "CF/1988" 
+                  ? `Lei nº ${node.act.numero}` 
                   : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
                 
                 // ═══════════════════════════════════════════════════════════════════

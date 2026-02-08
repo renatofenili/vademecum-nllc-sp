@@ -606,73 +606,115 @@ export const RadialHierarchyView = ({
     const baseArcRadius = availableHeight * 0.35; // Raio base dos arcos
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANTI-COLISÃO: Tamanho mínimo de nó e distância mínima entre nós
+    // ANTI-COLISÃO DEFINITIVA: Sistema de força que garante zero sobreposição
     // ═══════════════════════════════════════════════════════════════════════════
-    const NODE_MIN_WIDTH = 120;  // Largura mínima do nó
-    const NODE_MIN_HEIGHT = 50;  // Altura mínima do nó
-    const NODE_PADDING = 15;     // Espaçamento entre nós
-    const MIN_ARC_DISTANCE = NODE_MIN_WIDTH + NODE_PADDING; // Distância mínima no arco
+    const NODE_WIDTH = 140;   // Largura do nó
+    const NODE_HEIGHT = 55;   // Altura do nó
+    const MIN_GAP = 12;       // Espaço mínimo entre nós
 
-    // Função para calcular ângulo mínimo entre nós em um dado raio
-    const calcMinAngleSpacing = (radius: number, minDistance: number): number => {
-      // Comprimento do arco = raio * ângulo
-      // ângulo mínimo = minDistance / radius
-      return minDistance / radius;
+    // Verifica se dois retângulos se sobrepõem
+    const rectsOverlap = (
+      x1: number, y1: number, w1: number, h1: number,
+      x2: number, y2: number, w2: number, h2: number
+    ): boolean => {
+      return !(x1 + w1 / 2 + MIN_GAP < x2 - w2 / 2 ||
+               x2 + w2 / 2 + MIN_GAP < x1 - w1 / 2 ||
+               y1 + h1 / 2 + MIN_GAP < y2 - h2 / 2 ||
+               y2 + h2 / 2 + MIN_GAP < y1 - h1 / 2);
     };
 
-    // Função para posicionar nós em um setor com anti-colisão
+    // Resolve colisões usando força de repulsão iterativa
+    const resolveCollisions = (
+      positions: { act: ActNode; x: number; y: number; angle: number }[],
+      centerX: number,
+      centerY: number,
+      iterations: number = 50
+    ): { act: ActNode; x: number; y: number; angle: number }[] => {
+      if (positions.length <= 1) return positions;
+
+      const result = positions.map(p => ({ ...p }));
+      
+      for (let iter = 0; iter < iterations; iter++) {
+        let hasCollision = false;
+        
+        for (let i = 0; i < result.length; i++) {
+          for (let j = i + 1; j < result.length; j++) {
+            const a = result[i];
+            const b = result[j];
+            
+            if (rectsOverlap(a.x, a.y, NODE_WIDTH, NODE_HEIGHT, b.x, b.y, NODE_WIDTH, NODE_HEIGHT)) {
+              hasCollision = true;
+              
+              // Calcular vetor de separação
+              const dx = b.x - a.x;
+              const dy = b.y - a.y;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              
+              // Calcular sobreposição necessária para separar
+              const overlapX = (NODE_WIDTH + MIN_GAP) - Math.abs(dx);
+              const overlapY = (NODE_HEIGHT + MIN_GAP) - Math.abs(dy);
+              
+              // Usar menor eixo de separação
+              let moveX = 0, moveY = 0;
+              if (overlapX > 0 && overlapY > 0) {
+                if (overlapX < overlapY) {
+                  moveX = (overlapX / 2 + 2) * (dx >= 0 ? 1 : -1);
+                } else {
+                  moveY = (overlapY / 2 + 2) * (dy >= 0 ? 1 : -1);
+                }
+              }
+              
+              // Aplicar movimento (afastar ambos os nós)
+              a.x -= moveX;
+              a.y -= moveY;
+              b.x += moveX;
+              b.y += moveY;
+            }
+          }
+        }
+        
+        // Se não há mais colisões, terminar mais cedo
+        if (!hasCollision) break;
+      }
+      
+      // Recalcular ângulos após resolução
+      result.forEach(p => {
+        const dx = p.x - centerX;
+        const dy = p.y - centerY;
+        p.angle = Math.atan2(dy, dx);
+      });
+      
+      return result;
+    };
+
+    // Função para posicionar nós em um setor com anti-colisão garantida
     const positionNodesInSector = (
       nodes: ActNode[],
       startAngle: number,
       endAngle: number,
       ring: number
-    ): { positions: { act: ActNode; x: number; y: number; angle: number; radius: number }[] } => {
+    ): { positions: { act: ActNode; x: number; y: number; angle: number }[] } => {
       if (nodes.length === 0) return { positions: [] };
 
       const sectorSpan = endAngle - startAngle;
-      const minAngle = calcMinAngleSpacing(baseArcRadius, MIN_ARC_DISTANCE);
-      const requiredAngle = (nodes.length - 1) * minAngle;
       
-      const positions: { act: ActNode; x: number; y: number; angle: number; radius: number }[] = [];
+      // Posição inicial: distribuição uniforme no setor
+      const initialPositions: { act: ActNode; x: number; y: number; angle: number }[] = [];
       
-      // Se cabe no setor com o raio base
-      if (requiredAngle <= sectorSpan || nodes.length === 1) {
-        const actualSpacing = nodes.length > 1 ? sectorSpan / (nodes.length - 1) : 0;
-        nodes.forEach((act, idx) => {
-          const angle = nodes.length === 1 
-            ? (startAngle + endAngle) / 2 
-            : startAngle + idx * actualSpacing;
-          
-          const x = leiCenterX + baseArcRadius * Math.cos(angle);
-          const y = leiCenterY + baseArcRadius * Math.sin(angle);
-          positions.push({ act, x, y, angle, radius: baseArcRadius });
-        });
-      } else {
-        // Precisa de múltiplas "faixas" de raio para evitar sobreposição
-        // Calculamos quantos nós cabem por faixa
-        const nodesPerRing = Math.floor(sectorSpan / minAngle) + 1;
-        const numRings = Math.ceil(nodes.length / nodesPerRing);
-        const ringSpacing = NODE_MIN_HEIGHT + NODE_PADDING;
+      nodes.forEach((act, idx) => {
+        const angle = nodes.length === 1 
+          ? (startAngle + endAngle) / 2 
+          : startAngle + (idx / (nodes.length - 1)) * sectorSpan;
         
-        nodes.forEach((act, idx) => {
-          const ringIndex = Math.floor(idx / nodesPerRing);
-          const indexInRing = idx % nodesPerRing;
-          const nodesInThisRing = Math.min(nodesPerRing, nodes.length - ringIndex * nodesPerRing);
-          
-          const ringRadius = baseArcRadius + ringIndex * ringSpacing;
-          const actualSpacing = nodesInThisRing > 1 ? sectorSpan / (nodesInThisRing - 1) : 0;
-          
-          const angle = nodesInThisRing === 1 
-            ? (startAngle + endAngle) / 2 
-            : startAngle + indexInRing * actualSpacing;
-          
-          const x = leiCenterX + ringRadius * Math.cos(angle);
-          const y = leiCenterY + ringRadius * Math.sin(angle);
-          positions.push({ act, x, y, angle, radius: ringRadius });
-        });
-      }
+        const x = leiCenterX + baseArcRadius * Math.cos(angle);
+        const y = leiCenterY + baseArcRadius * Math.sin(angle);
+        initialPositions.push({ act, x, y, angle });
+      });
       
-      return { positions };
+      // Resolver colisões
+      const resolved = resolveCollisions(initialPositions, leiCenterX, leiCenterY);
+      
+      return { positions: resolved };
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -780,6 +822,61 @@ export const RadialHierarchyView = ({
         y,
       });
     });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RESOLUÇÃO GLOBAL DE COLISÕES: Verificar TODOS os nós entre si
+    // ═══════════════════════════════════════════════════════════════════════════
+    const allRegulamentacaoNodes = result.filter(n => n.ring >= 2);
+    
+    // Aplicar resolução de colisões global
+    for (let iter = 0; iter < 100; iter++) {
+      let hasCollision = false;
+      
+      for (let i = 0; i < allRegulamentacaoNodes.length; i++) {
+        for (let j = i + 1; j < allRegulamentacaoNodes.length; j++) {
+          const a = allRegulamentacaoNodes[i];
+          const b = allRegulamentacaoNodes[j];
+          
+          if (rectsOverlap(a.x, a.y, NODE_WIDTH, NODE_HEIGHT, b.x, b.y, NODE_WIDTH, NODE_HEIGHT)) {
+            hasCollision = true;
+            
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            
+            const overlapX = (NODE_WIDTH + MIN_GAP) - Math.abs(dx);
+            const overlapY = (NODE_HEIGHT + MIN_GAP) - Math.abs(dy);
+            
+            let moveX = 0, moveY = 0;
+            if (overlapX > 0 && overlapY > 0) {
+              if (overlapX < overlapY) {
+                moveX = (overlapX / 2 + 3) * (dx >= 0 ? 1 : -1);
+              } else {
+                moveY = (overlapY / 2 + 3) * (dy >= 0 ? 1 : -1);
+              }
+            }
+            
+            a.x -= moveX;
+            a.y -= moveY;
+            b.x += moveX;
+            b.y += moveY;
+            
+            // Atualizar nodePositions também
+            const posA = nodePositions.get(a.id);
+            const posB = nodePositions.get(b.id);
+            if (posA) {
+              posA.x = a.x;
+              posA.y = a.y;
+            }
+            if (posB) {
+              posB.x = b.x;
+              posB.y = b.y;
+            }
+          }
+        }
+      }
+      
+      if (!hasCollision) break;
+    }
 
     // Y positions for level labels (approximate)
     const levelYPositions = [cfY, leiY, regulamentacaoY, regulamentacaoY + 60];

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { TabType } from "./Header";
 
 interface HeroProps {
@@ -21,7 +21,7 @@ const Hero = ({ onNavigate }: HeroProps) => {
           Acesse relatórios analíticos, consultas inteligentes e mapas normativos.
         </p>
 
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="mt-10 flex items-center justify-center">
           <Button 
             size="lg" 
             className="gap-2 px-8 text-base"
@@ -29,15 +29,6 @@ const Hero = ({ onNavigate }: HeroProps) => {
           >
             Consultar Normas
             <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button 
-            size="lg" 
-            variant="outline" 
-            className="px-8 text-base gap-2"
-            onClick={() => onNavigate("consultas")}
-          >
-            <Search className="h-4 w-4" />
-            Fazer Consulta
           </Button>
         </div>
       </div>

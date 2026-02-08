@@ -8,6 +8,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MacroStage {
   id: string;
@@ -130,6 +136,7 @@ const MapaCalorTab = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [globalMax, setGlobalMax] = useState(1);
   const [normasByTema, setNormasByTema] = useState<Record<string, NormaInfo[]>>({});
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const loadThemes = async () => {
@@ -276,58 +283,81 @@ const MapaCalorTab = () => {
                         // Determine text color based on intensity
                         const textColor = intensity > 0.5 ? "white" : "hsl(220, 20%, 20%)";
 
+                        const cellContent = (
+                          <div
+                            className="relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg hover:z-10"
+                            style={{
+                              backgroundColor: heatColor,
+                              boxShadow: `0 2px 8px ${heatColor}40`,
+                            }}
+                          >
+                            <span
+                              className="text-xs font-medium block max-w-[140px] truncate"
+                              style={{ color: textColor }}
+                            >
+                              {theme.tema}
+                            </span>
+                            <span
+                              className="text-lg font-bold block"
+                              style={{ color: textColor }}
+                            >
+                              {theme.count}
+                            </span>
+                          </div>
+                        );
+
+                        const detailsContent = (
+                          <div className="space-y-2">
+                            <p className="font-semibold">{theme.tema}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {theme.count} normas ({percentage}% do total)
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Intensidade: {heatLabel}
+                            </p>
+                            {normasByTema[theme.tema] && normasByTema[theme.tema].length > 0 && (
+                              <div className="border-t border-border pt-2 mt-2">
+                                <p className="text-xs font-medium mb-1">Normas:</p>
+                                <div className="space-y-1 max-h-48 overflow-y-auto">
+                                  {normasByTema[theme.tema].slice(0, 10).map((norma) => (
+                                    <div key={norma.id} className="text-xs text-muted-foreground">
+                                      <span className="inline-block w-16 font-medium">{norma.tipo.toUpperCase()}:</span>
+                                      <span>{norma.numero}</span>
+                                    </div>
+                                  ))}
+                                  {normasByTema[theme.tema].length > 10 && (
+                                    <p className="text-xs text-muted-foreground italic">
+                                      +{normasByTema[theme.tema].length - 10} outras
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+
+                        // Mobile: use Popover (click-based)
+                        if (isMobile) {
+                          return (
+                            <Popover key={theme.tema}>
+                              <PopoverTrigger asChild>
+                                {cellContent}
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="max-w-sm">
+                                {detailsContent}
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        }
+
+                        // Desktop: use Tooltip (hover-based)
                         return (
                           <Tooltip key={theme.tema}>
                             <TooltipTrigger asChild>
-                              <div
-                                className="relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg hover:z-10"
-                                style={{
-                                  backgroundColor: heatColor,
-                                  boxShadow: `0 2px 8px ${heatColor}40`,
-                                }}
-                              >
-                                <span
-                                  className="text-xs font-medium block max-w-[140px] truncate"
-                                  style={{ color: textColor }}
-                                >
-                                  {theme.tema}
-                                </span>
-                                <span
-                                  className="text-lg font-bold block"
-                                  style={{ color: textColor }}
-                                >
-                                  {theme.count}
-                                </span>
-                              </div>
+                              {cellContent}
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-sm">
-                              <div className="space-y-2">
-                                <p className="font-semibold">{theme.tema}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {theme.count} normas ({percentage}% do total)
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Intensidade: {heatLabel}
-                                </p>
-                                {normasByTema[theme.tema] && normasByTema[theme.tema].length > 0 && (
-                                  <div className="border-t border-slate-600 pt-2 mt-2">
-                                    <p className="text-xs font-medium mb-1">Normas:</p>
-                                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                                      {normasByTema[theme.tema].slice(0, 10).map((norma) => (
-                                        <div key={norma.id} className="text-xs text-muted-foreground">
-                                          <span className="inline-block w-16 font-medium">{norma.tipo.toUpperCase()}:</span>
-                                          <span>{norma.numero}</span>
-                                        </div>
-                                      ))}
-                                      {normasByTema[theme.tema].length > 10 && (
-                                        <p className="text-xs text-muted-foreground italic">
-                                          +{normasByTema[theme.tema].length - 10} outras
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              {detailsContent}
                             </TooltipContent>
                           </Tooltip>
                         );

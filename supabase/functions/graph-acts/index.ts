@@ -1,12 +1,19 @@
 // deno-lint-ignore-file no-explicit-any
 // Graph-acts edge function - builds normative hierarchy graph
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Input validation schema
+const inputSchema = z.object({
+  root: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/i, "root must contain only alphanumeric characters, underscores and hyphens").optional().default("lei14133"),
+  depth: z.number().int().min(1).max(10).optional().default(2),
+});
 
 interface ActNode {
   id: string;
@@ -53,23 +60,32 @@ Deno.serve(async (req) => {
   }
 
   try {
-    let root = "lei14133";
-    let depth = 2;
-
-    // Support both GET query params and POST body
+    // Parse and validate input
+    let rawInput: any = {};
+    
     if (req.method === "GET") {
       const url = new URL(req.url);
-      root = url.searchParams.get("root") || "lei14133";
-      depth = parseInt(url.searchParams.get("depth") || "2", 10);
+      rawInput = {
+        root: url.searchParams.get("root") || undefined,
+        depth: url.searchParams.get("depth") ? parseInt(url.searchParams.get("depth")!, 10) : undefined,
+      };
     } else {
       try {
-        const body = await req.json();
-        root = body.root || "lei14133";
-        depth = body.depth || 2;
+        rawInput = await req.json();
       } catch {
         // Use defaults if body parsing fails
       }
     }
+
+    const validation = inputSchema.safeParse(rawInput);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: validation.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { root, depth } = validation.data;
 
     console.log(`Building acts graph with root: ${root}, depth: ${depth}`);
 

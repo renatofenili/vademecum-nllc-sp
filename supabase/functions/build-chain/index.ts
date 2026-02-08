@@ -1,11 +1,18 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Input validation schema
+const inputSchema = z.object({
+  document_id: z.string().uuid({ message: "document_id must be a valid UUID" }),
+  anchor: z.string().min(1, "anchor is required").max(100, "anchor too long"),
+});
 
 interface ChainNode {
   document_id: string;
@@ -44,18 +51,30 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { document_id, anchor } = await req.json();
-
-    if (!document_id || !anchor) {
+    // Parse and validate input
+    let rawInput;
+    try {
+      rawInput = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "document_id and anchor are required" }),
+        JSON.stringify({ error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    const validation = inputSchema.safeParse(rawInput);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: validation.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { document_id, anchor } = validation.data;
+
     console.log(`Building chain for: ${document_id} / ${anchor}`);
 
-    // Create Supabase client with service role
+    // Create Supabase client with service role for data access
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

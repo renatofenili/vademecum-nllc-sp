@@ -1,11 +1,17 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Input validation schema
+const inputSchema = z.object({
+  act_id: z.string().uuid({ message: "act_id must be a valid UUID" }),
+});
 
 interface DispositivoNode {
   anchor: string;
@@ -38,27 +44,31 @@ Deno.serve(async (req) => {
   }
 
   try {
-    let actId: string | null = null;
-
-    // Support both GET query params and POST body
+    // Parse and validate input
+    let rawInput: any = {};
+    
     if (req.method === "GET") {
       const url = new URL(req.url);
-      actId = url.searchParams.get("act_id");
+      rawInput = {
+        act_id: url.searchParams.get("act_id") || undefined,
+      };
     } else {
       try {
-        const body = await req.json();
-        actId = body.act_id || null;
+        rawInput = await req.json();
       } catch {
-        // actId remains null
+        // rawInput remains empty
       }
     }
 
-    if (!actId) {
+    const validation = inputSchema.safeParse(rawInput);
+    if (!validation.success) {
       return new Response(
-        JSON.stringify({ error: "act_id is required" }),
+        JSON.stringify({ error: "Validation failed", details: validation.error.errors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const { act_id: actId } = validation.data;
 
     console.log(`Building dispositivos graph for act: ${actId}`);
 

@@ -1,11 +1,19 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Input validation schema
+const inputSchema = z.object({
+  evento: z.string()
+    .min(10, "evento must have at least 10 characters")
+    .max(10000, "evento must have at most 10000 characters"),
+});
 
 interface ApplicableDevice {
   document_id: string;
@@ -45,14 +53,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { evento } = await req.json();
-
-    if (!evento || typeof evento !== "string") {
+    // Parse and validate input
+    let rawInput;
+    try {
+      rawInput = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "evento (string) is required" }),
+        JSON.stringify({ error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const validation = inputSchema.safeParse(rawInput);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: validation.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { evento } = validation.data;
 
     console.log(`Finding applicable provisions for event: ${evento.substring(0, 100)}...`);
 

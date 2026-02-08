@@ -258,8 +258,6 @@ const MapaCalorTab = () => {
                 <Arrow />
                 <FlowBox label="ETP" count={getBoxCount("ETP")} maxCount={maxCount} />
                 <Arrow />
-                <FlowBox label="Gestão de riscos" count={getBoxCount("Gestão de riscos")} maxCount={maxCount} />
-                <Arrow />
                 <FlowBox label="Pesquisa de preços" count={getBoxCount("Pesquisa de preços")} maxCount={maxCount} />
                 <Arrow />
                 <FlowBox label="Termo de referência" count={getBoxCount("Termo de referência")} maxCount={maxCount} />

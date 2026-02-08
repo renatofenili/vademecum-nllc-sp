@@ -572,21 +572,68 @@ export const RadialHierarchyView = ({
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 1: Lei - eixo central, abaixo da CF
+    // NÍVEL 1: Leis - eixo central, abaixo da CF (SEM SOBREPOSIÇÃO)
     // ═══════════════════════════════════════════════════════════════════════════
+    const MIN_GAP = 14;
+
+    // Estimativa de tamanho do nó (deve espelhar a heurística usada no render)
+    const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number }> = {
+      0: { minWidth: 110, maxWidth: 180, height: 52 },
+      1: { minWidth: 100, maxWidth: 165, height: 38 },
+      2: { minWidth: 90, maxWidth: 150, height: 32 },
+      3: { minWidth: 80, maxWidth: 140, height: 28 },
+    };
+
+    const getNodeLabel = (act: ActNode, ring: number): string => {
+      if (ring === 0) return "CF/1988";
+      return `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`;
+    };
+
+    const estimateNodeSize = (act: ActNode, ring: number): { w: number; h: number } => {
+      const label = getNodeLabel(act, ring);
+      const cfg = nodeSizeByRing[ring] || nodeSizeByRing[3];
+      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6 + 20);
+      return {
+        w: Math.min(estimatedWidth, cfg.maxWidth),
+        h: cfg.height,
+      };
+    };
+
+    // Verifica se dois retângulos centrados se sobrepõem
+    const rectsOverlap = (
+      x1: number,
+      y1: number,
+      w1: number,
+      h1: number,
+      x2: number,
+      y2: number,
+      w2: number,
+      h2: number
+    ): boolean => {
+      return !(
+        x1 + w1 / 2 + MIN_GAP < x2 - w2 / 2 ||
+        x2 + w2 / 2 + MIN_GAP < x1 - w1 / 2 ||
+        y1 + h1 / 2 + MIN_GAP < y2 - h2 / 2 ||
+        y2 + h2 / 2 + MIN_GAP < y1 - h1 / 2
+      );
+    };
+
     const sortedLeis = [...leiNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
       return numA - numB;
     });
-    
-    const leiWidth = Math.min(dimensions.width * 0.4, sortedLeis.length * 180);
-    const leiStartX = cx - leiWidth / 2;
-    const leiSpacing = sortedLeis.length > 1 ? leiWidth / (sortedLeis.length - 1) : 0;
-    
-    sortedLeis.forEach((act, idx) => {
-      const x = sortedLeis.length === 1 ? cx : leiStartX + idx * leiSpacing;
+
+    // Distribuição horizontal por largura real (permitindo extrapolar viewport via pan/zoom)
+    const leisWithSize = sortedLeis.map((act) => ({ act, ...estimateNodeSize(act, 1) }));
+    const totalLeisWidth = leisWithSize.reduce((sum, n) => sum + n.w, 0) + Math.max(0, leisWithSize.length - 1) * MIN_GAP;
+    let leiCursorX = cx - totalLeisWidth / 2;
+
+    leisWithSize.forEach(({ act, w }) => {
+      const x = leiCursorX + w / 2;
       const y = leiY;
+      leiCursorX += w + MIN_GAP;
+
       nodePositions.set(act.id, { x, y, ring: 1, angle: 0 });
       result.push({
         id: act.id,
@@ -600,283 +647,160 @@ export const RadialHierarchyView = ({
       });
     });
 
-    // Ponto de referência: centro da Lei (para os arcos partirem dela)
+    // Ponto de referência: centro da Lei (para os leques partirem dela)
     const leiCenterX = cx;
     const leiCenterY = leiY;
-    const baseArcRadius = availableHeight * 0.35; // Raio base dos arcos
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ANTI-COLISÃO DEFINITIVA: Sistema de força que garante zero sobreposição
-    // ═══════════════════════════════════════════════════════════════════════════
-    const NODE_WIDTH = 140;   // Largura do nó
-    const NODE_HEIGHT = 55;   // Altura do nó
-    const MIN_GAP = 12;       // Espaço mínimo entre nós
 
-    // Verifica se dois retângulos se sobrepõem
-    const rectsOverlap = (
-      x1: number, y1: number, w1: number, h1: number,
-      x2: number, y2: number, w2: number, h2: number
-    ): boolean => {
-      return !(x1 + w1 / 2 + MIN_GAP < x2 - w2 / 2 ||
-               x2 + w2 / 2 + MIN_GAP < x1 - w1 / 2 ||
-               y1 + h1 / 2 + MIN_GAP < y2 - h2 / 2 ||
-               y2 + h2 / 2 + MIN_GAP < y1 - h1 / 2);
+    // Raio base (mínimo) para evitar colisão com a Lei mesmo em telas menores
+    const baseArcRadius = Math.max(availableHeight * 0.35, 160);
+
+    const degToRad = (deg: number) => (deg * Math.PI) / 180;
+
+    type CandidateNode = {
+      act: ActNode;
+      ring: number;
+      angle: number;
+      radius: number;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
     };
 
-    // Resolve colisões usando força de repulsão iterativa
-    const resolveCollisions = (
-      positions: { act: ActNode; x: number; y: number; angle: number }[],
-      centerX: number,
-      centerY: number,
-      iterations: number = 50
-    ): { act: ActNode; x: number; y: number; angle: number }[] => {
-      if (positions.length <= 1) return positions;
-
-      const result = positions.map(p => ({ ...p }));
-      
-      for (let iter = 0; iter < iterations; iter++) {
-        let hasCollision = false;
-        
-        for (let i = 0; i < result.length; i++) {
-          for (let j = i + 1; j < result.length; j++) {
-            const a = result[i];
-            const b = result[j];
-            
-            if (rectsOverlap(a.x, a.y, NODE_WIDTH, NODE_HEIGHT, b.x, b.y, NODE_WIDTH, NODE_HEIGHT)) {
-              hasCollision = true;
-              
-              // Calcular vetor de separação
-              const dx = b.x - a.x;
-              const dy = b.y - a.y;
-              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              
-              // Calcular sobreposição necessária para separar
-              const overlapX = (NODE_WIDTH + MIN_GAP) - Math.abs(dx);
-              const overlapY = (NODE_HEIGHT + MIN_GAP) - Math.abs(dy);
-              
-              // Usar menor eixo de separação
-              let moveX = 0, moveY = 0;
-              if (overlapX > 0 && overlapY > 0) {
-                if (overlapX < overlapY) {
-                  moveX = (overlapX / 2 + 2) * (dx >= 0 ? 1 : -1);
-                } else {
-                  moveY = (overlapY / 2 + 2) * (dy >= 0 ? 1 : -1);
-                }
-              }
-              
-              // Aplicar movimento (afastar ambos os nós)
-              a.x -= moveX;
-              a.y -= moveY;
-              b.x += moveX;
-              b.y += moveY;
-            }
-          }
-        }
-        
-        // Se não há mais colisões, terminar mais cedo
-        if (!hasCollision) break;
-      }
-      
-      // Recalcular ângulos após resolução
-      result.forEach(p => {
-        const dx = p.x - centerX;
-        const dy = p.y - centerY;
-        p.angle = Math.atan2(dy, dx);
-      });
-      
-      return result;
-    };
-
-    // Função para posicionar nós em um setor com anti-colisão garantida
-    const positionNodesInSector = (
+    const buildSectorCandidates = (
       nodes: ActNode[],
-      startAngle: number,
-      endAngle: number,
-      ring: number
-    ): { positions: { act: ActNode; x: number; y: number; angle: number }[] } => {
-      if (nodes.length === 0) return { positions: [] };
+      ring: number,
+      startDeg: number,
+      endDeg: number,
+      baseRadius: number
+    ): CandidateNode[] => {
+      if (!nodes.length) return [];
 
-      const sectorSpan = endAngle - startAngle;
-      
-      // Posição inicial: distribuição uniforme no setor
-      const initialPositions: { act: ActNode; x: number; y: number; angle: number }[] = [];
-      
-      nodes.forEach((act, idx) => {
-        const angle = nodes.length === 1 
-          ? (startAngle + endAngle) / 2 
-          : startAngle + (idx / (nodes.length - 1)) * sectorSpan;
-        
-        const x = leiCenterX + baseArcRadius * Math.cos(angle);
-        const y = leiCenterY + baseArcRadius * Math.sin(angle);
-        initialPositions.push({ act, x, y, angle });
-      });
-      
-      // Resolver colisões
-      const resolved = resolveCollisions(initialPositions, leiCenterX, leiCenterY);
-      
-      return { positions: resolved };
+      const startAngle = degToRad(startDeg);
+      const endAngle = degToRad(endDeg);
+      const sectorSpan = Math.max(0.0001, endAngle - startAngle);
+
+      const sizes = nodes.map((act) => estimateNodeSize(act, ring));
+      const maxW = Math.max(...sizes.map((s) => s.w));
+      const maxH = Math.max(...sizes.map((s) => s.h));
+
+      const minArcDistance = maxW + MIN_GAP;
+      const layerSpacing = maxH + MIN_GAP;
+
+      const candidates: CandidateNode[] = [];
+
+      let remaining = nodes.length;
+      let offset = 0;
+      let layer = 0;
+
+      while (remaining > 0) {
+        const radius = baseRadius + layer * layerSpacing;
+        const minAngleSpacing = minArcDistance / radius;
+        const capacity = Math.max(1, Math.floor(sectorSpan / minAngleSpacing) + 1);
+        const take = Math.min(capacity, remaining);
+
+        const spacing = take > 1 ? sectorSpan / (take - 1) : 0;
+
+        for (let i = 0; i < take; i++) {
+          const act = nodes[offset + i];
+          const { w, h } = estimateNodeSize(act, ring);
+
+          const angle = take === 1 ? (startAngle + endAngle) / 2 : startAngle + i * spacing;
+          const x = leiCenterX + radius * Math.cos(angle);
+          const y = leiCenterY + radius * Math.sin(angle);
+
+          candidates.push({ act, ring, angle, radius, x, y, w, h });
+        }
+
+        offset += take;
+        remaining -= take;
+        layer++;
+      }
+
+      return candidates;
     };
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DOMÍNIO 1: Regulamentação Executiva (Decretos) - ARCO LATERAL ESQUERDO
-    // Ângulos: 200° a 340° (setor esquerdo, abaixo da Lei)
-    // Convenção: 0° = direita, 90° = baixo, 180° = esquerda, 270° = cima
-    // ═══════════════════════════════════════════════════════════════════════════
-    const sortedDecretos = [...decretoNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
-      return numA - numB;
-    });
-    
-    // Decretos: setor esquerdo (200° a 340°) - leque aberto para a esquerda
-    const decretoStartAngle = (200 * Math.PI) / 180;  // 200°
-    const decretoEndAngle = (340 * Math.PI) / 180;    // 340°
-    
-    const decretoPositions = positionNodesInSector(
-      sortedDecretos, 
-      decretoStartAngle, 
-      decretoEndAngle, 
-      2
-    );
-    
-    decretoPositions.positions.forEach(({ act, x, y, angle }) => {
-      nodePositions.set(act.id, { x, y, ring: 2, angle });
-      result.push({
-        id: act.id,
-        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-        tipo: act.tipo,
-        act,
-        ring: 2,
-        angle,
-        x,
-        y,
-      });
-    });
+    // Coloca nós um a um e, se houver colisão, empurra para fora no mesmo ângulo.
+    // Isso preserva o "leque" (ângulo próprio por nó) e garante zero sobreposição.
+    const placeWithoutOverlap = (
+      candidates: CandidateNode[],
+      placed: { x: number; y: number; w: number; h: number }[]
+    ) => {
+      candidates.forEach((cand) => {
+        const collides = placed.some((p) => rectsOverlap(cand.x, cand.y, cand.w, cand.h, p.x, p.y, p.w, p.h));
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DOMÍNIO 2: Regulamentação Administrativa (INs/Portarias) - ARCO INFERIOR CENTRAL
-    // Ângulos: 160° a 200° (setor inferior central)
-    // ═══════════════════════════════════════════════════════════════════════════
-    const sortedINs = [...inNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
-      return numA - numB;
-    });
-    
-    // INs: setor inferior central (160° a 200°) - leque estreito embaixo
-    const inStartAngle = (160 * Math.PI) / 180;   // 160°
-    const inEndAngle = (200 * Math.PI) / 180;     // 200°
-    
-    const inPositions = positionNodesInSector(
-      sortedINs,
-      inStartAngle,
-      inEndAngle,
-      3
-    );
-    
-    inPositions.positions.forEach(({ act, x, y, angle }) => {
-      nodePositions.set(act.id, { x, y, ring: 3, angle });
-      result.push({
-        id: act.id,
-        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-        tipo: act.tipo,
-        act,
-        ring: 3,
-        angle,
-        x,
-        y,
-      });
-    });
+        if (collides) {
+          // Salto determinístico para um raio "seguro" (via bounding circles), garantindo 0 sobreposição.
+          const candCircle = Math.hypot(cand.w / 2, cand.h / 2);
+          const maxPlaced = placed.reduce((max, p) => {
+            const dist = Math.hypot(p.x - leiCenterX, p.y - leiCenterY);
+            const pCircle = Math.hypot(p.w / 2, p.h / 2);
+            return Math.max(max, dist + pCircle);
+          }, 0);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DOMÍNIO 3: Regulamentação Colegiada (Resoluções) - ARCO LATERAL DIREITO
-    // Ângulos: 20° a 160° (setor direito, abaixo da Lei)
-    // ═══════════════════════════════════════════════════════════════════════════
-    const sortedResolucoes = [...resolucaoNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
-      return numA - numB;
-    });
-    
-    // Resoluções: setor direito (20° a 160°) - leque aberto para a direita
-    const resolucaoStartAngle = (20 * Math.PI) / 180;   // 20°
-    const resolucaoEndAngle = (160 * Math.PI) / 180;    // 160°
-    
-    const resolucaoPositions = positionNodesInSector(
-      sortedResolucoes,
-      resolucaoStartAngle,
-      resolucaoEndAngle,
-      3
-    );
-    
-    resolucaoPositions.positions.forEach(({ act, x, y, angle }) => {
-      nodePositions.set(act.id, { x, y, ring: 3, angle });
-      result.push({
-        id: act.id,
-        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-        tipo: act.tipo,
-        act,
-        ring: 3,
-        angle,
-        x,
-        y,
-      });
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // RESOLUÇÃO GLOBAL DE COLISÕES: Verificar TODOS os nós entre si
-    // ═══════════════════════════════════════════════════════════════════════════
-    const allRegulamentacaoNodes = result.filter(n => n.ring >= 2);
-    
-    // Aplicar resolução de colisões global
-    for (let iter = 0; iter < 100; iter++) {
-      let hasCollision = false;
-      
-      for (let i = 0; i < allRegulamentacaoNodes.length; i++) {
-        for (let j = i + 1; j < allRegulamentacaoNodes.length; j++) {
-          const a = allRegulamentacaoNodes[i];
-          const b = allRegulamentacaoNodes[j];
-          
-          if (rectsOverlap(a.x, a.y, NODE_WIDTH, NODE_HEIGHT, b.x, b.y, NODE_WIDTH, NODE_HEIGHT)) {
-            hasCollision = true;
-            
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            
-            const overlapX = (NODE_WIDTH + MIN_GAP) - Math.abs(dx);
-            const overlapY = (NODE_HEIGHT + MIN_GAP) - Math.abs(dy);
-            
-            let moveX = 0, moveY = 0;
-            if (overlapX > 0 && overlapY > 0) {
-              if (overlapX < overlapY) {
-                moveX = (overlapX / 2 + 3) * (dx >= 0 ? 1 : -1);
-              } else {
-                moveY = (overlapY / 2 + 3) * (dy >= 0 ? 1 : -1);
-              }
-            }
-            
-            a.x -= moveX;
-            a.y -= moveY;
-            b.x += moveX;
-            b.y += moveY;
-            
-            // Atualizar nodePositions também
-            const posA = nodePositions.get(a.id);
-            const posB = nodePositions.get(b.id);
-            if (posA) {
-              posA.x = a.x;
-              posA.y = a.y;
-            }
-            if (posB) {
-              posB.x = b.x;
-              posB.y = b.y;
-            }
-          }
+          cand.radius = Math.max(cand.radius, maxPlaced + candCircle + MIN_GAP + 2);
+          cand.x = leiCenterX + cand.radius * Math.cos(cand.angle);
+          cand.y = leiCenterY + cand.radius * Math.sin(cand.angle);
         }
-      }
-      
-      if (!hasCollision) break;
-    }
+
+        placed.push({ x: cand.x, y: cand.y, w: cand.w, h: cand.h });
+
+        nodePositions.set(cand.act.id, { x: cand.x, y: cand.y, ring: cand.ring, angle: cand.angle });
+        result.push({
+          id: cand.act.id,
+          label: `${tipoLabels[cand.act.tipo] || cand.act.tipo} ${cand.act.numero}`,
+          tipo: cand.act.tipo,
+          act: cand.act,
+          ring: cand.ring,
+          angle: cand.angle,
+          x: cand.x,
+          y: cand.y,
+        });
+      });
+    };
+
+    // Obstáculos fixos (CF + Leis) para o empurrão anti-colisão global
+    const fixedObstacles: { x: number; y: number; w: number; h: number }[] = result.map((n) => {
+      const { w, h } = estimateNodeSize(n.act, n.ring);
+      return { x: n.x, y: n.y, w, h };
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DOMÍNIOS PARALELOS (todos conectados à Lei; nenhum subordinado entre si)
+    // Setores DISJUNTOS e abaixo da Lei (0°=direita, 90°=baixo, 180°=esquerda)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // DOMÍNIO 1: Regulamentação Executiva (Decretos) - leque lateral esquerdo
+    const sortedDecretos = [...decretoNodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
+      return numA - numB;
+    });
+
+    // DOMÍNIO 2: Regulamentação Administrativa (INs/Portarias) - leque inferior central
+    const sortedINs = [...inNodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
+      return numA - numB;
+    });
+
+    // DOMÍNIO 3: Regulamentação Colegiada (Resoluções) - leque lateral direito
+    const sortedResolucoes = [...resolucaoNodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
+      return numA - numB;
+    });
+
+    // Setores fixos (distribuição angular interna evita formação de colunas)
+    const decretoCandidates = buildSectorCandidates(sortedDecretos, 2, 112, 162, baseArcRadius);
+    const inCandidates = buildSectorCandidates(sortedINs, 3, 70, 110, baseArcRadius * 1.05);
+    const resolucaoCandidates = buildSectorCandidates(sortedResolucoes, 3, 15, 65, baseArcRadius);
+
+    // Ordem de colocação: decretos (mais próximos/alto na validade), depois INs e Resoluções
+    const allCandidates = [...decretoCandidates, ...inCandidates, ...resolucaoCandidates];
+
+    // Colocação global sem sobreposição (entre domínios e contra CF/Leis)
+    placeWithoutOverlap(allCandidates, fixedObstacles);
 
     // Y positions for level labels (approximate)
     const levelYPositions = [cfY, leiY, regulamentacaoY, regulamentacaoY + 60];

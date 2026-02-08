@@ -397,6 +397,38 @@ export const RadialHierarchyView = ({
     return node?.id ?? null;
   }, [data?.nodes]);
 
+  const decreto12807ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("12807");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const decreto11878ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("11878");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const decreto11462ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && num.includes("11462");
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
+  const decreto68861ActId = useMemo(() => {
+    const node = data?.nodes?.find((n) => {
+      const num = normalizeNumeroLoose(n.numero);
+      return n.tipo === "decreto" && (num.includes("68861") || num.includes("69861"));
+    });
+    return node?.id ?? null;
+  }, [data?.nodes]);
+
   const ensureExpanded = useCallback(
     (actId: string) => {
       const expanded = expandedDispositivosMap.get(actId);
@@ -1822,6 +1854,32 @@ export const RadialHierarchyView = ({
                   // Decreto 68.017 -> Lei 14.133 art. 18
                   if (link.fromNodeId === decreto68017ActId) {
                     return normAnchor === "art.18" || normAnchor === "art18";
+                  }
+
+                  // Decreto 12.807 -> Lei 14.133 art. 182
+                  if (link.fromNodeId === decreto12807ActId) {
+                    return normAnchor === "art.182" || normAnchor === "art182";
+                  }
+
+                  // Decreto 11.878 -> Lei 14.133 art. 79
+                  if (link.fromNodeId === decreto11878ActId) {
+                    return normAnchor === "art.79" || normAnchor === "art79";
+                  }
+
+                  // Decreto 11.462 -> Lei 14.133 arts. 82 a 86
+                  if (link.fromNodeId === decreto11462ActId) {
+                    return normAnchor === "art.82" || normAnchor === "art82" ||
+                           normAnchor === "art.83" || normAnchor === "art83" ||
+                           normAnchor === "art.84" || normAnchor === "art84" ||
+                           normAnchor === "art.85" || normAnchor === "art85" ||
+                           normAnchor === "art.86" || normAnchor === "art86";
+                  }
+
+                  // Decreto 68.861/69.861 -> Lei 14.133 arts. 25, 60, 156
+                  if (link.fromNodeId === decreto68861ActId) {
+                    return normAnchor === "art.25" || normAnchor === "art25" ||
+                           normAnchor === "art.60" || normAnchor === "art60" ||
+                           normAnchor === "art.156" || normAnchor === "art156";
                   }
                   
                   return false;

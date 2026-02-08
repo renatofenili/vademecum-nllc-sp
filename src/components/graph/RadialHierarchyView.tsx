@@ -1774,11 +1774,23 @@ export const RadialHierarchyView = ({
                   ? "CF/1988" 
                   : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
                 
-                // Estimate width: ~6px per character + padding
-                // CF/88 ligeiramente maior que os demais
-                const estimatedWidth = Math.max(isCenter ? 95 : 100, fullLabel.length * 6 + 16);
-                const nodeWidth = Math.min(estimatedWidth, 160); // Cap at 160px
-                const nodeHeight = isCenter ? 46 : 32;
+                // ═══════════════════════════════════════════════════════════════════
+                // HIERARQUIA VISUAL: Tamanhos progressivos por nível normativo
+                // CF (maior) → Leis → Decretos → INs/Resoluções (menor)
+                // Cria percepção imediata de "quem sustenta quem"
+                // ═══════════════════════════════════════════════════════════════════
+                const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number; fontSize: number }> = {
+                  0: { minWidth: 110, maxWidth: 180, height: 52, fontSize: 15 },   // CF - âncora visual absoluta
+                  1: { minWidth: 100, maxWidth: 165, height: 38, fontSize: 11 },   // Leis - base do ordenamento
+                  2: { minWidth: 90, maxWidth: 150, height: 32, fontSize: 10 },    // Decretos - regulamentação
+                  3: { minWidth: 80, maxWidth: 140, height: 28, fontSize: 9 },     // INs/Resoluções - operacional
+                };
+                
+                const sizeConfig = nodeSizeByRing[node.ring] || nodeSizeByRing[3];
+                const estimatedWidth = Math.max(sizeConfig.minWidth, fullLabel.length * 6 + 20);
+                const nodeWidth = Math.min(estimatedWidth, sizeConfig.maxWidth);
+                const nodeHeight = sizeConfig.height;
+                const fontSize = sizeConfig.fontSize;
                 
                 const color = ringColors[node.ring];
                 const textColor = ringTextColors[node.ring];
@@ -1830,7 +1842,7 @@ export const RadialHierarchyView = ({
                         textAnchor="middle"
                         dominantBaseline="central"
                         className="font-medium pointer-events-none select-none"
-                        style={{ fontSize: isCenter ? 14 : 10, fill: textColor }}
+                        style={{ fontSize, fill: textColor, fontWeight: isCenter ? 600 : 500 }}
                       >
                         {fullLabel}
                       </text>

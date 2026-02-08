@@ -77,20 +77,27 @@ const SmartSearch = ({
     debounceRef.current = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const searchTerm = value.toLowerCase().trim();
+        const searchTerm = value.trim();
         
-        // Search across multiple fields using OR conditions
-        // Fields: numero, ementa, orgao_emissor, observacoes, analise_norma, texto_extraido
+        // Format search term for PostgreSQL full-text search (tsquery)
+        // Split into words, filter empties, add :* for prefix matching
+        const tsQuery = searchTerm
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(word => `${word}:*`)
+          .join(" & ");
+        
+        // Use PostgreSQL full-text search with search_vector column (much faster than ILIKE)
         const { data, error } = await supabase
           .from("normas")
-          .select("id, numero, tipo, ementa, data_publicacao, orgao_emissor, observacoes, analise_norma, texto_extraido")
-          .or(`numero.ilike.%${searchTerm}%,ementa.ilike.%${searchTerm}%,orgao_emissor.ilike.%${searchTerm}%,observacoes.ilike.%${searchTerm}%,analise_norma.ilike.%${searchTerm}%,texto_extraido.ilike.%${searchTerm}%`)
+          .select("id, numero, tipo, ementa, data_publicacao, orgao_emissor, observacoes, analise_norma")
+          .textSearch("search_vector", tsQuery, { type: "websearch", config: "portuguese" })
           .order("data_publicacao", { ascending: false })
           .limit(10);
 
         if (error) throw error;
 
-        // Determine which field matched for each result
+        // Determine which field matched for each result (approximate, since FTS doesn't tell us)
         const resultsWithMatch = (data || []).map((norma) => {
           let matchField = "";
           const term = searchTerm.toLowerCase();
@@ -102,10 +109,10 @@ const SmartSearch = ({
           } else if (norma.orgao_emissor?.toLowerCase().includes(term)) {
             matchField = "órgão emissor";
           } else if (norma.analise_norma?.toLowerCase().includes(term)) {
-            matchField = "análise crítica";
+            matchField = "linguagem simples";
           } else if (norma.observacoes?.toLowerCase().includes(term)) {
             matchField = "observações";
-          } else if (norma.texto_extraido?.toLowerCase().includes(term)) {
+          } else {
             matchField = "texto completo";
           }
 

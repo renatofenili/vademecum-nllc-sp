@@ -48,12 +48,19 @@ const NormasTab = ({ initialSearch = "", selectedNormaId }: NormasTabProps) => {
     queryFn: async () => {
       let query = supabase
         .from("normas")
-        .select("id, numero, tipo, ementa, data_publicacao, status, texto_extraido")
+        .select("id, numero, tipo, ementa, data_publicacao, status")
         .order("data_publicacao", { ascending: false });
 
       if (searchTerm) {
-        // Search across all metadata fields
-        query = query.or(`numero.ilike.%${searchTerm}%,ementa.ilike.%${searchTerm}%,orgao_emissor.ilike.%${searchTerm}%,observacoes.ilike.%${searchTerm}%,analise_norma.ilike.%${searchTerm}%,texto_extraido.ilike.%${searchTerm}%`);
+        // Use PostgreSQL full-text search (much faster than ILIKE on large text fields)
+        const tsQuery = searchTerm
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(word => `${word}:*`)
+          .join(" & ");
+        
+        query = query.textSearch("search_vector", tsQuery, { type: "websearch", config: "portuguese" });
       }
 
       if (tipoFilter !== "all") {

@@ -119,27 +119,54 @@ const getHeatLabel = (intensity: number): string => {
   return "Muito alta";
 };
 
+interface NormaInfo {
+  id: string;
+  numero: string;
+  tipo: string;
+}
+
 const MapaCalorTab = () => {
   const [themeCounts, setThemeCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [globalMax, setGlobalMax] = useState(1);
+  const [normasByTema, setNormasByTema] = useState<Record<string, NormaInfo[]>>({});
 
   useEffect(() => {
     const loadThemes = async () => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        // Carrega contagem de temas
+        const { data: temasData, error: temasError } = await supabase
           .from("normas_temas")
           .select("tema");
 
-        if (error) throw error;
+        if (temasError) throw temasError;
 
         const counts: Record<string, number> = {};
-        (data || []).forEach((row) => {
+        (temasData || []).forEach((row) => {
           counts[row.tema] = (counts[row.tema] || 0) + 1;
         });
 
+        // Carrega normas por tema com join
+        const { data: normasTemasData, error: normasError } = await supabase
+          .from("normas_temas")
+          .select("tema, normas(id, numero, tipo)")
+          .order("tema");
+
+        if (normasError) throw normasError;
+
+        const normasByTemaMap: Record<string, NormaInfo[]> = {};
+        (normasTemasData || []).forEach((row: any) => {
+          if (!normasByTemaMap[row.tema]) {
+            normasByTemaMap[row.tema] = [];
+          }
+          if (row.normas) {
+            normasByTemaMap[row.tema].push(row.normas);
+          }
+        });
+
         setThemeCounts(counts);
+        setNormasByTema(normasByTemaMap);
         setGlobalMax(Math.max(...Object.values(counts), 1));
       } catch (err) {
         console.error("Erro ao carregar temas:", err);
@@ -273,8 +300,8 @@ const MapaCalorTab = () => {
                                 </span>
                               </div>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-xs">
-                              <div className="space-y-1">
+                            <TooltipContent side="top" className="max-w-sm">
+                              <div className="space-y-2">
                                 <p className="font-semibold">{theme.tema}</p>
                                 <p className="text-sm text-muted-foreground">
                                   {theme.count} normas ({percentage}% do total)
@@ -282,6 +309,24 @@ const MapaCalorTab = () => {
                                 <p className="text-xs text-muted-foreground">
                                   Intensidade: {heatLabel}
                                 </p>
+                                {normasByTema[theme.tema] && normasByTema[theme.tema].length > 0 && (
+                                  <div className="border-t border-slate-600 pt-2 mt-2">
+                                    <p className="text-xs font-medium mb-1">Normas:</p>
+                                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                                      {normasByTema[theme.tema].slice(0, 10).map((norma) => (
+                                        <div key={norma.id} className="text-xs text-muted-foreground">
+                                          <span className="inline-block w-16 font-medium">{norma.tipo.toUpperCase()}:</span>
+                                          <span>{norma.numero}</span>
+                                        </div>
+                                      ))}
+                                      {normasByTema[theme.tema].length > 10 && (
+                                        <p className="text-xs text-muted-foreground italic">
+                                          +{normasByTema[theme.tema].length - 10} outras
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </TooltipContent>
                           </Tooltip>

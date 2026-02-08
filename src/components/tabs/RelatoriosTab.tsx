@@ -75,15 +75,20 @@ const RelatoriosTab = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("normas")
-        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma")
-        .not("analise_norma", "is", null);
+        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma");
       
       if (error) throw error;
       
       // Ordenar manualmente: Decreto 67.985 primeiro, depois por data
       const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
-        if (a.numero === "67.985/2023") return -1;
-        if (b.numero === "67.985/2023") return 1;
+        // Normas COM análise vêm primeiro
+        if (a.analise_norma && !b.analise_norma) return -1;
+        if (!a.analise_norma && b.analise_norma) return 1;
+        // Dentro das que têm análise, Decreto 67.985 primeiro
+        if (a.analise_norma && b.analise_norma) {
+          if (a.numero === "67.985/2023") return -1;
+          if (b.numero === "67.985/2023") return 1;
+        }
         return new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime();
       });
       
@@ -149,32 +154,42 @@ const RelatoriosTab = () => {
         ) : (
           normas?.map((norma) => {
             const Icon = getIconForTipo(norma.tipo);
+            const temAnalise = !!norma.analise_norma;
             return (
               <Card
                 key={norma.id}
                 className={cn(
-                  "group cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-[1.02] hover:border-primary/40 overflow-hidden",
+                  "group transition-all duration-300 overflow-hidden",
+                  temAnalise 
+                    ? "cursor-pointer hover:shadow-xl hover:scale-[1.02] hover:border-primary/40" 
+                    : "bg-muted/60 opacity-70",
                   selectedNorma?.id === norma.id && "ring-2 ring-primary"
                 )}
-                onClick={() => setSelectedNorma(norma)}
+                onClick={() => temAnalise && setSelectedNorma(norma)}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className={cn(
                       "flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-300",
-                      getTipoColor(norma.tipo),
-                      "group-hover:scale-110"
+                      temAnalise ? getTipoColor(norma.tipo) : "bg-muted-foreground/20 text-muted-foreground",
+                      temAnalise && "group-hover:scale-110"
                     )}>
                       <Icon className="h-5 w-5" />
                     </div>
                     <Badge 
                       variant="outline" 
-                      className={cn("text-xs border", getTipoColor(norma.tipo))}
+                      className={cn(
+                        "text-xs border", 
+                        temAnalise ? getTipoColor(norma.tipo) : "bg-muted text-muted-foreground border-muted-foreground/30"
+                      )}
                     >
                       {formatTipo(norma.tipo)}
                     </Badge>
                   </div>
-                  <CardTitle className="text-lg mt-3 group-hover:text-primary transition-colors line-clamp-1">
+                  <CardTitle className={cn(
+                    "text-lg mt-3 transition-colors line-clamp-1",
+                    temAnalise ? "group-hover:text-primary" : "text-muted-foreground"
+                  )}>
                     {formatTipo(norma.tipo)} {norma.numero}
                   </CardTitle>
                   <CardDescription className="line-clamp-2 text-sm">
@@ -182,9 +197,15 @@ const RelatoriosTab = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="bg-muted/40 rounded-lg p-3 mb-3">
+                  <div className={cn(
+                    "rounded-lg p-3 mb-3",
+                    temAnalise ? "bg-muted/40" : "bg-muted/20"
+                  )}>
                     <p className="text-sm text-muted-foreground line-clamp-3">
-                      {extrairResumo(norma.analise_norma, 150)}...
+                      {temAnalise 
+                        ? `${extrairResumo(norma.analise_norma, 150)}...`
+                        : "Texto em linguagem simples em breve..."
+                      }
                     </p>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -192,9 +213,15 @@ const RelatoriosTab = () => {
                       <Calendar className="h-3 w-3" />
                       {formatDateBR(norma.data_publicacao)}
                     </span>
-                    <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs group-hover:text-primary">
-                      Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                    </Button>
+                    {temAnalise ? (
+                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs group-hover:text-primary">
+                        Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </Button>
+                    ) : (
+                      <Badge variant="outline" className="text-xs bg-muted/50 text-muted-foreground border-muted-foreground/30">
+                        Em breve
+                      </Badge>
+                    )}
                   </div>
                 </CardContent>
               </Card>

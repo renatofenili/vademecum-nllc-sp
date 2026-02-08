@@ -599,20 +599,17 @@ export const RadialHierarchyView = ({
     const sortedDecretos = [...decretoNodes].sort(sortByNumero);
     const decretosCount = sortedDecretos.length;
     
-    // Calcular o tamanho máximo dos nós de decreto para determinar o raio
+    // Calcular o tamanho dos nós de decreto
     const decretoSizes = sortedDecretos.map(act => estimateNodeSize(act, 1));
-    const maxDecretoWidth = Math.max(...decretoSizes.map(s => s.w), 100);
     const maxDecretoHeight = Math.max(...decretoSizes.map(s => s.h), 36);
     
-    // Calcular raio mínimo para que os nós não se sobreponham
-    // Circunferência necessária = (largura média + gap) * número de nós
-    const avgDecretoWidth = decretoSizes.reduce((sum, s) => sum + s.w, 0) / Math.max(decretosCount, 1);
-    const circumferenceNeeded = (avgDecretoWidth + MIN_GAP * 2) * decretosCount;
-    const minRadiusDecretos = Math.max(
+    // Raio compacto: usa a diagonal do nó como espaçamento angular mínimo
+    const avgDecretoDiagonal = decretoSizes.reduce((sum, s) => sum + Math.hypot(s.w, s.h), 0) / Math.max(decretosCount, 1);
+    const circumferenceNeeded = (avgDecretoDiagonal * 0.55 + MIN_GAP) * decretosCount;
+    const RADIUS_DECRETOS = Math.max(
       circumferenceNeeded / (2 * Math.PI),
-      Math.min(dimensions.width, dimensions.height) * 0.18
+      120  // mínimo absoluto
     );
-    const RADIUS_DECRETOS = minRadiusDecretos;
 
     sortedDecretos.forEach((act, idx) => {
       const { w, h } = estimateNodeSize(act, 1);
@@ -644,15 +641,15 @@ export const RadialHierarchyView = ({
     
     // Calcular o tamanho dos nós de IN/Resolução
     const insSizes = sortedINsResolucoes.map(act => estimateNodeSize(act, 2));
-    const avgInsWidth = insSizes.length > 0 
-      ? insSizes.reduce((sum, s) => sum + s.w, 0) / insCount 
-      : 100;
+    const avgInsDiagonal = insSizes.length > 0 
+      ? insSizes.reduce((sum, s) => sum + Math.hypot(s.w, s.h), 0) / insCount 
+      : 80;
     
-    // Raio para INs: além dos decretos + espaço + raio calculado para caber todos
-    const circumferenceNeededIns = (avgInsWidth + MIN_GAP * 2) * Math.max(insCount, 1);
+    // Raio compacto para INs: além dos decretos + gap pequeno
+    const circumferenceNeededIns = (avgInsDiagonal * 0.55 + MIN_GAP) * Math.max(insCount, 1);
     const minRadiusIns = circumferenceNeededIns / (2 * Math.PI);
     const RADIUS_INS = Math.max(
-      RADIUS_DECRETOS + maxDecretoHeight + 60,
+      RADIUS_DECRETOS + maxDecretoHeight + 40,
       minRadiusIns
     );
 

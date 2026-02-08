@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ActsGraphData, ActNode, DispositivosGraphData, DispositivoNode } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -1530,19 +1531,26 @@ export const RadialHierarchyView = ({
             {showHierarchyLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
           </button>
           
-          {/* Regulamenta - with pulsing glow effect */}
-          <button
-            onClick={() => setShowRegulamentaLinks(!showRegulamentaLinks)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all font-medium ${
-              showRegulamentaLinks 
-                ? "bg-green-500/20 text-green-600 dark:text-green-400 animate-glow-pulse" 
-                : "bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground animate-glow-pulse"
-            }`}
-          >
-            <div className="w-4 h-0.5 bg-green-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 2px, currentColor 2px, currentColor 4px)" }} />
-            <span>Regulamenta</span>
-            {showRegulamentaLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          </button>
+          {/* Regulamenta - with pulsing glow effect and tooltip */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setShowRegulamentaLinks(!showRegulamentaLinks)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all font-medium ${
+                  showRegulamentaLinks 
+                    ? "bg-green-500/20 text-green-600 dark:text-green-400 animate-glow-pulse" 
+                    : "bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground animate-glow-pulse"
+                }`}
+              >
+                <div className="w-4 h-0.5 bg-green-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 2px, currentColor 2px, currentColor 4px)" }} />
+                <span>Regulamenta</span>
+                {showRegulamentaLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              Identificação dos artigos da Lei nº 14.133/21 tocados pelas normas infralegais
+            </TooltipContent>
+          </Tooltip>
           
         </div>
         

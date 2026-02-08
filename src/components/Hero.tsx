@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { TabType } from "./Header";
+import logoSGGD from "@/assets/logo-sggd.jpg";
 
 interface HeroProps {
   onNavigate: (tab: TabType) => void;
@@ -8,9 +9,18 @@ interface HeroProps {
 
 const Hero = ({ onNavigate }: HeroProps) => {
   return (
-    <section className="bg-hero py-20 md:py-32">
+    <section className="bg-hero py-16 md:py-24">
       <div className="container text-center">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-4">
+        {/* Logo SGGD centralizado com destaque */}
+        <div className="mb-8 flex justify-center">
+          <img 
+            src={logoSGGD} 
+            alt="SGGD - Gestão e Governo Digital" 
+            className="h-24 md:h-32 lg:h-40 w-auto object-contain rounded-lg shadow-lg"
+          />
+        </div>
+        
+        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
           Normas de Licitações e Contratos
           <br />
           <span className="text-primary">do Estado de São Paulo</span>

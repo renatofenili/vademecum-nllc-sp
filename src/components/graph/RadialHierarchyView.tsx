@@ -438,18 +438,54 @@ export const RadialHierarchyView = ({
     };
   }, []);
 
-  // Calculate expansion offset based on all expanded dispositivos
+  // Calculate expansion offset based on Lei central expansion (artigos em círculo)
+  const leiExpansionInfo = useMemo(() => {
+    if (!lei14133ActId) return { isExpanded: false, artigoCount: 0, ringRadius: 0, pushOffset: 0 };
+    
+    const leiExpanded = expandedDispositivosMap.get(lei14133ActId);
+    if (!leiExpanded || leiExpanded.isLoading || !leiExpanded.artigoGroups.length) {
+      return { isExpanded: false, artigoCount: 0, ringRadius: 0, pushOffset: 0 };
+    }
+    
+    const artigoCount = leiExpanded.artigoGroups.length;
+    
+    // Calcular quantos anéis de artigos precisamos
+    const ARTIGOS_PER_RING = 40; // artigos por anel concêntrico
+    const artigoRings = Math.ceil(artigoCount / ARTIGOS_PER_RING);
+    
+    // Raio do primeiro anel de artigos (ao redor da Lei)
+    const firstArtigoRingRadius = 70;
+    const artigoRingSpacing = 35;
+    
+    // Último anel de artigos
+    const lastArtigoRingRadius = firstArtigoRingRadius + (artigoRings - 1) * artigoRingSpacing;
+    
+    // Offset para empurrar decretos/INs para fora
+    const pushOffset = lastArtigoRingRadius + 40;
+    
+    return { 
+      isExpanded: true, 
+      artigoCount, 
+      ringRadius: firstArtigoRingRadius,
+      ringSpacing: artigoRingSpacing,
+      artigosPerRing: ARTIGOS_PER_RING,
+      pushOffset 
+    };
+  }, [lei14133ActId, expandedDispositivosMap]);
+
+  // Legacy expansion offset for other norms
   const expansionOffset = useMemo(() => {
     if (expandedDispositivosMap.size === 0) {
       return { ring: -1, offset: 0 };
     }
     
-    // Find the innermost ring with expanded dispositivos
+    // Find the innermost ring with expanded dispositivos (excluding Lei central)
     let minRing = 4;
     let maxOffset = 0;
     
     expandedDispositivosMap.forEach((expanded) => {
       if (expanded.isLoading || !expanded.artigoGroups.length) return;
+      if (expanded.actId === lei14133ActId) return; // Lei is handled separately
       
       const expandedNode = data?.nodes.find(n => n.id === expanded.actId);
       if (!expandedNode) return;
@@ -473,7 +509,7 @@ export const RadialHierarchyView = ({
     if (minRing === 4) return { ring: -1, offset: 0 };
     
     return { ring: minRing, offset: maxOffset };
-  }, [expandedDispositivosMap, data?.nodes]);
+  }, [expandedDispositivosMap, data?.nodes, lei14133ActId]);
 
   // Build hierarchical nodes with Lei 14.133 at center
   // Ring 1 = Decretos, Ring 2 = INs/Resoluções (CF removed)
@@ -737,10 +773,15 @@ export const RadialHierarchyView = ({
       });
     };
 
-    // Raios base FIXOS por nível (derivados apenas do tamanho do container)
+    // Raios base - empurrados para fora quando a Lei está expandida
     const minDim = Math.min(dimensions.width, dimensions.height);
-    const RADIUS_DECRETOS = Math.max(140, minDim * 0.26);
-    const RADIUS_INS = RADIUS_DECRETOS + Math.max(90, minDim * 0.12);
+    const BASE_RADIUS_DECRETOS = Math.max(140, minDim * 0.26);
+    const BASE_RADIUS_INS = BASE_RADIUS_DECRETOS + Math.max(90, minDim * 0.12);
+    
+    // Aplicar push se Lei está expandida
+    const leiPush = leiExpansionInfo.pushOffset || 0;
+    const RADIUS_DECRETOS = BASE_RADIUS_DECRETOS + leiPush;
+    const RADIUS_INS = BASE_RADIUS_INS + leiPush;
 
     // Ring 1: decretos
     placeRing({
@@ -854,7 +895,7 @@ export const RadialHierarchyView = ({
       regulatesMap,
       regulatedByMap,
     };
-  }, [data, dimensions, expansionOffset]);
+  }, [data, dimensions, expansionOffset, leiExpansionInfo]);
 
   // Calculate article positions for expanded norms (needed for inter-norm article links)
   const artigoPositions = useMemo(() => {
@@ -868,21 +909,43 @@ export const RadialHierarchyView = ({
       
       const artigoGroups = nodeExpanded.artigoGroups;
       const count = artigoGroups.length;
-      const maxPerRing = 20;
+      const isLeiCentral = node.ring === 0;
       
       artigoGroups.forEach((group, idx) => {
-        const ringIndex = Math.floor(idx / maxPerRing);
-        const indexInRing = idx % maxPerRing;
-        const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+        let artigoX: number;
+        let artigoY: number;
         
-        // Para layout vertical, distribuir artigos horizontalmente abaixo do nó pai
-        const baseOffset = 50 + ringIndex * 30;
-        const artigoSpread = Math.min(300, countInThisRing * 25);
-        const artigoStartX = -artigoSpread / 2;
-        const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
-        
-        const artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
-        const artigoY = node.y + baseOffset;
+        if (isLeiCentral) {
+          // LAYOUT CIRCULAR para Lei central: artigos em anéis concêntricos
+          const ARTIGOS_PER_RING = 40;
+          const ringIndex = Math.floor(idx / ARTIGOS_PER_RING);
+          const indexInRing = idx % ARTIGOS_PER_RING;
+          const countInThisRing = Math.min(ARTIGOS_PER_RING, count - ringIndex * ARTIGOS_PER_RING);
+          
+          // Raio do anel de artigos
+          const baseArtigoRadius = 70 + ringIndex * 35;
+          
+          // Ângulo do artigo neste anel (distribuído uniformemente)
+          const angleStep = (2 * Math.PI) / countInThisRing;
+          const angle = -Math.PI / 2 + indexInRing * angleStep; // Começa no topo
+          
+          artigoX = node.x + baseArtigoRadius * Math.cos(angle);
+          artigoY = node.y + baseArtigoRadius * Math.sin(angle);
+        } else {
+          // Layout original para outras normas (horizontal abaixo)
+          const maxPerRing = 20;
+          const ringIndex = Math.floor(idx / maxPerRing);
+          const indexInRing = idx % maxPerRing;
+          const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+          
+          const baseOffset = 50 + ringIndex * 30;
+          const artigoSpread = Math.min(300, countInThisRing * 25);
+          const artigoStartX = -artigoSpread / 2;
+          const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
+          
+          artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
+          artigoY = node.y + baseOffset;
+        }
         
         // Key: "actId:anchor" (e.g., "uuid:art.74")
         const rawAnchor = group.artigo.anchor;
@@ -1931,19 +1994,42 @@ export const RadialHierarchyView = ({
                     {/* Artigos as child nodes around the parent */}
                     {hasExpandedDispositivos && artigoGroups.map((group, idx) => {
                       const count = artigoGroups.length;
-                      const maxPerRing = 20;
-                      const ringIndex = Math.floor(idx / maxPerRing);
-                      const indexInRing = idx % maxPerRing;
-                      const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+                      const isLeiCentral = node.ring === 0;
                       
-                      // Para layout vertical, distribuir artigos horizontalmente abaixo do nó pai
-                      const baseOffset = 50 + ringIndex * 30;
-                      const artigoSpread = Math.min(300, countInThisRing * 25);
-                      const artigoStartX = -artigoSpread / 2;
-                      const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
+                      let artigoX: number;
+                      let artigoY: number;
                       
-                      const artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
-                      const artigoY = node.y + baseOffset;
+                      if (isLeiCentral) {
+                        // LAYOUT CIRCULAR para Lei central: artigos em anéis concêntricos
+                        const ARTIGOS_PER_RING = 40;
+                        const ringIndex = Math.floor(idx / ARTIGOS_PER_RING);
+                        const indexInRing = idx % ARTIGOS_PER_RING;
+                        const countInThisRing = Math.min(ARTIGOS_PER_RING, count - ringIndex * ARTIGOS_PER_RING);
+                        
+                        // Raio do anel de artigos
+                        const baseArtigoRadius = 70 + ringIndex * 35;
+                        
+                        // Ângulo do artigo neste anel (distribuído uniformemente)
+                        const angleStep = (2 * Math.PI) / countInThisRing;
+                        const angle = -Math.PI / 2 + indexInRing * angleStep; // Começa no topo
+                        
+                        artigoX = node.x + baseArtigoRadius * Math.cos(angle);
+                        artigoY = node.y + baseArtigoRadius * Math.sin(angle);
+                      } else {
+                        // Layout original para outras normas (horizontal abaixo)
+                        const maxPerRing = 20;
+                        const ringIndex = Math.floor(idx / maxPerRing);
+                        const indexInRing = idx % maxPerRing;
+                        const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
+                        
+                        const baseOffset = 50 + ringIndex * 30;
+                        const artigoSpread = Math.min(300, countInThisRing * 25);
+                        const artigoStartX = -artigoSpread / 2;
+                        const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
+                        
+                        artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
+                        artigoY = node.y + baseOffset;
+                      }
 
                       // Check if this article is a target of a connection line and get source color
                       const artigoKey = `${node.id}:${normalizeAnchor(group.artigo.anchor)}`;

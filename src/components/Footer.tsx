@@ -9,10 +9,10 @@ const Footer = ({ onTabChange }: FooterProps) => {
   const navItems: { label: string; tab: TabType }[] = [
     { label: "Início", tab: "home" },
     { label: "Normas", tab: "normas" },
-    { label: "Relatórios", tab: "relatorios" },
     { label: "Busca por Dispositivo", tab: "consultas" },
     { label: "Mapa Relacional", tab: "mapas" },
     { label: "Mapa de Calor", tab: "mapacalor" },
+    { label: "Linguagem Simples!", tab: "relatorios" },
   ];
 
   return (

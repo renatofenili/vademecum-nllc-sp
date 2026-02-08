@@ -257,7 +257,13 @@ Deno.serve(async (req) => {
     "68.304": ["art.74", "art.75"], // Decreto 68.304/2024 -> arts. 74 e 75
     "68.422": ["art.31"],  // Decreto 68.422/2024 -> art. 31
     "69.233": ["art.174"], // Decreto 69.233/2024 -> art. 174
-    "12.807": ["art.182"], // Decreto 12.807/2025 -> art. 182 (atualização de valores)
+
+    // NOVAS RELAÇÕES (toggle "Regulamenta")
+    "12.807": ["art.182"], // Decreto 12.807/2025 -> art. 182
+    "11.878": ["art.79"],  // Decreto 11.878/2024 -> art. 79
+    "11.462": ["art.82", "art.83", "art.84", "art.85", "art.86"], // Decreto 11.462/2023 -> arts. 82-86
+    "68.861": ["art.25", "art.60", "art.156"], // Decreto 68.861 -> arts. 25, 60, 156
+    "69.861": ["art.25", "art.60", "art.156"], // Decreto 69.861 -> arts. 25, 60, 156
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -273,47 +279,64 @@ Deno.serve(async (req) => {
     console.warn(`[CORREÇÃO 12.807] ATENÇÃO: Decreto nº 12.807 NÃO encontrado nos nodes! Verificar banco de dados.`);
   }
   
-  // Force connection for ALL decretos without an existing edge to Lei 14.133
+  // Ensure validated article edges exist for decretos (domain knowledge)
+  // and ensure every decreto has at least one structural edge to Lei 14.133.
   for (const norma of (normas || [])) {
     if (norma.tipo !== "decreto") continue;
-    
-    const hasEdgeToLei14133 = decretosWithLei14133Edge.has(norma.id);
-    
-    if (!hasEdgeToLei14133) {
-      // Check if this decreto has validated article mappings
-      const numeroKey = Object.keys(validatedDecreeArticles).find(key => 
-        norma.numero?.includes(key)
-      );
-      
-      const articles = numeroKey ? validatedDecreeArticles[numeroKey] : null;
-      
-      if (articles && articles.length > 0) {
-        // Create edges with specific article anchors
-        console.log(`Adding validated article edges: Decreto ${norma.numero} -> Lei 14.133 [${articles.join(", ")}]`);
+
+    // Check if this decreto has validated article mappings
+    const numeroKey = Object.keys(validatedDecreeArticles).find((key) => {
+      const normaNorm = normalizeNumero(norma.numero || "");
+      const keyNorm = normalizeNumero(key);
+      return normaNorm.includes(keyNorm);
+    });
+    const articles = numeroKey ? validatedDecreeArticles[numeroKey] : null;
+
+    // Track if there is ANY edge from this decreto to Lei 14.133 (either extracted or forced)
+    let hasAnyEdgeToLei14133 = decretosWithLei14133Edge.has(norma.id);
+
+    // 1) Always add validated article edges when available (even if a structural edge already exists)
+    if (articles && articles.length > 0) {
+      const alreadyHasAnyValidatedAnchor = edges.some((e) => {
+        if (e.from_act !== norma.id) return false;
+        if (e.to_act !== (lei14133Id || "lei14133") && e.to_act !== "lei14133") return false;
+        return (e.evidences || []).some((ev) => articles.includes(ev.to_anchor));
+      });
+
+      if (!alreadyHasAnyValidatedAnchor) {
+        console.log(
+          `Adding validated article edges: Decreto ${norma.numero} -> Lei 14.133 [${articles.join(", ")}]`
+        );
         edges.push({
           from_act: norma.id,
           to_act: lei14133Id || "lei14133",
           relation_type: "regulates",
-          evidences: articles.map(art => ({
+          evidences: articles.map((art) => ({
             from_anchor: "ementa",
             to_anchor: art,
             excerpt: `Regulamenta o ${art} da Lei federal nº 14.133, de 1º de abril de 2021`,
           })),
         });
-      } else {
-        // Fallback: generic structural connection
-        console.log(`Forcing structural edge: Decreto ${norma.numero} -> Lei 14.133/2021 (domain rule)`);
-        edges.push({
-          from_act: norma.id,
-          to_act: lei14133Id || "lei14133",
-          relation_type: "regulates",
-          evidences: [{
+      }
+
+      hasAnyEdgeToLei14133 = true;
+    }
+
+    // 2) If it still has no connection at all, force the generic structural edge
+    if (!hasAnyEdgeToLei14133) {
+      console.log(`Forcing structural edge: Decreto ${norma.numero} -> Lei 14.133/2021 (domain rule)`);
+      edges.push({
+        from_act: norma.id,
+        to_act: lei14133Id || "lei14133",
+        relation_type: "regulates",
+        evidences: [
+          {
             from_anchor: "",
             to_anchor: "",
             excerpt: "[Conexão estrutural obrigatória - Lei de Licitações]",
-          }],
-        });
-      }
+          },
+        ],
+      });
     }
   }
 

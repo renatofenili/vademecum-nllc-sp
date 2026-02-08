@@ -587,92 +587,213 @@ export const RadialHierarchyView = ({
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 1: DECRETOS - Equidistantes da Lei, SEM SOBREPOSIÇÃO
-    // Calcula o raio mínimo necessário para caber todos os nós sem colisão
+    // ANEL 1 (Decretos) + ANEL 2 (INs/Resoluções)
+    // Regras:
+    // - raio BASE fixo por nível (não cresce)
+    // - resolver colisões LOCALMENTE: jitter angular (±2°..±10°) e offset radial pequeno
+    // - se necessário, encurtar label (tooltip já mostra o nome completo)
+    // - não invadir o setor do vizinho (cada nó fica dentro da sua fatia angular)
     // ═══════════════════════════════════════════════════════════════════════════
+
     const sortByNumero = (a: ActNode, b: ActNode) => {
       const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
       const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
       return numA - numB;
     };
 
-    const sortedDecretos = [...decretoNodes].sort(sortByNumero);
-    const decretosCount = sortedDecretos.length;
-    
-    // Calcular o tamanho dos nós de decreto
-    const decretoSizes = sortedDecretos.map(act => estimateNodeSize(act, 1));
-    const maxDecretoHeight = Math.max(...decretoSizes.map(s => s.h), 36);
-    
-    // Raio compacto: usa a diagonal do nó como espaçamento angular mínimo
-    const avgDecretoDiagonal = decretoSizes.reduce((sum, s) => sum + Math.hypot(s.w, s.h), 0) / Math.max(decretosCount, 1);
-    const circumferenceNeeded = (avgDecretoDiagonal * 0.55 + MIN_GAP) * decretosCount;
-    const RADIUS_DECRETOS = Math.max(
-      circumferenceNeeded / (2 * Math.PI),
-      120  // mínimo absoluto
-    );
+    const tipoOrder: Record<string, number> = {
+      instrucao_normativa: 0,
+      portaria: 1,
+      resolucao: 2,
+      outro: 3,
+    };
 
-    sortedDecretos.forEach((act, idx) => {
-      const { w, h } = estimateNodeSize(act, 1);
-      
-      // Distribuir uniformemente em 360° (começando de 270° = topo)
-      const angle = degToRad(270 + (idx / decretosCount) * 360);
-      const x = cx + RADIUS_DECRETOS * Math.cos(angle);
-      const y = cy + RADIUS_DECRETOS * Math.sin(angle);
+    const sortByTipoNumero = (a: ActNode, b: ActNode) => {
+      const oa = tipoOrder[a.tipo] ?? 99;
+      const ob = tipoOrder[b.tipo] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return sortByNumero(a, b);
+    };
 
-      placedObstacles.push({ x, y, w, h });
-      nodePositions.set(act.id, { x, y, ring: 1, angle });
-      result.push({
-        id: act.id,
-        label: getNodeLabel(act, 1),
-        tipo: act.tipo,
-        act,
-        ring: 1,
-        angle,
-        x,
-        y,
+    const unique = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
+
+    const shortYear = (numero: string) => {
+      const n = numero || "";
+      // "68.422/2024" -> "68.422/24"
+      if (n.includes("/")) return n.replace(/\/\d{2}(\d{2})$/, "/$1");
+      // fallback: "...2024" -> "...24"
+      return n.replace(/(19|20)\d{2}$/, (m) => m.slice(-2));
+    };
+
+    const labelVariantsFor = (act: ActNode, ring: number): string[] => {
+      const full = getNodeLabel(act, ring);
+      const nShort = shortYear(act.numero);
+      const onlyNum = act.numero ? shortYear(act.numero) : full;
+
+      if (act.tipo === "decreto") {
+        return unique([
+          full,
+          `Dec. ${nShort}`,
+          `Dec. ${onlyNum}`,
+          onlyNum,
+        ]);
+      }
+      if (act.tipo === "instrucao_normativa") {
+        return unique([
+          full,
+          `IN ${nShort}`,
+          onlyNum,
+        ]);
+      }
+      if (act.tipo === "resolucao") {
+        return unique([
+          full,
+          `Res. ${nShort}`,
+          onlyNum,
+        ]);
+      }
+      if (act.tipo === "portaria") {
+        return unique([
+          full,
+          `Port. ${nShort}`,
+          onlyNum,
+        ]);
+      }
+
+      const tipoShort = (tipoLabels[act.tipo] || act.tipo).replace(/\b(Instrução Normativa)\b/i, "IN");
+      return unique([full, `${tipoShort} ${nShort}`, onlyNum]);
+    };
+
+    const estimateSizeForLabel = (label: string, ring: number): { w: number; h: number } => {
+      const cfg = nodeSizeByRing[ring] || nodeSizeByRing[2];
+      // Ajuste leve de largura por caracteres (mantém determinístico)
+      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6.2 + 26);
+      // Se encurtou muito, permitir um nó mais estreito (ajuda a evitar colisão)
+      const minW = label.length <= 10 ? Math.min(cfg.minWidth, 76) : cfg.minWidth;
+      return {
+        w: Math.min(Math.max(estimatedWidth, minW), cfg.maxWidth),
+        h: cfg.height,
+      };
+    };
+
+    const BASE_JITTER_DEG = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10];
+    const BASE_RADIAL_OFFSETS = [0, 8, -8, 16, -16];
+    const RADIAL_BAND_PX = 18; // faixa estreita ao redor do raio do nível
+
+    const placeRing = (opts: {
+      acts: ActNode[];
+      ring: number;
+      baseRadius: number;
+      startDeg: number;
+      sortFn: (a: ActNode, b: ActNode) => number;
+    }) => {
+      const { acts, ring, baseRadius, startDeg, sortFn } = opts;
+      const sorted = [...acts].sort(sortFn);
+      const count = sorted.length;
+      if (count === 0) return;
+
+      const slotSpanDeg = 360 / count;
+      const sectorHalfDeg = Math.min(10, slotSpanDeg * 0.45);
+      const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= sectorHalfDeg + 1e-6);
+
+      sorted.forEach((act, idx) => {
+        const baseAngle = degToRad(startDeg + (idx / count) * 360);
+        const variants = labelVariantsFor(act, ring);
+
+        let placed: { x: number; y: number; angle: number; r: number; w: number; h: number; label: string } | null = null;
+
+        for (const label of variants) {
+          const { w, h } = estimateSizeForLabel(label, ring);
+
+          for (const deltaDeg of jitterDeltas) {
+            const angle = baseAngle + degToRad(deltaDeg);
+
+            for (const ro of BASE_RADIAL_OFFSETS) {
+              const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
+              const x = cx + r * Math.cos(angle);
+              const y = cy + r * Math.sin(angle);
+
+              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
+              if (!collides) {
+                placed = { x, y, angle, r, w, h, label };
+                break;
+              }
+            }
+            if (placed) break;
+          }
+          if (placed) break;
+        }
+
+        // Fallback extremo: se nada couber, reduzir o label ao número e tentar de novo
+        // (mantém raio fixo; evita sobreposição de labels)
+        if (!placed) {
+          const minimal = unique([shortYear(act.numero), act.numero, "…"]).find(Boolean) || "…";
+          const { w, h } = estimateSizeForLabel(minimal, ring);
+
+          // tentar um pouco mais de offsets, mas sempre dentro da faixa do nível
+          const extraRadial = [0, 8, -8, 16, -16, 18, -18].filter((v) => Math.abs(v) <= RADIAL_BAND_PX);
+
+          outer: for (const deltaDeg of jitterDeltas) {
+            const angle = baseAngle + degToRad(deltaDeg);
+            for (const ro of extraRadial) {
+              const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
+              const x = cx + r * Math.cos(angle);
+              const y = cy + r * Math.sin(angle);
+              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
+              if (!collides) {
+                placed = { x, y, angle, r, w, h, label: minimal };
+                break outer;
+              }
+            }
+          }
+        }
+
+        // Se ainda assim não couber, colocar no ângulo base e aceitar label mínimo.
+        // (situação patológica; ao menos evita estouro de raio e mantém determinístico)
+        if (!placed) {
+          const label = unique([shortYear(act.numero), act.numero, "…"]).find(Boolean) || "…";
+          const { w, h } = estimateSizeForLabel(label, ring);
+          const x = cx + baseRadius * Math.cos(baseAngle);
+          const y = cy + baseRadius * Math.sin(baseAngle);
+          placed = { x, y, angle: baseAngle, r: baseRadius, w, h, label };
+        }
+
+        placedObstacles.push({ x: placed.x, y: placed.y, w: placed.w, h: placed.h });
+        nodePositions.set(act.id, { x: placed.x, y: placed.y, ring, angle: placed.angle });
+        result.push({
+          id: act.id,
+          label: placed.label,
+          tipo: act.tipo,
+          act,
+          ring,
+          angle: placed.angle,
+          x: placed.x,
+          y: placed.y,
+        });
       });
+    };
+
+    // Raios base FIXOS por nível (derivados apenas do tamanho do container)
+    const minDim = Math.min(dimensions.width, dimensions.height);
+    const RADIUS_DECRETOS = Math.max(140, minDim * 0.26);
+    const RADIUS_INS = RADIUS_DECRETOS + Math.max(90, minDim * 0.12);
+
+    // Ring 1: decretos
+    placeRing({
+      acts: decretoNodes,
+      ring: 1,
+      baseRadius: RADIUS_DECRETOS,
+      startDeg: 270,
+      sortFn: sortByNumero,
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 2: INs e RESOLUÇÕES - Equidistantes, SEM SOBREPOSIÇÃO
-    // ═══════════════════════════════════════════════════════════════════════════
-    const sortedINsResolucoes = [...inResolucaoNodes].sort(sortByNumero);
-    const insCount = sortedINsResolucoes.length;
-    
-    // Calcular o tamanho dos nós de IN/Resolução
-    const insSizes = sortedINsResolucoes.map(act => estimateNodeSize(act, 2));
-    const avgInsDiagonal = insSizes.length > 0 
-      ? insSizes.reduce((sum, s) => sum + Math.hypot(s.w, s.h), 0) / insCount 
-      : 80;
-    
-    // Raio compacto para INs: além dos decretos + gap pequeno
-    const circumferenceNeededIns = (avgInsDiagonal * 0.55 + MIN_GAP) * Math.max(insCount, 1);
-    const minRadiusIns = circumferenceNeededIns / (2 * Math.PI);
-    const RADIUS_INS = Math.max(
-      RADIUS_DECRETOS + maxDecretoHeight + 40,
-      minRadiusIns
-    );
-
-    sortedINsResolucoes.forEach((act, idx) => {
-      const { w, h } = estimateNodeSize(act, 2);
-      
-      // Distribuir uniformemente em 360° (offset de 15° para não alinhar com decretos)
-      const angle = degToRad(285 + (idx / Math.max(insCount, 1)) * 360);
-      const x = cx + RADIUS_INS * Math.cos(angle);
-      const y = cy + RADIUS_INS * Math.sin(angle);
-
-      placedObstacles.push({ x, y, w, h });
-      nodePositions.set(act.id, { x, y, ring: 2, angle });
-      result.push({
-        id: act.id,
-        label: getNodeLabel(act, 2),
-        tipo: act.tipo,
-        act,
-        ring: 2,
-        angle,
-        x,
-        y,
-      });
+    // Ring 2: INs/Resoluções
+    placeRing({
+      acts: inResolucaoNodes,
+      ring: 2,
+      baseRadius: RADIUS_INS,
+      startDeg: 285,
+      sortFn: sortByTipoNumero,
     });
 
     // Y positions for level labels (não usadas neste layout)
@@ -757,7 +878,7 @@ export const RadialHierarchyView = ({
       }
     });
 
-    console.log(`[MAPA] Lei 14.133 no centro | ${sortedDecretos.length} Decretos (anel 1) | ${sortedINsResolucoes.length} INs/Res (anel 2)`);
+    console.log(`[MAPA] Lei 14.133 no centro | ${decretoNodes.length} Decretos (anel 1) | ${inResolucaoNodes.length} INs/Res (anel 2)`);
 
     return { 
       nodes: result, 
@@ -1724,26 +1845,20 @@ export const RadialHierarchyView = ({
               {/* Nodes */}
               {nodes.map((node) => {
                 const isCenter = node.ring === 0;
-                
-                // Calculate dynamic width based on label length
-                const fullLabel = isCenter 
-                  ? `Lei nº ${node.act.numero}` 
-                  : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
+                const label = node.label;
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // HIERARQUIA VISUAL: Tamanhos progressivos por nível normativo
-                // CF (maior) → Leis → Decretos → INs/Resoluções (menor)
-                // Cria percepção imediata de "quem sustenta quem"
+                // HIERARQUIA VISUAL: Lei (centro) → Decretos → INs/Resoluções
+                // (medidas precisam bater com o cálculo do layout para evitar overlap)
                 // ═══════════════════════════════════════════════════════════════════
                 const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number; fontSize: number }> = {
-                  0: { minWidth: 110, maxWidth: 180, height: 52, fontSize: 15 },   // CF - âncora visual absoluta
-                  1: { minWidth: 100, maxWidth: 165, height: 38, fontSize: 11 },   // Leis - base do ordenamento
-                  2: { minWidth: 90, maxWidth: 150, height: 32, fontSize: 10 },    // Decretos - regulamentação
-                  3: { minWidth: 80, maxWidth: 140, height: 28, fontSize: 9 },     // INs/Resoluções - operacional
+                  0: { minWidth: 130, maxWidth: 220, height: 52, fontSize: 14 }, // Lei (centro)
+                  1: { minWidth: 90, maxWidth: 170, height: 36, fontSize: 10 },  // Decretos
+                  2: { minWidth: 80, maxWidth: 155, height: 32, fontSize: 9 },   // INs/Resoluções
                 };
                 
-                const sizeConfig = nodeSizeByRing[node.ring] || nodeSizeByRing[3];
-                const estimatedWidth = Math.max(sizeConfig.minWidth, fullLabel.length * 6 + 20);
+                const sizeConfig = nodeSizeByRing[node.ring] || nodeSizeByRing[2];
+                const estimatedWidth = Math.max(sizeConfig.minWidth, label.length * 6 + 20);
                 const nodeWidth = Math.min(estimatedWidth, sizeConfig.maxWidth);
                 const nodeHeight = sizeConfig.height;
                 const fontSize = sizeConfig.fontSize;
@@ -1793,14 +1908,14 @@ export const RadialHierarchyView = ({
                         }}
                       />
                       
-                      {/* Node label - full name */}
+                      {/* Node label (encurtado quando necessário para evitar overlap; nome completo no tooltip) */}
                       <text
                         textAnchor="middle"
                         dominantBaseline="central"
                         className="font-medium pointer-events-none select-none"
                         style={{ fontSize, fill: textColor, fontWeight: isCenter ? 600 : 500 }}
                       >
-                        {fullLabel}
+                        {label}
                       </text>
                       
                       {/* Loading indicator for dispositivos */}
@@ -2027,8 +2142,8 @@ export const RadialHierarchyView = ({
                   
                   <Separator />
                   
-                  {/* Botão Expandir Dispositivos - oculto para CF/88 */}
-                  {selectedNode.ring !== 0 && (() => {
+                  {/* Botão Expandir Dispositivos (sempre disponível para normas; CF não aparece neste modo) */}
+                  {selectedNode.act.tipo !== "constituicao" && (() => {
                     const selectedExpanded = expandedDispositivosMap.get(selectedNode.id);
                     const isExpanded = !!selectedExpanded && !selectedExpanded.isLoading && selectedExpanded.artigoGroups.length > 0;
                     const isLoading = !!selectedExpanded?.isLoading;

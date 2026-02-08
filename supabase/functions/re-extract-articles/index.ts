@@ -1,12 +1,23 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDocument } from "https://esm.sh/pdfjs-serverless@0.3.2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const inputSchema = z.object({
+  norma_id: z.string().uuid({ message: "norma_id must be a valid UUID" }),
+  missing_articles: z.array(z.number().int().positive().max(9999)).max(100).optional(),
+  missing_anchors: z.array(z.string().min(1).max(100)).max(50).optional(),
+}).refine(
+  (data) => (data.missing_articles && data.missing_articles.length > 0) || (data.missing_anchors && data.missing_anchors.length > 0),
+  { message: "Either missing_articles or missing_anchors must be provided" }
+);
 
 interface ExtractedArticle {
   document_id: string;
@@ -323,27 +334,79 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { norma_id, missing_articles, missing_anchors } = await req.json();
+    // Authentication check
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     
-    const hasArticles = Array.isArray(missing_articles) && missing_articles.length > 0;
-    const hasAnchors = Array.isArray(missing_anchors) && missing_anchors.length > 0;
-    
-    if (!norma_id || (!hasArticles && !hasAnchors)) {
+    if (!token) {
+      console.log("Missing authorization token");
       return new Response(
-        JSON.stringify({ error: "norma_id and (missing_articles[] or missing_anchors[]) required" }),
+        JSON.stringify({ error: "Unauthorized: Missing authorization token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create Supabase client with user's token for auth validation
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Validate token
+    const { data: userData, error: userError } = await authClient.auth.getUser(token);
+    if (userError || !userData?.user) {
+      console.log("Invalid authorization token:", userError?.message);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create service role client for admin check
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check admin role (this is an admin-only operation)
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (!roleData) {
+      console.log(`User ${userData.user.id} is not an admin`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Admin user authenticated: ${userData.user.id}`);
+
+    // Parse and validate input
+    let rawInput;
+    try {
+      rawInput = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const articlesList = missing_articles || [];
-    const anchorsList: string[] = missing_anchors || [];
-    
-    console.log(`Re-extracting for norma ${norma_id}: articles=${articlesList.join(", ")}, anchors=${anchorsList.join(", ")}`);
+    const validation = inputSchema.safeParse(rawInput);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: validation.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const { norma_id, missing_articles = [], missing_anchors = [] } = validation.data;
+    
+    console.log(`Re-extracting for norma ${norma_id}: articles=${missing_articles.join(", ")}, anchors=${missing_anchors.join(", ")}`);
 
     // Get norma info
     const { data: norma, error: normaError } = await supabase
@@ -394,18 +457,18 @@ Deno.serve(async (req) => {
     const fullText = "\n" + normalizePdfText(parts.join("\n\n")) + "\n";
     
     // Extract numbered articles
-    const extracted = await extractArticlesFromPdf(pdfBytes, articlesList, anchorsList);
+    const extracted = await extractArticlesFromPdf(pdfBytes, missing_articles, missing_anchors);
     
     // Extract special sections (like Disposição Transitória)
-    const specialSections = extractSpecialSections(fullText, norma_id, anchorsList);
+    const specialSections = extractSpecialSections(fullText, norma_id, missing_anchors);
     
     if (extracted.size === 0 && specialSections.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
           message: "No articles could be extracted from PDF",
-          requested_articles: articlesList,
-          requested_anchors: anchorsList,
+          requested_articles: missing_articles,
+          requested_anchors: missing_anchors,
           found: []
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -466,9 +529,9 @@ Deno.serve(async (req) => {
     }
 
     const foundArticles = Array.from(extracted.keys()).sort((a, b) => a - b);
-    const stillMissing = articlesList.filter((n: number) => !extracted.has(n));
+    const stillMissing = missing_articles.filter((n: number) => !extracted.has(n));
     const foundAnchors = specialSections.map(s => s.anchor);
-    const stillMissingAnchors = anchorsList.filter((a: string) => !foundAnchors.includes(a));
+    const stillMissingAnchors = missing_anchors.filter((a: string) => !foundAnchors.includes(a));
 
     console.log(`Successfully extracted ${foundArticles.length} articles + ${specialSections.length} special sections`);
     console.log(`Still missing articles: ${stillMissing.join(", ") || "none"}`);
@@ -477,8 +540,8 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        requested_articles: articlesList,
-        requested_anchors: anchorsList,
+        requested_articles: missing_articles,
+        requested_anchors: missing_anchors,
         found: foundArticles,
         found_anchors: foundAnchors,
         still_missing: stillMissing,

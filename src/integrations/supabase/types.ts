@@ -37,6 +37,7 @@ export type Database = {
           remissoes_extraidas: Json | null
           remissoes_extraidas_em: string | null
           remissoes_status: string | null
+          search_vector: unknown
           status: string | null
           tema: Json | null
           texto_extraido: string | null
@@ -71,6 +72,7 @@ export type Database = {
           remissoes_extraidas?: Json | null
           remissoes_extraidas_em?: string | null
           remissoes_status?: string | null
+          search_vector?: unknown
           status?: string | null
           tema?: Json | null
           texto_extraido?: string | null
@@ -105,6 +107,7 @@ export type Database = {
           remissoes_extraidas?: Json | null
           remissoes_extraidas_em?: string | null
           remissoes_status?: string | null
+          search_vector?: unknown
           status?: string | null
           tema?: Json | null
           texto_extraido?: string | null

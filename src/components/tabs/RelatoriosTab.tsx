@@ -100,6 +100,9 @@ const RelatoriosTab = () => {
             Normas jurídicas traduzidas para uma linguagem clara e objetiva. 
             Entenda o que cada lei, decreto ou resolução significa na prática.
           </p>
+          <p className="text-xs text-primary max-w-2xl mx-auto mt-4 italic">
+            Importante! O conteúdo desta página tem fim didático, não podendo substituir, para fins jurídicos, o texto da norma em si.
+          </p>
         </div>
       </div>
 

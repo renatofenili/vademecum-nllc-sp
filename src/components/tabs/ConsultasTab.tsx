@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Search, MessageSquare, Link2, FileText, ArrowRight, Loader2 } from "lucide-react";
+import { Search, MessageSquare, Link2, FileText, ArrowRight, Loader2, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import DispositivoSearch from "@/components/consultas/DispositivoSearch";
 
 interface DispositivoAplicavel {
   document_id: string;
@@ -18,11 +20,35 @@ interface ResultadoConsulta {
   dispositivos_aplicaveis: DispositivoAplicavel[];
 }
 
+interface DispositivoSelecionado {
+  normaId: string;
+  normaTipo: string;
+  normaNumero: string;
+  anchor: string;
+  nivel: string;
+  texto: string;
+}
+
+const formatTipo = (tipo: string) => {
+  const tipos: Record<string, string> = {
+    decreto: "Decreto",
+    resolucao: "Resolução",
+    portaria: "Portaria",
+    lei: "Lei",
+    lei_federal: "Lei Federal",
+    lei_estadual: "Lei Estadual",
+    instrucao_normativa: "Instrução Normativa",
+    outro: "Outro",
+  };
+  return tipos[tipo] || tipo;
+};
+
 const ConsultasTab = () => {
   const [eventoDescricao, setEventoDescricao] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resultado, setResultado] = useState<ResultadoConsulta | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dispositivoSelecionado, setDispositivoSelecionado] = useState<DispositivoSelecionado | null>(null);
 
   const handleConsultaEvento = async () => {
     if (!eventoDescricao.trim()) return;
@@ -187,14 +213,76 @@ const ConsultasTab = () => {
                 Consulta a partir de Dispositivo
               </CardTitle>
               <CardDescription>
-                Selecione um dispositivo específico para visualizar sua cadeia normativa e conexões.
+                Pesquise por artigo, parágrafo, inciso ou texto de qualquer norma cadastrada.
               </CardDescription>
             </CardHeader>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-30" />
-              <p>Selecione uma norma na aba "Normas" e depois acesse um dispositivo específico para consultar suas conexões.</p>
+            <CardContent className="space-y-4">
+              <DispositivoSearch
+                onSelectDispositivo={setDispositivoSelecionado}
+                placeholder="Buscar por dispositivo (ex: Art. 75, §1º, dispensa, inexigibilidade...)"
+              />
+
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-muted-foreground">Exemplos:</span>
+                {["Art. 75", "§1º", "dispensa", "inexigibilidade", "pregão"].map((term) => (
+                  <button
+                    key={term}
+                    className="text-sm text-primary hover:underline underline-offset-2"
+                    onClick={() => {
+                      const input = document.querySelector('input[placeholder*="dispositivo"]') as HTMLInputElement;
+                      if (input) {
+                        input.value = term;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                        nativeInputValueSetter?.call(input, term);
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                    }}
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
+
+          {/* Dispositivo Selecionado */}
+          {dispositivoSelecionado && (
+            <Card>
+              <CardHeader className="border-b border-border bg-muted/30">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge>{formatTipo(dispositivoSelecionado.normaTipo)}</Badge>
+                      <Badge variant="outline" className="font-mono">
+                        {dispositivoSelecionado.anchor}
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-lg">
+                      {formatTipo(dispositivoSelecionado.normaTipo)} {dispositivoSelecionado.normaNumero}
+                    </CardTitle>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDispositivoSelecionado(null)}
+                  >
+                    <Search className="h-4 w-4 mr-1" />
+                    Nova busca
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="max-h-[400px]">
+                  <div className="p-6">
+                    <p className="text-foreground leading-relaxed whitespace-pre-line text-justify">
+                      {dispositivoSelecionado.texto}
+                    </p>
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="combinacao" className="space-y-6">

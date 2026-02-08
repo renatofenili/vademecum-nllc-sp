@@ -587,8 +587,8 @@ export const RadialHierarchyView = ({
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 1: DECRETOS - RAIO FIXO, equidistantes da Lei
-    // Distribuição angular uniforme, sem empurro radial
+    // ANEL 1: DECRETOS - Equidistantes da Lei, SEM SOBREPOSIÇÃO
+    // Calcula o raio mínimo necessário para caber todos os nós sem colisão
     // ═══════════════════════════════════════════════════════════════════════════
     const sortByNumero = (a: ActNode, b: ActNode) => {
       const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
@@ -599,8 +599,20 @@ export const RadialHierarchyView = ({
     const sortedDecretos = [...decretoNodes].sort(sortByNumero);
     const decretosCount = sortedDecretos.length;
     
-    // Raio fixo para todos os decretos
-    const RADIUS_DECRETOS = Math.min(dimensions.width, dimensions.height) * 0.28;
+    // Calcular o tamanho máximo dos nós de decreto para determinar o raio
+    const decretoSizes = sortedDecretos.map(act => estimateNodeSize(act, 1));
+    const maxDecretoWidth = Math.max(...decretoSizes.map(s => s.w), 100);
+    const maxDecretoHeight = Math.max(...decretoSizes.map(s => s.h), 36);
+    
+    // Calcular raio mínimo para que os nós não se sobreponham
+    // Circunferência necessária = (largura média + gap) * número de nós
+    const avgDecretoWidth = decretoSizes.reduce((sum, s) => sum + s.w, 0) / Math.max(decretosCount, 1);
+    const circumferenceNeeded = (avgDecretoWidth + MIN_GAP * 2) * decretosCount;
+    const minRadiusDecretos = Math.max(
+      circumferenceNeeded / (2 * Math.PI),
+      Math.min(dimensions.width, dimensions.height) * 0.18
+    );
+    const RADIUS_DECRETOS = minRadiusDecretos;
 
     sortedDecretos.forEach((act, idx) => {
       const { w, h } = estimateNodeSize(act, 1);
@@ -625,20 +637,30 @@ export const RadialHierarchyView = ({
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 2: INs e RESOLUÇÕES - RAIO FIXO, equidistantes da Lei
-    // Distribuição angular uniforme com offset para não alinhar com decretos
+    // ANEL 2: INs e RESOLUÇÕES - Equidistantes, SEM SOBREPOSIÇÃO
     // ═══════════════════════════════════════════════════════════════════════════
     const sortedINsResolucoes = [...inResolucaoNodes].sort(sortByNumero);
     const insCount = sortedINsResolucoes.length;
     
-    // Raio fixo para INs/Resoluções (maior que decretos)
-    const RADIUS_INS = RADIUS_DECRETOS + 120;
+    // Calcular o tamanho dos nós de IN/Resolução
+    const insSizes = sortedINsResolucoes.map(act => estimateNodeSize(act, 2));
+    const avgInsWidth = insSizes.length > 0 
+      ? insSizes.reduce((sum, s) => sum + s.w, 0) / insCount 
+      : 100;
+    
+    // Raio para INs: além dos decretos + espaço + raio calculado para caber todos
+    const circumferenceNeededIns = (avgInsWidth + MIN_GAP * 2) * Math.max(insCount, 1);
+    const minRadiusIns = circumferenceNeededIns / (2 * Math.PI);
+    const RADIUS_INS = Math.max(
+      RADIUS_DECRETOS + maxDecretoHeight + 60,
+      minRadiusIns
+    );
 
     sortedINsResolucoes.forEach((act, idx) => {
       const { w, h } = estimateNodeSize(act, 2);
       
       // Distribuir uniformemente em 360° (offset de 15° para não alinhar com decretos)
-      const angle = degToRad(285 + (idx / insCount) * 360);
+      const angle = degToRad(285 + (idx / Math.max(insCount, 1)) * 360);
       const x = cx + RADIUS_INS * Math.cos(angle);
       const y = cy + RADIUS_INS * Math.sin(angle);
 

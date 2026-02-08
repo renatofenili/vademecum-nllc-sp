@@ -607,7 +607,8 @@ export const RadialHierarchyView = ({
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOMÍNIO 1: Regulamentação Executiva (Decretos) - ARCO LATERAL ESQUERDO
-    // Ângulo: 180° a 240° (setor esquerdo-inferior)
+    // Ângulos: 200° a 340° (setor esquerdo, abaixo da Lei)
+    // Convenção: 0° = direita, 90° = baixo, 180° = esquerda, 270° = cima
     // ═══════════════════════════════════════════════════════════════════════════
     const sortedDecretos = [...decretoNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
@@ -615,12 +616,14 @@ export const RadialHierarchyView = ({
       return numA - numB;
     });
     
-    const decretoStartAngle = Math.PI * 0.65;  // ~117° (esquerda-baixo)
-    const decretoEndAngle = Math.PI * 1.1;     // ~198° (esquerda-baixo)
+    // Decretos: setor esquerdo (200° a 340°) - leque aberto para a esquerda
+    const decretoStartAngle = (200 * Math.PI) / 180;  // 200°
+    const decretoEndAngle = (340 * Math.PI) / 180;    // 340°
     const decretoAngleSpread = decretoEndAngle - decretoStartAngle;
     
     sortedDecretos.forEach((act, idx) => {
       const count = sortedDecretos.length;
+      // Distribuição angular uniforme dentro do setor
       const angle = count === 1 
         ? (decretoStartAngle + decretoEndAngle) / 2 
         : decretoStartAngle + (idx / (count - 1)) * decretoAngleSpread;
@@ -643,7 +646,7 @@ export const RadialHierarchyView = ({
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOMÍNIO 2: Regulamentação Administrativa (INs/Portarias) - ARCO INFERIOR CENTRAL
-    // Ângulo: 240° a 300° (setor inferior)
+    // Ângulos: 160° a 200° (setor inferior central)
     // ═══════════════════════════════════════════════════════════════════════════
     const sortedINs = [...inNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
@@ -651,14 +654,15 @@ export const RadialHierarchyView = ({
       return numA - numB;
     });
     
-    const inStartAngle = Math.PI * 1.15;   // ~207° (centro-baixo esquerda)
-    const inEndAngle = Math.PI * 1.85;     // ~333° (centro-baixo direita)
+    // INs: setor inferior central (160° a 200°) - leque estreito embaixo
+    const inStartAngle = (160 * Math.PI) / 180;   // 160°
+    const inEndAngle = (200 * Math.PI) / 180;     // 200°
     const inAngleSpread = inEndAngle - inStartAngle;
     
     sortedINs.forEach((act, idx) => {
       const count = sortedINs.length;
       const angle = count === 1 
-        ? Math.PI * 1.5  // Exatamente embaixo (270°)
+        ? (inStartAngle + inEndAngle) / 2  // Centro do setor (180°)
         : inStartAngle + (idx / (count - 1)) * inAngleSpread;
       
       const x = leiCenterX + arcRadius * Math.cos(angle);
@@ -679,7 +683,7 @@ export const RadialHierarchyView = ({
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOMÍNIO 3: Regulamentação Colegiada (Resoluções) - ARCO LATERAL DIREITO
-    // Ângulo: 300° a 360° (setor direito-inferior)
+    // Ângulos: 20° a 160° (setor direito, abaixo da Lei)
     // ═══════════════════════════════════════════════════════════════════════════
     const sortedResolucoes = [...resolucaoNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
@@ -687,8 +691,9 @@ export const RadialHierarchyView = ({
       return numA - numB;
     });
     
-    const resolucaoStartAngle = Math.PI * 1.9;  // ~342° (direita-baixo)
-    const resolucaoEndAngle = Math.PI * 2.35;   // ~423° = 63° (direita-baixo)
+    // Resoluções: setor direito (20° a 160°) - leque aberto para a direita
+    const resolucaoStartAngle = (20 * Math.PI) / 180;   // 20°
+    const resolucaoEndAngle = (160 * Math.PI) / 180;    // 160°
     const resolucaoAngleSpread = resolucaoEndAngle - resolucaoStartAngle;
     
     sortedResolucoes.forEach((act, idx) => {

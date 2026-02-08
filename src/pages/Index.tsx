@@ -8,6 +8,7 @@ import NormasTab from "@/components/tabs/NormasTab";
 import RelatoriosTab from "@/components/tabs/RelatoriosTab";
 import ConsultasTab from "@/components/tabs/ConsultasTab";
 import MapasTab from "@/components/tabs/MapasTab";
+import MapaCalorTab from "@/components/tabs/MapaCalorTab";
 import MudancasTab from "@/components/tabs/MudancasTab";
 
 const Index = () => {
@@ -61,6 +62,12 @@ const Index = () => {
         return (
           <div className="container py-6 md:py-8">
             <MapasTab />
+          </div>
+        );
+      case "mapacalor":
+        return (
+          <div className="container py-6 md:py-8">
+            <MapaCalorTab />
           </div>
         );
       case "mudancas":

@@ -1991,45 +1991,29 @@ export const RadialHierarchyView = ({
                       )}
                     </g>
 
-                    {/* Artigos as child nodes around the parent */}
+                    {/* Artigos as child nodes around the parent - SEMPRE EM CÍRCULO */}
                     {hasExpandedDispositivos && artigoGroups.map((group, idx) => {
                       const count = artigoGroups.length;
                       const isLeiCentral = node.ring === 0;
                       
-                      let artigoX: number;
-                      let artigoY: number;
+                      // LAYOUT CIRCULAR para TODAS as normas: artigos em anéis concêntricos
+                      // Lei central: mais artigos por anel (maior raio disponível)
+                      // Outras normas: menos artigos por anel (menor área)
+                      const ARTIGOS_PER_RING = isLeiCentral ? 40 : Math.min(count, 24);
+                      const ringIndex = Math.floor(idx / ARTIGOS_PER_RING);
+                      const indexInRing = idx % ARTIGOS_PER_RING;
+                      const countInThisRing = Math.min(ARTIGOS_PER_RING, count - ringIndex * ARTIGOS_PER_RING);
                       
-                      if (isLeiCentral) {
-                        // LAYOUT CIRCULAR para Lei central: artigos em anéis concêntricos
-                        const ARTIGOS_PER_RING = 40;
-                        const ringIndex = Math.floor(idx / ARTIGOS_PER_RING);
-                        const indexInRing = idx % ARTIGOS_PER_RING;
-                        const countInThisRing = Math.min(ARTIGOS_PER_RING, count - ringIndex * ARTIGOS_PER_RING);
-                        
-                        // Raio do anel de artigos
-                        const baseArtigoRadius = 70 + ringIndex * 35;
-                        
-                        // Ângulo do artigo neste anel (distribuído uniformemente)
-                        const angleStep = (2 * Math.PI) / countInThisRing;
-                        const angle = -Math.PI / 2 + indexInRing * angleStep; // Começa no topo
-                        
-                        artigoX = node.x + baseArtigoRadius * Math.cos(angle);
-                        artigoY = node.y + baseArtigoRadius * Math.sin(angle);
-                      } else {
-                        // Layout original para outras normas (horizontal abaixo)
-                        const maxPerRing = 20;
-                        const ringIndex = Math.floor(idx / maxPerRing);
-                        const indexInRing = idx % maxPerRing;
-                        const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
-                        
-                        const baseOffset = 50 + ringIndex * 30;
-                        const artigoSpread = Math.min(300, countInThisRing * 25);
-                        const artigoStartX = -artigoSpread / 2;
-                        const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
-                        
-                        artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
-                        artigoY = node.y + baseOffset;
-                      }
+                      // Raio base depende do tipo de nó
+                      // Lei central: mais espaço, outras normas: círculo mais compacto
+                      const baseArtigoRadius = isLeiCentral ? 70 + ringIndex * 35 : 45 + ringIndex * 25;
+                      
+                      // Ângulo do artigo neste anel (distribuído uniformemente, começa no topo)
+                      const angleStep = (2 * Math.PI) / countInThisRing;
+                      const angle = -Math.PI / 2 + indexInRing * angleStep;
+                      
+                      const artigoX = node.x + baseArtigoRadius * Math.cos(angle);
+                      const artigoY = node.y + baseArtigoRadius * Math.sin(angle);
 
                       // Check if this article is a target of a connection line and get source color
                       const artigoKey = `${node.id}:${normalizeAnchor(group.artigo.anchor)}`;

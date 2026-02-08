@@ -1530,13 +1530,13 @@ export const RadialHierarchyView = ({
             {showHierarchyLinks ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
           </button>
           
-          {/* Regulamenta */}
+          {/* Regulamenta - with pulsing glow effect */}
           <button
             onClick={() => setShowRegulamentaLinks(!showRegulamentaLinks)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all font-medium ${
               showRegulamentaLinks 
-                ? "bg-green-500/20 text-green-600 dark:text-green-400" 
-                : "bg-muted text-muted-foreground opacity-50"
+                ? "bg-green-500/20 text-green-600 dark:text-green-400 animate-glow-pulse" 
+                : "bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground animate-glow-pulse"
             }`}
           >
             <div className="w-4 h-0.5 bg-green-500 rounded" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 2px, currentColor 2px, currentColor 4px)" }} />

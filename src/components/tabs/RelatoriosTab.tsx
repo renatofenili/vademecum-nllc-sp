@@ -76,8 +76,18 @@ const RelatoriosTab = () => {
       const { data, error } = await supabase
         .from("normas")
         .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma")
-        .not("analise_norma", "is", null)
-        .order("data_publicacao", { ascending: false });
+        .not("analise_norma", "is", null);
+      
+      if (error) throw error;
+      
+      // Ordenar manualmente: Decreto 67.985 primeiro, depois por data
+      const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
+        if (a.numero === "67.985/2023") return -1;
+        if (b.numero === "67.985/2023") return 1;
+        return new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime();
+      });
+      
+      return sorted;
       
       if (error) throw error;
       return data as NormaSimplificada[];

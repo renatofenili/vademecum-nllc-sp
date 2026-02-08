@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { Search, FileText } from "lucide-react";
+import { Search, FileText, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import DispositivoSearch from "@/components/consultas/DispositivoSearch";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DispositivoSelecionado {
+  normaId: string;
+  normaTipo: string;
+  normaNumero: string;
+  anchor: string;
+  nivel: string;
+  texto: string;
+}
+
+interface ResultadoDispositivo {
   normaId: string;
   normaTipo: string;
   normaNumero: string;
@@ -29,8 +40,95 @@ const formatTipo = (tipo: string) => {
   return tipos[tipo] || tipo;
 };
 
+const formatNivel = (nivel: string) => {
+  const niveis: Record<string, string> = {
+    artigo: "Artigo",
+    paragrafo: "Parágrafo",
+    inciso: "Inciso",
+    alinea: "Alínea",
+    ementa: "Ementa",
+    preambulo: "Preâmbulo",
+    secao: "Seção",
+  };
+  return niveis[nivel] || nivel;
+};
+
 const ConsultasTab = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [resultados, setResultados] = useState<ResultadoDispositivo[]>([]);
   const [dispositivoSelecionado, setDispositivoSelecionado] = useState<DispositivoSelecionado | null>(null);
+  const [searchRealizada, setSearchRealizada] = useState(false);
+
+  const handlePesquisar = async () => {
+    if (!searchTerm.trim() || searchTerm.length < 2) return;
+
+    setIsLoading(true);
+    setSearchRealizada(true);
+    try {
+      const term = searchTerm.toLowerCase().trim();
+
+      // Fetch normas with texto_extraido that might contain the search term
+      const { data: normas, error } = await supabase
+        .from("normas")
+        .select("id, tipo, numero, texto_extraido")
+        .not("texto_extraido", "is", null)
+        .limit(100);
+
+      if (error) throw error;
+
+      const matchedDispositivos: ResultadoDispositivo[] = [];
+
+      for (const norma of normas || []) {
+        if (!norma.texto_extraido) continue;
+
+        try {
+          const dispositivos = JSON.parse(norma.texto_extraido) as Array<{
+            anchor: string;
+            nivel: string;
+            texto: string;
+          }>;
+
+          if (!Array.isArray(dispositivos)) continue;
+
+          for (const disp of dispositivos) {
+            const anchorMatch = disp.anchor?.toLowerCase().includes(term);
+            const textoMatch = disp.texto?.toLowerCase().includes(term);
+
+            if (anchorMatch || textoMatch) {
+              matchedDispositivos.push({
+                normaId: norma.id,
+                normaTipo: norma.tipo,
+                normaNumero: norma.numero,
+                anchor: disp.anchor,
+                nivel: disp.nivel,
+                texto: disp.texto,
+              });
+            }
+
+            if (matchedDispositivos.length >= 50) break;
+          }
+        } catch {
+          // Skip if texto_extraido is not valid JSON
+        }
+
+        if (matchedDispositivos.length >= 50) break;
+      }
+
+      setResultados(matchedDispositivos);
+    } catch (err) {
+      console.error("Erro na busca de dispositivos:", err);
+      setResultados([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchTerm.trim()) {
+      handlePesquisar();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -58,10 +156,33 @@ const ConsultasTab = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <DispositivoSearch
-            onSelectDispositivo={setDispositivoSelecionado}
-            placeholder="Buscar por dispositivo (ex: Art. 75, §1º, dispensa, inexigibilidade...)"
-          />
+          <div className="flex gap-2">
+            <Input
+              type="search"
+              placeholder="Ex: Art. 75, §1º, dispensa, inexigibilidade..."
+              className="h-12"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={handleKeyPress}
+            />
+            <Button
+              onClick={handlePesquisar}
+              disabled={!searchTerm.trim() || isLoading}
+              className="px-8"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Pesquisando...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Pesquisar
+                </>
+              )}
+            </Button>
+          </div>
 
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-muted-foreground">Exemplos:</span>
@@ -69,14 +190,7 @@ const ConsultasTab = () => {
               <button
                 key={term}
                 className="text-sm text-primary hover:underline underline-offset-2"
-                onClick={() => {
-                  const input = document.querySelector('input[placeholder*="dispositivo"]') as HTMLInputElement;
-                  if (input) {
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                    nativeInputValueSetter?.call(input, term);
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                  }
-                }}
+                onClick={() => setSearchTerm(term)}
               >
                 {term}
               </button>
@@ -84,6 +198,68 @@ const ConsultasTab = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Resultados */}
+      {searchRealizada && (
+        <>
+          {resultados.length > 0 ? (
+            <Card>
+              <CardHeader className="border-b border-border bg-muted/30">
+                <CardTitle>
+                  Dispositivos Encontrados ({resultados.length})
+                </CardTitle>
+                <CardDescription>
+                  Clique em um dispositivo para visualizar o conteúdo completo
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[500px] overflow-y-auto">
+                  {resultados.map((resultado, index) => (
+                    <button
+                      key={`${resultado.normaId}-${resultado.anchor}-${index}`}
+                      onClick={() => setDispositivoSelecionado(resultado)}
+                      className={cn(
+                        "w-full px-4 py-3 text-left border-b border-border hover:bg-muted/50 transition-colors last:border-b-0",
+                        dispositivoSelecionado?.anchor === resultado.anchor && dispositivoSelecionado?.normaId === resultado.normaId
+                          ? "bg-muted"
+                          : ""
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-primary text-sm font-semibold flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              {formatTipo(resultado.normaTipo)} {resultado.normaNumero}
+                            </Badge>
+                            <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
+                              {resultado.anchor}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatNivel(resultado.nivel)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {resultado.texto.substring(0, 200)}...
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                Nenhum dispositivo encontrado para "{searchTerm}"
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* Dispositivo Selecionado */}
       {dispositivoSelecionado && (
@@ -107,12 +283,12 @@ const ConsultasTab = () => {
                 onClick={() => setDispositivoSelecionado(null)}
               >
                 <Search className="h-4 w-4 mr-1" />
-                Nova busca
+                Voltar
               </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[400px]">
+            <ScrollArea type="always" className="max-h-[500px]">
               <div className="p-6">
                 <p className="text-foreground leading-relaxed whitespace-pre-line text-justify">
                   {dispositivoSelecionado.texto}

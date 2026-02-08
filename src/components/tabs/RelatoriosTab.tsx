@@ -206,7 +206,7 @@ const RelatoriosTab = () => {
       {/* Modal de Leitura */}
       {selectedNorma && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
+          <Card className="w-full max-w-3xl h-[90vh] flex flex-col shadow-2xl">
             <CardHeader className="border-b border-border bg-muted/30 flex-shrink-0">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -247,8 +247,8 @@ const RelatoriosTab = () => {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-0 flex-1 min-h-0">
-              <ScrollArea type="always" className="h-full max-h-[60vh]">
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <ScrollArea type="always" className="h-full">
                 <div className="p-6">
                   <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full mb-4">
                     <Sparkles className="h-3.5 w-3.5" />

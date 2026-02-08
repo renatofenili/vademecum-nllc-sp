@@ -1,4 +1,4 @@
-import { FileText, FileBarChart, Search, Network, RefreshCw, LucideIcon } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, Flame, LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TabType } from "./Header";
 
@@ -35,10 +35,10 @@ const categories: Category[] = [
     tab: "mapas",
   },
   {
-    icon: RefreshCw,
-    title: "O que mudou",
-    description: "Acompanhe as atualizações mais recentes na legislação de licitações e seus impactos práticos.",
-    tab: "mudancas",
+    icon: Flame,
+    title: "Mapa de Calor",
+    description: "Visualize a jornada da contratação pública com a intensidade normativa de cada etapa.",
+    tab: "mapacalor",
   },
 ];
 

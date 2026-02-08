@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
-import { Flame, Info, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { Flame, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -15,109 +14,156 @@ interface ThemeCount {
   count: number;
 }
 
-interface MacroStage {
-  id: string;
-  title: string;
-  description: string;
-  color: string;
-  bgColor: string;
-  themes: string[];
+// Mapeamento de temas do banco para labels do fluxograma
+const themeMapping: Record<string, string[]> = {
+  "PCA": ["PCA"],
+  "ETP": ["ETP"],
+  "Gestão de riscos": ["Gestão de riscos"],
+  "Pesquisa de preços": ["Pesquisa de Preços"],
+  "Termo de referência": ["TR / Projeto Básico"],
+  "Licitação": ["Seleção do fornecedor", "Modalidades", "Critério de julgamento", "Publicação do edital", "Minuta de edital"],
+  "Contratação direta": ["Dispensa e inexigibilidade de licitação"],
+  "Dispensa de licitação": ["Dispensa e inexigibilidade de licitação"],
+  "Inexigibilidade": ["Dispensa e inexigibilidade de licitação"],
+  "Gestão de contrato": ["Gestão do contrato", "Fiscalização contratual", "Sanções"],
+  // Transversais
+  "A Lei nº 14.133/21": ["Valores da Lei nº 14.133/21"],
+  "Governança": ["Governança", "Controle", "Análise jurídica"],
+  "Sustentabilidade": ["Contratações sustentáveis"],
+  "SRP": ["Sistema de Registro de Preços"],
+  "Credenciamento": ["Credenciamento"],
+  "Inovação em logística": ["Inovação"],
+  "Terceirização": [],
+};
+
+// Função para calcular cor baseada na intensidade
+const getHeatStyle = (count: number, maxCount: number) => {
+  if (count === 0) {
+    return {
+      backgroundColor: "hsl(220, 10%, 92%)",
+      borderColor: "hsl(220, 10%, 80%)",
+      textColor: "hsl(220, 10%, 50%)",
+      opacity: 0.6,
+    };
+  }
+  
+  const intensity = count / maxCount;
+  
+  if (intensity <= 0.2) {
+    return {
+      backgroundColor: "hsl(200, 60%, 85%)",
+      borderColor: "hsl(200, 60%, 60%)",
+      textColor: "hsl(200, 60%, 30%)",
+      opacity: 0.7,
+    };
+  } else if (intensity <= 0.4) {
+    return {
+      backgroundColor: "hsl(180, 50%, 75%)",
+      borderColor: "hsl(180, 50%, 50%)",
+      textColor: "hsl(180, 50%, 25%)",
+      opacity: 0.8,
+    };
+  } else if (intensity <= 0.6) {
+    return {
+      backgroundColor: "hsl(45, 80%, 70%)",
+      borderColor: "hsl(45, 80%, 45%)",
+      textColor: "hsl(45, 80%, 20%)",
+      opacity: 0.9,
+    };
+  } else if (intensity <= 0.8) {
+    return {
+      backgroundColor: "hsl(25, 85%, 60%)",
+      borderColor: "hsl(25, 85%, 40%)",
+      textColor: "hsl(25, 85%, 15%)",
+      opacity: 0.95,
+    };
+  } else {
+    return {
+      backgroundColor: "hsl(5, 75%, 55%)",
+      borderColor: "hsl(5, 75%, 35%)",
+      textColor: "white",
+      opacity: 1,
+    };
+  }
+};
+
+interface FlowBoxProps {
+  label: string;
+  count: number;
+  maxCount: number;
+  rounded?: "left" | "right" | "full" | "none";
+  className?: string;
 }
 
-// Macroetapas do fluxo de contratação pública
-const macroStages: MacroStage[] = [
-  {
-    id: "planejamento",
-    title: "Planejamento",
-    description: "Fase de preparação e estudos preliminares",
-    color: "hsl(210, 70%, 45%)",
-    bgColor: "hsl(210, 70%, 97%)",
-    themes: [
-      "Fase preparatória",
-      "ETP",
-      "Pesquisa de Preços",
-      "TR / Projeto Básico",
-      "PCA",
-    ],
-  },
-  {
-    id: "selecao",
-    title: "Seleção do Fornecedor",
-    description: "Procedimentos licitatórios e contratação direta",
-    color: "hsl(260, 60%, 50%)",
-    bgColor: "hsl(260, 60%, 97%)",
-    themes: [
-      "Modalidades",
-      "Critério de julgamento",
-      "Dispensa e inexigibilidade de licitação",
-      "Publicação do edital",
-      "Minuta de edital",
-      "Impugnação / pedido de esclarecimento",
-      "Credenciamento",
-      "Aviso de contratação direta",
-      "Seleção do fornecedor",
-    ],
-  },
-  {
-    id: "execucao",
-    title: "Execução Contratual",
-    description: "Gestão, fiscalização e acompanhamento",
-    color: "hsl(25, 80%, 50%)",
-    bgColor: "hsl(25, 80%, 97%)",
-    themes: [
-      "Gestão do contrato",
-      "Fiscalização contratual",
-      "Sanções",
-      "Contrato de eficiência",
-      "Assinatura de contrato / ata de registro de preços",
-      "Reequilíbrio / reajuste / repactuação",
-      "Pagamento",
-      "Regime de execução",
-      "Aditivos e apostilamentos",
-      "Sistema de Registro de Preços",
-    ],
-  },
-  {
-    id: "governanca",
-    title: "Governança e Controle",
-    description: "Transparência, inovação e compliance",
-    color: "hsl(160, 60%, 40%)",
-    bgColor: "hsl(160, 60%, 97%)",
-    themes: [
-      "Governança",
-      "Controle",
-      "Análise jurídica",
-      "Contratações sustentáveis",
-      "Inovação",
-      "Transparência",
-      "PNCP",
-      "Valores da Lei nº 14.133/21",
-      "Agentes que atuam no processo de contratação",
-    ],
-  },
-];
+const FlowBox = ({ label, count, maxCount, rounded = "none", className = "" }: FlowBoxProps) => {
+  const style = getHeatStyle(count, maxCount);
+  
+  const roundedClass = {
+    left: "rounded-l-2xl rounded-r-md",
+    right: "rounded-r-2xl rounded-l-md",
+    full: "rounded-2xl",
+    none: "rounded-md",
+  }[rounded];
 
-// Gradiente de cores para intensidade dentro de cada grupo
-const getHeatIntensity = (intensity: number): { opacity: number; glow: boolean } => {
-  if (intensity <= 0.2) return { opacity: 0.5, glow: false };
-  if (intensity <= 0.4) return { opacity: 0.65, glow: false };
-  if (intensity <= 0.6) return { opacity: 0.8, glow: false };
-  if (intensity <= 0.8) return { opacity: 0.9, glow: true };
-  return { opacity: 1, glow: true };
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`relative px-4 py-3 min-w-[100px] text-center font-medium text-sm border-2 cursor-pointer transition-transform hover:scale-105 hover:shadow-lg ${roundedClass} ${className}`}
+          style={{
+            backgroundColor: style.backgroundColor,
+            borderColor: style.borderColor,
+            color: style.textColor,
+            opacity: style.opacity,
+          }}
+        >
+          <span className="block">{label}</span>
+          {count > 0 && (
+            <span 
+              className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold flex items-center justify-center"
+              style={{ 
+                backgroundColor: style.borderColor,
+                color: "white",
+              }}
+            >
+              {count}
+            </span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="font-semibold">{label}</p>
+        <p className="text-sm text-muted-foreground">
+          {count} {count === 1 ? "norma" : "normas"}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
 };
 
-const getHeatLabel = (intensity: number): string => {
-  if (intensity <= 0.2) return "Baixa";
-  if (intensity <= 0.4) return "Moderada";
-  if (intensity <= 0.6) return "Média";
-  if (intensity <= 0.8) return "Alta";
-  return "Muito Alta";
-};
+const Arrow = ({ className = "" }: { className?: string }) => (
+  <div className={`flex items-center justify-center ${className}`}>
+    <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-muted-foreground">
+      <path d="M0 8H20M20 8L14 2M20 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  </div>
+);
+
+const VerticalArrow = ({ direction = "down" }: { direction?: "up" | "down" }) => (
+  <div className="flex items-center justify-center h-6">
+    <svg width="16" height="20" viewBox="0 0 16 20" fill="none" className="text-muted-foreground">
+      {direction === "down" ? (
+        <path d="M8 0V16M8 16L2 10M8 16L14 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      ) : (
+        <path d="M8 20V4M8 4L2 10M8 4L14 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      )}
+    </svg>
+  </div>
+);
 
 const MapaCalorTab = () => {
   const [themeCounts, setThemeCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [globalMax, setGlobalMax] = useState(1);
 
   useEffect(() => {
     const loadThemes = async () => {
@@ -129,14 +175,12 @@ const MapaCalorTab = () => {
 
         if (error) throw error;
 
-        // Agrupa e conta por tema
         const counts: Record<string, number> = {};
         (data || []).forEach((row) => {
           counts[row.tema] = (counts[row.tema] || 0) + 1;
         });
 
         setThemeCounts(counts);
-        setGlobalMax(Math.max(...Object.values(counts), 1));
       } catch (err) {
         console.error("Erro ao carregar temas:", err);
       } finally {
@@ -147,7 +191,17 @@ const MapaCalorTab = () => {
     loadThemes();
   }, []);
 
-  const totalNormas = Object.values(themeCounts).reduce((sum, c) => sum + c, 0);
+  // Calcula contagem para cada box do fluxograma
+  const getBoxCount = (boxLabel: string): number => {
+    const dbThemes = themeMapping[boxLabel] || [];
+    return dbThemes.reduce((sum, tema) => sum + (themeCounts[tema] || 0), 0);
+  };
+
+  const maxCount = useMemo(() => {
+    const allBoxLabels = Object.keys(themeMapping);
+    const counts = allBoxLabels.map(getBoxCount);
+    return Math.max(...counts, 1);
+  }, [themeCounts]);
 
   return (
     <div className="space-y-6">
@@ -161,180 +215,148 @@ const MapaCalorTab = () => {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Jornada da contratação pública × intensidade de regulamentação
+            Fluxo da contratação pública × intensidade de regulamentação
           </p>
         </div>
       </div>
 
-      {/* Flow indicator */}
-      <div className="flex justify-center">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
-          <span className="font-medium">Fluxo:</span>
-          {macroStages.map((stage, idx) => (
-            <span key={stage.id} className="flex items-center gap-1">
-              <span
-                className="px-2 py-0.5 rounded font-medium text-white"
-                style={{ backgroundColor: stage.color }}
-              >
-                {stage.title}
-              </span>
-              {idx < macroStages.length - 1 && (
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              )}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Heat map legend */}
+      {/* Legend */}
       <div className="flex justify-center">
         <div className="flex items-center gap-4 text-xs bg-card border border-border rounded-lg px-4 py-2">
-          <span className="text-muted-foreground font-medium">Intensidade normativa:</span>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded border border-border" style={{ opacity: 0.5, backgroundColor: "hsl(220, 10%, 60%)" }} />
-              <span className="text-muted-foreground">Baixa</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded border border-border" style={{ opacity: 0.8, backgroundColor: "hsl(220, 10%, 50%)" }} />
-              <span className="text-muted-foreground">Média</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded border border-border shadow-md" style={{ opacity: 1, backgroundColor: "hsl(220, 10%, 40%)" }} />
-              <span className="text-muted-foreground">Alta</span>
-            </div>
+          <span className="text-muted-foreground font-medium">Intensidade:</span>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(200, 60%, 85%)", borderColor: "hsl(200, 60%, 60%)" }} />
+            <span className="text-muted-foreground">Baixa</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(45, 80%, 70%)", borderColor: "hsl(45, 80%, 45%)" }} />
+            <span className="text-muted-foreground">Média</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(5, 75%, 55%)", borderColor: "hsl(5, 75%, 35%)" }} />
+            <span className="text-muted-foreground">Alta</span>
+          </div>
+          <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
+            <span className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">5</span>
+            <span className="text-muted-foreground">nº de normas</span>
           </div>
         </div>
       </div>
 
-      {/* Macro stages */}
+      {/* Flowchart */}
       {isLoading ? (
-        <div className="space-y-8">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="h-8 w-48" />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                {Array.from({ length: 5 }).map((_, j) => (
-                  <Skeleton key={j} className="h-24 rounded-lg" />
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="flex justify-center py-12">
+          <Skeleton className="h-96 w-full max-w-5xl rounded-xl" />
         </div>
       ) : (
         <TooltipProvider>
-          <div className="space-y-8">
-            {macroStages.map((stage) => {
-              // Filtra temas desta etapa que existem no banco
-              const stageThemes = stage.themes
-                .map((tema) => ({
-                  tema,
-                  count: themeCounts[tema] || 0,
-                }))
-                .filter((t) => t.count > 0);
-
-              // Calcula o máximo local para intensidade relativa dentro do grupo
-              const localMax = Math.max(...stageThemes.map((t) => t.count), 1);
-              const stageTotal = stageThemes.reduce((sum, t) => sum + t.count, 0);
-
-              if (stageThemes.length === 0) return null;
-
-              return (
-                <div key={stage.id} className="space-y-3">
-                  {/* Stage header */}
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-1.5 h-8 rounded-full"
-                      style={{ backgroundColor: stage.color }}
-                    />
-                    <div>
-                      <h2
-                        className="text-lg font-bold"
-                        style={{ color: stage.color }}
-                      >
-                        {stage.title}
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
-                        {stage.description} • {stageTotal} classificações
-                      </p>
-                    </div>
+          <div className="bg-slate-800 rounded-xl p-6 md:p-8 overflow-x-auto">
+            <div className="min-w-[900px]">
+              {/* Main Flow */}
+              <div className="flex items-center gap-2 mb-8">
+                <FlowBox label="PCA" count={getBoxCount("PCA")} maxCount={maxCount} rounded="left" />
+                <Arrow />
+                <FlowBox label="ETP" count={getBoxCount("ETP")} maxCount={maxCount} />
+                <Arrow />
+                <FlowBox label="Gestão de riscos" count={getBoxCount("Gestão de riscos")} maxCount={maxCount} />
+                <Arrow />
+                <FlowBox label="Pesquisa de preços" count={getBoxCount("Pesquisa de preços")} maxCount={maxCount} />
+                <Arrow />
+                <FlowBox label="Termo de referência" count={getBoxCount("Termo de referência")} maxCount={maxCount} />
+                <Arrow />
+                
+                {/* Bifurcation */}
+                <div className="flex flex-col gap-4">
+                  {/* Top path: Licitação */}
+                  <div className="flex items-center gap-2">
+                    <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
+                    <Arrow />
+                    <FlowBox label="Dispensa de licitação" count={getBoxCount("Dispensa de licitação")} maxCount={maxCount} />
+                    <Arrow />
+                    <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
                   </div>
-
-                  {/* Stage cards */}
-                  <div
-                    className="rounded-xl p-4 border"
-                    style={{
-                      backgroundColor: stage.bgColor,
-                      borderColor: `${stage.color}30`,
-                    }}
-                  >
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                      {stageThemes.map((theme) => {
-                        const intensity = theme.count / localMax;
-                        const { opacity, glow } = getHeatIntensity(intensity);
-                        const heatLabel = getHeatLabel(intensity);
-                        const percentage = ((theme.count / totalNormas) * 100).toFixed(1);
-
-                        return (
-                          <Tooltip key={theme.tema}>
-                            <TooltipTrigger asChild>
-                              <Card
-                                className="relative overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.03] border-2"
-                                style={{
-                                  opacity,
-                                  borderColor: stage.color,
-                                  boxShadow: glow
-                                    ? `0 4px 20px -4px ${stage.color}60`
-                                    : "none",
-                                }}
-                              >
-                                <CardHeader className="pb-1 pt-3 px-3">
-                                  <CardTitle className="text-xs font-semibold text-foreground line-clamp-2">
-                                    {theme.tema}
-                                  </CardTitle>
-                                </CardHeader>
-
-                                <CardContent className="pb-3 px-3">
-                                  <p
-                                    className="text-xl font-bold"
-                                    style={{ color: stage.color }}
-                                  >
-                                    {theme.count}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    normas
-                                  </p>
-                                </CardContent>
-
-                                {/* Heat bar at bottom */}
-                                <div
-                                  className="absolute bottom-0 left-0 h-1 transition-all"
-                                  style={{
-                                    backgroundColor: stage.color,
-                                    width: `${intensity * 100}%`,
-                                  }}
-                                />
-                              </Card>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-xs">
-                              <div className="space-y-1">
-                                <p className="font-semibold">{theme.tema}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {theme.count} normas ({percentage}% do total)
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Intensidade: {heatLabel}
-                                </p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
+                  
+                  {/* Bottom path: Contratação direta */}
+                  <div className="flex items-center gap-2">
+                    <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
+                    <Arrow />
+                    <FlowBox label="Inexigibilidade" count={getBoxCount("Inexigibilidade")} maxCount={maxCount} />
+                    <div className="flex items-center">
+                      <svg width="60" height="40" viewBox="0 0 60 40" fill="none" className="text-muted-foreground">
+                        <path d="M0 20H40C50 20 50 0 50 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M44 26L50 20L44 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+
+              {/* Transversal content section */}
+              <div className="border-t-2 border-dashed border-slate-600 pt-6 mt-6">
+                <h3 className="text-orange-400 font-semibold text-lg mb-4 underline underline-offset-4">
+                  Conteúdos transversais ou específicos
+                </h3>
+                
+                <div className="flex flex-wrap gap-4">
+                  {/* Row 1 */}
+                  <div className="flex items-center gap-3">
+                    <FlowBox 
+                      label="A Lei nº 14.133/21" 
+                      count={getBoxCount("A Lei nº 14.133/21")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-500/80 !border-stone-400"
+                    />
+                    <FlowBox 
+                      label="Governança" 
+                      count={getBoxCount("Governança")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-500/80 !border-stone-400"
+                    />
+                    <FlowBox 
+                      label="Sustentabilidade" 
+                      count={getBoxCount("Sustentabilidade")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-500/80 !border-stone-400"
+                    />
+                  </div>
+                  
+                  {/* Row 2 */}
+                  <div className="flex items-center gap-3 mt-2">
+                    <FlowBox 
+                      label="SRP" 
+                      count={getBoxCount("SRP")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-600/80 !border-stone-500"
+                    />
+                    <FlowBox 
+                      label="Credenciamento" 
+                      count={getBoxCount("Credenciamento")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-600/80 !border-stone-500"
+                    />
+                    <FlowBox 
+                      label="Inovação em logística" 
+                      count={getBoxCount("Inovação em logística")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-600/80 !border-stone-500"
+                    />
+                    <FlowBox 
+                      label="Terceirização" 
+                      count={getBoxCount("Terceirização")} 
+                      maxCount={maxCount} 
+                      rounded="full"
+                      className="!bg-stone-600/80 !border-stone-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </TooltipProvider>
       )}
@@ -344,7 +366,7 @@ const MapaCalorTab = () => {
         <div className="inline-flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
           <Info className="h-3.5 w-3.5" />
           <span>
-            A intensidade reflete a quantidade de normas por tema dentro de cada etapa da contratação.
+            A intensidade das cores reflete a quantidade de normas que tratam cada tema. Passe o mouse para ver detalhes.
           </span>
         </div>
       </div>

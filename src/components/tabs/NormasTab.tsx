@@ -22,18 +22,26 @@ const tiposNorma = [
 
 interface NormasTabProps {
   initialSearch?: string;
+  selectedNormaId?: string | null;
 }
 
-const NormasTab = ({ initialSearch = "" }: NormasTabProps) => {
+const NormasTab = ({ initialSearch = "", selectedNormaId }: NormasTabProps) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [tipoFilter, setTipoFilter] = useState("all");
-  const [selectedNorma, setSelectedNorma] = useState<string | null>(null);
+  const [selectedNorma, setSelectedNorma] = useState<string | null>(selectedNormaId || null);
 
   useEffect(() => {
     if (initialSearch) {
       setSearchTerm(initialSearch);
     }
   }, [initialSearch]);
+
+  // Select norma when navigating from Consultas
+  useEffect(() => {
+    if (selectedNormaId) {
+      setSelectedNorma(selectedNormaId);
+    }
+  }, [selectedNormaId]);
 
   const { data: normas, isLoading } = useQuery({
     queryKey: ["normas", searchTerm, tipoFilter],

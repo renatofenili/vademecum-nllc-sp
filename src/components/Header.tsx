@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { FileText, FileBarChart, Search, Network, RefreshCw, Home } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, RefreshCw, Home, Flame } from "lucide-react";
 
-export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mudancas";
+export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mapacalor" | "mudancas";
 
 interface HeaderProps {
   activeTab?: TabType;
@@ -14,6 +14,7 @@ const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
   { label: "Relatórios", tab: "relatorios", icon: FileBarChart },
   { label: "Consultas", tab: "consultas", icon: Search },
   { label: "Mapas", tab: "mapas", icon: Network },
+  { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "O que mudou", tab: "mudancas", icon: RefreshCw },
 ];
 

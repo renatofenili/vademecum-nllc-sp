@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { FileText, FileBarChart, Search, Network, Flame, Home } from "lucide-react";
+import logoSGGD from "@/assets/logo-sggd.jpg";
 
 export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mapacalor";
 
@@ -25,9 +26,11 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
           onClick={() => onTabChange?.("home")}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded bg-primary">
-            <FileText className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img 
+            src={logoSGGD} 
+            alt="SGGD - Gestão e Governo Digital" 
+            className="h-10 w-auto object-contain"
+          />
           <span className="text-lg font-semibold text-foreground">
             Vade-Mécum SGGD SP
           </span>

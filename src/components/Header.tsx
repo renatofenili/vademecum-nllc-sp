@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FileText, FileBarChart, Search, Network, Flame, Home } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, Flame } from "lucide-react";
 import logoSGGD from "@/assets/logo-sggd.jpg";
 
 export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mapacalor";
@@ -10,7 +10,6 @@ interface HeaderProps {
 }
 
 const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
-  { label: "Início", tab: "home", icon: Home },
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Busca por Dispositivo", tab: "consultas", icon: Search },
   { label: "Mapa Relacional", tab: "mapas", icon: Network },

@@ -711,98 +711,67 @@ export const RadialHierarchyView = ({
       if (count === 0) return;
 
       const slotSpanDeg = 360 / count;
-      const sectorHalfDeg = Math.max(0.5, slotSpanDeg * 0.49);
-      const maxJitterDeg = Math.min(10, sectorHalfDeg);
-      const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= maxJitterDeg + 1e-6);
+      const maxJitterDeg = Math.min(12, slotSpanDeg * 0.48);
+      const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= maxJitterDeg + 0.01);
 
-      type Cand = { x: number; y: number; angle: number; r: number; w: number; h: number; label: string };
-
-      // Pré-gerar candidatos determinísticos por nó (label → jitter → offset radial)
-      const candidatesByIdx: Cand[][] = sorted.map((act, idx) => {
+      // Greedy placement: para cada nó, testar variantes de label + jitter + offset até achar posição livre
+      sorted.forEach((act, idx) => {
         const baseAngle = degToRad(startDeg + (idx / count) * 360);
         const variants = labelVariantsFor(act, ring);
-        const cands: Cand[] = [];
 
-        for (const label of variants) {
+        let placed: { x: number; y: number; angle: number; r: number; w: number; h: number; label: string } | null = null;
+
+        // Tenta cada variante de label (da mais completa à mais curta)
+        outer: for (const label of variants) {
           const { w, h } = estimateSizeForLabel(label, ring);
+
+          // Tenta cada jitter angular
           for (const deltaDeg of jitterDeltas) {
             const angle = baseAngle + degToRad(deltaDeg);
+
+            // Tenta cada offset radial
             for (const ro of BASE_RADIAL_OFFSETS) {
               const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
               const x = cx + r * Math.cos(angle);
               const y = cy + r * Math.sin(angle);
-              cands.push({ x, y, angle, r, w, h, label });
+
+              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
+              if (!collides) {
+                placed = { x, y, angle, r, w, h, label };
+                break outer;
+              }
             }
           }
         }
 
-        // limitar para evitar explosão combinatória (mantém determinístico)
-        return cands.slice(0, 120);
-      });
-
-      const chosen: (Cand | null)[] = new Array(count).fill(null);
-
-      const overlapsAny = (cand: Cand, obstacles: { x: number; y: number; w: number; h: number }[]) => {
-        return obstacles.some((p) => rectsOverlap(cand.x, cand.y, cand.w, cand.h, p.x, p.y, p.w, p.h));
-      };
-
-      // Backtracking determinístico para GARANTIR ausência de overlap dentro do nível
-      const solve = (
-        i: number,
-        obstacles: { x: number; y: number; w: number; h: number }[]
-      ): boolean => {
-        if (i >= count) return true;
-
-        for (const cand of candidatesByIdx[i]) {
-          if (overlapsAny(cand, obstacles)) continue;
-          chosen[i] = cand;
-          obstacles.push({ x: cand.x, y: cand.y, w: cand.w, h: cand.h });
-          if (solve(i + 1, obstacles)) return true;
-          obstacles.pop();
-          chosen[i] = null;
-        }
-
-        return false;
-      };
-
-      const ok = solve(0, [...placedObstacles]);
-
-      // Se não houver solução com pills normais dentro da faixa do nível,
-      // degradar deterministicamente para marca mínima (•) e tentar novamente.
-      if (!ok) {
-        const forcedCandidatesByIdx: Cand[][] = sorted.map((act, idx) => {
-          const baseAngle = degToRad(startDeg + (idx / count) * 360);
+        // Se nenhuma combinação funcionou, usar marca mínima "•"
+        if (!placed) {
           const label = "•";
           const { w, h } = estimateSizeForLabel(label, ring);
-          const cands: Cand[] = [];
 
-          for (const deltaDeg of jitterDeltas) {
+          outer2: for (const deltaDeg of jitterDeltas) {
             const angle = baseAngle + degToRad(deltaDeg);
             for (const ro of BASE_RADIAL_OFFSETS) {
               const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
               const x = cx + r * Math.cos(angle);
               const y = cy + r * Math.sin(angle);
-              cands.push({ x, y, angle, r, w, h, label });
+              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
+              if (!collides) {
+                placed = { x, y, angle, r, w, h, label };
+                break outer2;
+              }
             }
           }
-
-          return cands;
-        });
-
-        candidatesByIdx.splice(0, candidatesByIdx.length, ...forcedCandidatesByIdx);
-        chosen.fill(null);
-        const ok2 = solve(0, [...placedObstacles]);
-        if (!ok2) {
-          // Último recurso: não colocar nós que não cabem (melhor do que sobrepor)
-          // (mantém a regra "jamais sobreposição" acima de tudo)
-          console.warn(`[MAPA] Anel ${ring}: densidade extrema — alguns labels foram suprimidos.`);
         }
-      }
 
-      // Commit: inserir posições escolhidas SEMPRE sem overlap
-      sorted.forEach((act, idx) => {
-        const placed = chosen[idx];
-        if (!placed) return;
+        // Último recurso: colocar no ângulo base com label mínimo (não deveria acontecer)
+        if (!placed) {
+          const label = "•";
+          const { w, h } = estimateSizeForLabel(label, ring);
+          const x = cx + baseRadius * Math.cos(baseAngle);
+          const y = cy + baseRadius * Math.sin(baseAngle);
+          placed = { x, y, angle: baseAngle, r: baseRadius, w, h, label };
+        }
 
         placedObstacles.push({ x: placed.x, y: placed.y, w: placed.w, h: placed.h });
         nodePositions.set(act.id, { x: placed.x, y: placed.y, ring, angle: placed.angle });

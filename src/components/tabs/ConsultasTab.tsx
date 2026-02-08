@@ -148,7 +148,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
       <div className="bg-hero py-8 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 border-b border-border">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-            Consulta por Dispositivo
+            Busca por Dispositivo
           </h1>
           <p className="text-muted-foreground text-lg">
             Pesquise por artigo, parágrafo, inciso ou texto de qualquer norma cadastrada

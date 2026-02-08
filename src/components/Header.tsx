@@ -23,7 +23,7 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
       <div className="container flex h-16 items-center justify-between">
         <button 
           onClick={() => onTabChange?.("home")}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
         >
           <img 
             src={logoSGGD} 

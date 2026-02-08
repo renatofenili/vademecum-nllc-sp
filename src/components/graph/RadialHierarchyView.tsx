@@ -603,7 +603,77 @@ export const RadialHierarchyView = ({
     // Ponto de referência: centro da Lei (para os arcos partirem dela)
     const leiCenterX = cx;
     const leiCenterY = leiY;
-    const arcRadius = availableHeight * 0.35; // Raio dos arcos
+    const baseArcRadius = availableHeight * 0.35; // Raio base dos arcos
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ANTI-COLISÃO: Tamanho mínimo de nó e distância mínima entre nós
+    // ═══════════════════════════════════════════════════════════════════════════
+    const NODE_MIN_WIDTH = 120;  // Largura mínima do nó
+    const NODE_MIN_HEIGHT = 50;  // Altura mínima do nó
+    const NODE_PADDING = 15;     // Espaçamento entre nós
+    const MIN_ARC_DISTANCE = NODE_MIN_WIDTH + NODE_PADDING; // Distância mínima no arco
+
+    // Função para calcular ângulo mínimo entre nós em um dado raio
+    const calcMinAngleSpacing = (radius: number, minDistance: number): number => {
+      // Comprimento do arco = raio * ângulo
+      // ângulo mínimo = minDistance / radius
+      return minDistance / radius;
+    };
+
+    // Função para posicionar nós em um setor com anti-colisão
+    const positionNodesInSector = (
+      nodes: ActNode[],
+      startAngle: number,
+      endAngle: number,
+      ring: number
+    ): { positions: { act: ActNode; x: number; y: number; angle: number; radius: number }[] } => {
+      if (nodes.length === 0) return { positions: [] };
+
+      const sectorSpan = endAngle - startAngle;
+      const minAngle = calcMinAngleSpacing(baseArcRadius, MIN_ARC_DISTANCE);
+      const requiredAngle = (nodes.length - 1) * minAngle;
+      
+      const positions: { act: ActNode; x: number; y: number; angle: number; radius: number }[] = [];
+      
+      // Se cabe no setor com o raio base
+      if (requiredAngle <= sectorSpan || nodes.length === 1) {
+        const actualSpacing = nodes.length > 1 ? sectorSpan / (nodes.length - 1) : 0;
+        nodes.forEach((act, idx) => {
+          const angle = nodes.length === 1 
+            ? (startAngle + endAngle) / 2 
+            : startAngle + idx * actualSpacing;
+          
+          const x = leiCenterX + baseArcRadius * Math.cos(angle);
+          const y = leiCenterY + baseArcRadius * Math.sin(angle);
+          positions.push({ act, x, y, angle, radius: baseArcRadius });
+        });
+      } else {
+        // Precisa de múltiplas "faixas" de raio para evitar sobreposição
+        // Calculamos quantos nós cabem por faixa
+        const nodesPerRing = Math.floor(sectorSpan / minAngle) + 1;
+        const numRings = Math.ceil(nodes.length / nodesPerRing);
+        const ringSpacing = NODE_MIN_HEIGHT + NODE_PADDING;
+        
+        nodes.forEach((act, idx) => {
+          const ringIndex = Math.floor(idx / nodesPerRing);
+          const indexInRing = idx % nodesPerRing;
+          const nodesInThisRing = Math.min(nodesPerRing, nodes.length - ringIndex * nodesPerRing);
+          
+          const ringRadius = baseArcRadius + ringIndex * ringSpacing;
+          const actualSpacing = nodesInThisRing > 1 ? sectorSpan / (nodesInThisRing - 1) : 0;
+          
+          const angle = nodesInThisRing === 1 
+            ? (startAngle + endAngle) / 2 
+            : startAngle + indexInRing * actualSpacing;
+          
+          const x = leiCenterX + ringRadius * Math.cos(angle);
+          const y = leiCenterY + ringRadius * Math.sin(angle);
+          positions.push({ act, x, y, angle, radius: ringRadius });
+        });
+      }
+      
+      return { positions };
+    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOMÍNIO 1: Regulamentação Executiva (Decretos) - ARCO LATERAL ESQUERDO
@@ -619,18 +689,15 @@ export const RadialHierarchyView = ({
     // Decretos: setor esquerdo (200° a 340°) - leque aberto para a esquerda
     const decretoStartAngle = (200 * Math.PI) / 180;  // 200°
     const decretoEndAngle = (340 * Math.PI) / 180;    // 340°
-    const decretoAngleSpread = decretoEndAngle - decretoStartAngle;
     
-    sortedDecretos.forEach((act, idx) => {
-      const count = sortedDecretos.length;
-      // Distribuição angular uniforme dentro do setor
-      const angle = count === 1 
-        ? (decretoStartAngle + decretoEndAngle) / 2 
-        : decretoStartAngle + (idx / (count - 1)) * decretoAngleSpread;
-      
-      const x = leiCenterX + arcRadius * Math.cos(angle);
-      const y = leiCenterY + arcRadius * Math.sin(angle);
-      
+    const decretoPositions = positionNodesInSector(
+      sortedDecretos, 
+      decretoStartAngle, 
+      decretoEndAngle, 
+      2
+    );
+    
+    decretoPositions.positions.forEach(({ act, x, y, angle }) => {
       nodePositions.set(act.id, { x, y, ring: 2, angle });
       result.push({
         id: act.id,
@@ -657,17 +724,15 @@ export const RadialHierarchyView = ({
     // INs: setor inferior central (160° a 200°) - leque estreito embaixo
     const inStartAngle = (160 * Math.PI) / 180;   // 160°
     const inEndAngle = (200 * Math.PI) / 180;     // 200°
-    const inAngleSpread = inEndAngle - inStartAngle;
     
-    sortedINs.forEach((act, idx) => {
-      const count = sortedINs.length;
-      const angle = count === 1 
-        ? (inStartAngle + inEndAngle) / 2  // Centro do setor (180°)
-        : inStartAngle + (idx / (count - 1)) * inAngleSpread;
-      
-      const x = leiCenterX + arcRadius * Math.cos(angle);
-      const y = leiCenterY + arcRadius * Math.sin(angle);
-      
+    const inPositions = positionNodesInSector(
+      sortedINs,
+      inStartAngle,
+      inEndAngle,
+      3
+    );
+    
+    inPositions.positions.forEach(({ act, x, y, angle }) => {
       nodePositions.set(act.id, { x, y, ring: 3, angle });
       result.push({
         id: act.id,
@@ -694,17 +759,15 @@ export const RadialHierarchyView = ({
     // Resoluções: setor direito (20° a 160°) - leque aberto para a direita
     const resolucaoStartAngle = (20 * Math.PI) / 180;   // 20°
     const resolucaoEndAngle = (160 * Math.PI) / 180;    // 160°
-    const resolucaoAngleSpread = resolucaoEndAngle - resolucaoStartAngle;
     
-    sortedResolucoes.forEach((act, idx) => {
-      const count = sortedResolucoes.length;
-      const angle = count === 1 
-        ? (resolucaoStartAngle + resolucaoEndAngle) / 2 
-        : resolucaoStartAngle + (idx / (count - 1)) * resolucaoAngleSpread;
-      
-      const x = leiCenterX + arcRadius * Math.cos(angle);
-      const y = leiCenterY + arcRadius * Math.sin(angle);
-      
+    const resolucaoPositions = positionNodesInSector(
+      sortedResolucoes,
+      resolucaoStartAngle,
+      resolucaoEndAngle,
+      3
+    );
+    
+    resolucaoPositions.positions.forEach(({ act, x, y, angle }) => {
       nodePositions.set(act.id, { x, y, ring: 3, angle });
       result.push({
         id: act.id,

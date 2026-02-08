@@ -55,7 +55,7 @@ const Categories = ({ onNavigate }: CategoriesProps) => {
             Explore o Sistema
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Acesse as diferentes funcionalidades do Vade-Mécum Analítico
+            Acesse as diferentes funcionalidades do <em>Vade Mecum</em> Analítico
           </p>
         </div>
         

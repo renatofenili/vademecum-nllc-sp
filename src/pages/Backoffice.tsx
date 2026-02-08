@@ -149,7 +149,7 @@ const Backoffice = () => {
               <FileText className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-lg font-semibold text-foreground">
-              Backoffice - Vade-Mécum
+              Backoffice - <em>Vade Mecum</em>
             </span>
           </div>
 

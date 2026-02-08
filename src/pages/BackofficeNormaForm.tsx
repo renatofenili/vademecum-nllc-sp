@@ -92,6 +92,7 @@ const temaOptions = [
   'Inovação',
   'Minuta de edital',
   'Modalidades',
+  'Pagamento',
   'PCA',
   'Pesquisa de Preços',
   'PNCP',

@@ -30,7 +30,10 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
             alt="SGGD - Gestão e Governo Digital" 
             className="h-10 w-auto object-contain"
           />
-          <span className="text-lg font-semibold text-foreground">
+          <span 
+            className="text-lg font-semibold text-foreground"
+            style={{ textShadow: '0 0 8px hsl(0, 72%, 50% / 0.3)' }}
+          >
             Vade-Mécum SGGD SP
           </span>
         </button>

@@ -494,19 +494,12 @@ export const RadialHierarchyView = ({
     }
 
     const cx = dimensions.width / 2;
-    const topPadding = 50;
-    const bottomPadding = 30;
-    const availableHeight = dimensions.height - topPadding - bottomPadding;
+    const cy = dimensions.height / 2;
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // LAYOUT COM PARALELISMO NORMATIVO
-    // CF (topo) → Lei (centro) → Três domínios paralelos de regulamentação
+    // LAYOUT RADIAL CENTRADO NA LEI 14.133
+    // Lei no centro → Todas as normas irradiam dela → CF como nó externo
     // ═══════════════════════════════════════════════════════════════════════════
-    
-    // Vertical positions
-    const cfY = topPadding;                              // CF no topo
-    const leiY = topPadding + availableHeight * 0.25;    // Lei abaixo da CF
-    const regulamentacaoY = topPadding + availableHeight * 0.65; // Centro dos arcos
     
     // Build a map of regulatory relationships from edges data
     const regulatoryTargets = new Map<string, string[]>();
@@ -521,12 +514,12 @@ export const RadialHierarchyView = ({
       });
     }
 
-    // Separate nodes by type for the three domains
+    // Separate nodes by type
     const cfNodes: ActNode[] = [];
     const leiNodes: ActNode[] = [];
-    const decretoNodes: ActNode[] = [];      // Regulamentação executiva (esquerda)
-    const inNodes: ActNode[] = [];           // Regulamentação administrativa (centro-baixo)
-    const resolucaoNodes: ActNode[] = [];    // Regulamentação colegiada (direita)
+    const decretoNodes: ActNode[] = [];
+    const inNodes: ActNode[] = [];
+    const resolucaoNodes: ActNode[] = [];
 
     data.nodes.forEach((node) => {
       const tipo = node.tipo;
@@ -541,10 +534,8 @@ export const RadialHierarchyView = ({
       } else if (tipo === 'resolucao') {
         resolucaoNodes.push(node);
       } else if (tipo === 'portaria') {
-        // Portarias vão para INs (regulamentação administrativa)
         inNodes.push(node);
       } else {
-        // Outros tipos vão para INs por padrão
         inNodes.push(node);
       }
     });
@@ -553,62 +544,35 @@ export const RadialHierarchyView = ({
     const nodePositions = new Map<string, { x: number; y: number; ring: number; angle: number }>();
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 0: CF/1988 - posição fixa no topo central
+    // ANTI-COLISÃO: Constantes e funções auxiliares
     // ═══════════════════════════════════════════════════════════════════════════
-    cfNodes.forEach((act) => {
-      const x = cx;
-      const y = cfY;
-      nodePositions.set(act.id, { x, y, ring: 0, angle: 0 });
-      result.push({
-        id: act.id,
-        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-        tipo: act.tipo,
-        act,
-        ring: 0,
-        angle: 0,
-        x,
-        y,
-      });
-    });
+    const MIN_GAP = 16;
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 1: Leis - eixo central, abaixo da CF (SEM SOBREPOSIÇÃO)
-    // ═══════════════════════════════════════════════════════════════════════════
-    const MIN_GAP = 14;
-
-    // Estimativa de tamanho do nó (deve espelhar a heurística usada no render)
     const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number }> = {
-      0: { minWidth: 110, maxWidth: 180, height: 52 },
-      1: { minWidth: 100, maxWidth: 165, height: 38 },
-      2: { minWidth: 90, maxWidth: 150, height: 32 },
-      3: { minWidth: 80, maxWidth: 140, height: 28 },
+      0: { minWidth: 90, maxWidth: 150, height: 38 },   // CF (agora secundário)
+      1: { minWidth: 120, maxWidth: 200, height: 48 },  // Lei (centro - maior)
+      2: { minWidth: 95, maxWidth: 160, height: 34 },   // Decretos
+      3: { minWidth: 85, maxWidth: 150, height: 30 },   // INs/Resoluções
     };
 
     const getNodeLabel = (act: ActNode, ring: number): string => {
-      if (ring === 0) return "CF/1988";
+      if (act.tipo === 'constituicao') return "CF/1988";
       return `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`;
     };
 
     const estimateNodeSize = (act: ActNode, ring: number): { w: number; h: number } => {
       const label = getNodeLabel(act, ring);
       const cfg = nodeSizeByRing[ring] || nodeSizeByRing[3];
-      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6 + 20);
+      const estimatedWidth = Math.max(cfg.minWidth, label.length * 6 + 24);
       return {
         w: Math.min(estimatedWidth, cfg.maxWidth),
         h: cfg.height,
       };
     };
 
-    // Verifica se dois retângulos centrados se sobrepõem
     const rectsOverlap = (
-      x1: number,
-      y1: number,
-      w1: number,
-      h1: number,
-      x2: number,
-      y2: number,
-      w2: number,
-      h2: number
+      x1: number, y1: number, w1: number, h1: number,
+      x2: number, y2: number, w2: number, h2: number
     ): boolean => {
       return !(
         x1 + w1 / 2 + MIN_GAP < x2 - w2 / 2 ||
@@ -618,43 +582,40 @@ export const RadialHierarchyView = ({
       );
     };
 
-    const sortedLeis = [...leiNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
-      return numA - numB;
-    });
+    const degToRad = (deg: number) => (deg * Math.PI) / 180;
 
-    // Distribuição horizontal por largura real (permitindo extrapolar viewport via pan/zoom)
-    const leisWithSize = sortedLeis.map((act) => ({ act, ...estimateNodeSize(act, 1) }));
-    const totalLeisWidth = leisWithSize.reduce((sum, n) => sum + n.w, 0) + Math.max(0, leisWithSize.length - 1) * MIN_GAP;
-    let leiCursorX = cx - totalLeisWidth / 2;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CENTRO: Lei 14.133 (ou primeira lei disponível)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const lei14133 = leiNodes.find(n => 
+      n.numero?.includes("14.133") || n.numero?.includes("14133")
+    ) || leiNodes[0];
 
-    leisWithSize.forEach(({ act, w }) => {
-      const x = leiCursorX + w / 2;
-      const y = leiY;
-      leiCursorX += w + MIN_GAP;
-
-      nodePositions.set(act.id, { x, y, ring: 1, angle: 0 });
+    if (lei14133) {
+      const { w, h } = estimateNodeSize(lei14133, 1);
+      nodePositions.set(lei14133.id, { x: cx, y: cy, ring: 1, angle: 0 });
       result.push({
-        id: act.id,
-        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-        tipo: act.tipo,
-        act,
+        id: lei14133.id,
+        label: `${tipoLabels[lei14133.tipo] || lei14133.tipo} ${lei14133.numero}`,
+        tipo: lei14133.tipo,
+        act: lei14133,
         ring: 1,
         angle: 0,
-        x,
-        y,
+        x: cx,
+        y: cy,
       });
-    });
+    }
 
-    // Ponto de referência: centro da Lei (para os leques partirem dela)
-    const leiCenterX = cx;
-    const leiCenterY = leiY;
+    // Obstáculos já posicionados (começando com a Lei central)
+    const placedObstacles: { x: number; y: number; w: number; h: number }[] = [];
+    if (lei14133) {
+      const { w, h } = estimateNodeSize(lei14133, 1);
+      placedObstacles.push({ x: cx, y: cy, w, h });
+    }
 
-    // Raio base (mínimo) para evitar colisão com a Lei mesmo em telas menores
-    const baseArcRadius = Math.max(availableHeight * 0.35, 160);
-
-    const degToRad = (deg: number) => (deg * Math.PI) / 180;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DISTRIBUIÇÃO RADIAL: Todos os nós irradiam do centro (Lei 14.133)
+    // ═══════════════════════════════════════════════════════════════════════════
 
     type CandidateNode = {
       act: ActNode;
@@ -667,143 +628,99 @@ export const RadialHierarchyView = ({
       h: number;
     };
 
-    const buildSectorCandidates = (
-      nodes: ActNode[],
-      ring: number,
-      startDeg: number,
-      endDeg: number,
-      baseRadius: number
-    ): CandidateNode[] => {
-      if (!nodes.length) return [];
+    // Ordenar por número
+    const sortByNumero = (a: ActNode, b: ActNode) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
+      return numA - numB;
+    };
 
-      const startAngle = degToRad(startDeg);
-      const endAngle = degToRad(endDeg);
-      const sectorSpan = Math.max(0.0001, endAngle - startAngle);
+    const sortedDecretos = [...decretoNodes].sort(sortByNumero);
+    const sortedINs = [...inNodes].sort(sortByNumero);
+    const sortedResolucoes = [...resolucaoNodes].sort(sortByNumero);
+    const sortedCF = [...cfNodes];
+    const otherLeis = leiNodes.filter(n => n.id !== lei14133?.id).sort(sortByNumero);
 
-      const sizes = nodes.map((act) => estimateNodeSize(act, ring));
-      const maxW = Math.max(...sizes.map((s) => s.w));
-      const maxH = Math.max(...sizes.map((s) => s.h));
+    // Todos os nós que irradiam da Lei central
+    const allRadialNodes: { act: ActNode; ring: number; priority: number }[] = [];
+    
+    // CF vai para cima (ângulo ~270°) - ring 0 visualmente mas conecta à Lei
+    sortedCF.forEach(act => allRadialNodes.push({ act, ring: 0, priority: 0 }));
+    
+    // Outras Leis (se houver) - perto da CF
+    otherLeis.forEach(act => allRadialNodes.push({ act, ring: 1, priority: 1 }));
+    
+    // Decretos - distribuídos em semicírculo superior e lateral
+    sortedDecretos.forEach(act => allRadialNodes.push({ act, ring: 2, priority: 2 }));
+    
+    // INs e Resoluções - distribuídos no restante
+    sortedINs.forEach(act => allRadialNodes.push({ act, ring: 3, priority: 3 }));
+    sortedResolucoes.forEach(act => allRadialNodes.push({ act, ring: 3, priority: 4 }));
 
-      const minArcDistance = maxW + MIN_GAP;
-      const layerSpacing = maxH + MIN_GAP;
+    // Calcular ângulos e raios iniciais
+    const totalNodes = allRadialNodes.length;
+    const baseRadius = Math.min(dimensions.width, dimensions.height) * 0.28;
+    
+    // Distribuir ângulos uniformemente (começando do topo = 270°)
+    const candidates: CandidateNode[] = allRadialNodes.map((item, idx) => {
+      const { act, ring } = item;
+      const { w, h } = estimateNodeSize(act, ring);
+      
+      // Ângulo distribuído uniformemente (270° = topo, sentido horário)
+      const angle = degToRad(270 + (idx / totalNodes) * 360);
+      
+      // Raio baseado no tipo (CF mais perto, INs mais longe)
+      let radiusMultiplier = 1.0;
+      if (ring === 0) radiusMultiplier = 1.1;      // CF
+      else if (ring === 2) radiusMultiplier = 1.0; // Decretos
+      else if (ring === 3) radiusMultiplier = 1.15; // INs/Resoluções
+      
+      const radius = baseRadius * radiusMultiplier;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+      
+      return { act, ring, angle, radius, x, y, w, h };
+    });
 
-      const candidates: CandidateNode[] = [];
-
-      let remaining = nodes.length;
-      let offset = 0;
-      let layer = 0;
-
-      while (remaining > 0) {
-        const radius = baseRadius + layer * layerSpacing;
-        const minAngleSpacing = minArcDistance / radius;
-        const capacity = Math.max(1, Math.floor(sectorSpan / minAngleSpacing) + 1);
-        const take = Math.min(capacity, remaining);
-
-        const spacing = take > 1 ? sectorSpan / (take - 1) : 0;
-
-        for (let i = 0; i < take; i++) {
-          const act = nodes[offset + i];
-          const { w, h } = estimateNodeSize(act, ring);
-
-          const angle = take === 1 ? (startAngle + endAngle) / 2 : startAngle + i * spacing;
-          const x = leiCenterX + radius * Math.cos(angle);
-          const y = leiCenterY + radius * Math.sin(angle);
-
-          candidates.push({ act, ring, angle, radius, x, y, w, h });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // POSICIONAMENTO SEM SOBREPOSIÇÃO: Empurra radialmente até não colidir
+    // ═══════════════════════════════════════════════════════════════════════════
+    candidates.forEach((cand) => {
+      let collides = true;
+      let iterations = 0;
+      const maxIterations = 500;
+      
+      while (collides && iterations < maxIterations) {
+        collides = placedObstacles.some((p) => 
+          rectsOverlap(cand.x, cand.y, cand.w, cand.h, p.x, p.y, p.w, p.h)
+        );
+        
+        if (collides) {
+          // Empurrar para fora no mesmo ângulo
+          cand.radius += Math.max(cand.h, 25) + MIN_GAP / 2;
+          cand.x = cx + cand.radius * Math.cos(cand.angle);
+          cand.y = cy + cand.radius * Math.sin(cand.angle);
         }
-
-        offset += take;
-        remaining -= take;
-        layer++;
+        iterations++;
       }
 
-      return candidates;
-    };
+      placedObstacles.push({ x: cand.x, y: cand.y, w: cand.w, h: cand.h });
 
-    // Coloca nós um a um e, se houver colisão, empurra para fora no mesmo ângulo.
-    // Isso preserva o "leque" (ângulo próprio por nó) e garante zero sobreposição.
-    const placeWithoutOverlap = (
-      candidates: CandidateNode[],
-      placed: { x: number; y: number; w: number; h: number }[]
-    ) => {
-      candidates.forEach((cand) => {
-        const collides = placed.some((p) => rectsOverlap(cand.x, cand.y, cand.w, cand.h, p.x, p.y, p.w, p.h));
-
-        if (collides) {
-          // Salto determinístico para um raio "seguro" (via bounding circles), garantindo 0 sobreposição.
-          const candCircle = Math.hypot(cand.w / 2, cand.h / 2);
-          const maxPlaced = placed.reduce((max, p) => {
-            const dist = Math.hypot(p.x - leiCenterX, p.y - leiCenterY);
-            const pCircle = Math.hypot(p.w / 2, p.h / 2);
-            return Math.max(max, dist + pCircle);
-          }, 0);
-
-          cand.radius = Math.max(cand.radius, maxPlaced + candCircle + MIN_GAP + 2);
-          cand.x = leiCenterX + cand.radius * Math.cos(cand.angle);
-          cand.y = leiCenterY + cand.radius * Math.sin(cand.angle);
-        }
-
-        placed.push({ x: cand.x, y: cand.y, w: cand.w, h: cand.h });
-
-        nodePositions.set(cand.act.id, { x: cand.x, y: cand.y, ring: cand.ring, angle: cand.angle });
-        result.push({
-          id: cand.act.id,
-          label: `${tipoLabels[cand.act.tipo] || cand.act.tipo} ${cand.act.numero}`,
-          tipo: cand.act.tipo,
-          act: cand.act,
-          ring: cand.ring,
-          angle: cand.angle,
-          x: cand.x,
-          y: cand.y,
-        });
+      nodePositions.set(cand.act.id, { x: cand.x, y: cand.y, ring: cand.ring, angle: cand.angle });
+      result.push({
+        id: cand.act.id,
+        label: getNodeLabel(cand.act, cand.ring),
+        tipo: cand.act.tipo,
+        act: cand.act,
+        ring: cand.ring,
+        angle: cand.angle,
+        x: cand.x,
+        y: cand.y,
       });
-    };
-
-    // Obstáculos fixos (CF + Leis) para o empurrão anti-colisão global
-    const fixedObstacles: { x: number; y: number; w: number; h: number }[] = result.map((n) => {
-      const { w, h } = estimateNodeSize(n.act, n.ring);
-      return { x: n.x, y: n.y, w, h };
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DOMÍNIOS PARALELOS (todos conectados à Lei; nenhum subordinado entre si)
-    // Setores DISJUNTOS e abaixo da Lei (0°=direita, 90°=baixo, 180°=esquerda)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    // DOMÍNIO 1: Regulamentação Executiva (Decretos) - leque lateral esquerdo
-    const sortedDecretos = [...decretoNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
-      return numA - numB;
-    });
-
-    // DOMÍNIO 2: Regulamentação Administrativa (INs/Portarias) - leque inferior central
-    const sortedINs = [...inNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
-      return numA - numB;
-    });
-
-    // DOMÍNIO 3: Regulamentação Colegiada (Resoluções) - leque lateral direito
-    const sortedResolucoes = [...resolucaoNodes].sort((a, b) => {
-      const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
-      const numB = parseInt(b.numero?.replace(/\D/g, "") || "0", 10);
-      return numA - numB;
-    });
-
-    // Setores fixos (distribuição angular interna evita formação de colunas)
-    const decretoCandidates = buildSectorCandidates(sortedDecretos, 2, 112, 162, baseArcRadius);
-    const inCandidates = buildSectorCandidates(sortedINs, 3, 70, 110, baseArcRadius * 1.05);
-    const resolucaoCandidates = buildSectorCandidates(sortedResolucoes, 3, 15, 65, baseArcRadius);
-
-    // Ordem de colocação: decretos (mais próximos/alto na validade), depois INs e Resoluções
-    const allCandidates = [...decretoCandidates, ...inCandidates, ...resolucaoCandidates];
-
-    // Colocação global sem sobreposição (entre domínios e contra CF/Leis)
-    placeWithoutOverlap(allCandidates, fixedObstacles);
-
-    // Y positions for level labels (approximate)
-    const levelYPositions = [cfY, leiY, regulamentacaoY, regulamentacaoY + 60];
+    // Y positions for level labels (não usadas neste layout radial)
+    const levelYPositions = [cy - 200, cy, cy + 100, cy + 200];
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CORREÇÃO CIRÚRGICA: Validar presença do Decreto 12.807/2025
@@ -828,67 +745,23 @@ export const RadialHierarchyView = ({
     
     // regulatoryTargets already built above for node positioning
     
-    // 1. Hierarchy links - STRICT NORMATIVE HIERARCHY RULES:
-    // - Ring 0: CF/88 (root)
-    // - Ring 1: Laws connect to CF/88
-    // - Ring 2: Decretos connect to Laws (ring 1), NEVER to CF/88
-    // - Ring 3: Resoluções/Portarias/INs connect to Laws (ring 1), NOT to Decretos
-    //           This reflects that these are administrative acts derived from Law, not from Decrees
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LINKS DE HIERARQUIA: TODOS conectam diretamente à Lei 14.133 (centro)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const leiCentralNode = result.find(n => n.ring === 1);
+    
     result.forEach((node) => {
-      if (node.ring === 0) return;
+      // A Lei central não se conecta a ninguém (é o centro)
+      if (node.ring === 1) return;
       
-      let parentsInRing: RingNode[] = [];
-      
-      if (node.ring === 1) {
-        // Laws: Connect to CF/88 (ring 0)
-        parentsInRing = result.filter((n) => n.ring === 0);
-      } else if (node.ring === 2) {
-        // Decretos: Connect to Laws (ring 1), NEVER to CF/88
-        parentsInRing = result.filter((n) => n.ring === 1);
-        
-        if (parentsInRing.length === 0) {
-          console.warn(`No Laws found for Decreto ${node.label} - skipping hierarchy link`);
-          return;
-        }
-      } else if (node.ring === 3) {
-        // ═══════════════════════════════════════════════════════════════════
-        // CORREÇÃO: Resoluções, Portarias, INs conectam à Lei 14.133 (anel 1)
-        // Não aos Decretos (anel 2) - são atos administrativos derivados da Lei
-        // ═══════════════════════════════════════════════════════════════════
-        parentsInRing = result.filter((n) => n.ring === 1);
-        
-        if (parentsInRing.length === 0) {
-          console.warn(`No Laws found for ${node.label} - skipping hierarchy link`);
-          return;
-        }
-      }
-      
-      // FINAL SAFETY CHECK: Never allow ring 2+ nodes to connect to ring 0
-      if (node.ring >= 2) {
-        parentsInRing = parentsInRing.filter((p) => p.ring !== 0);
-        if (parentsInRing.length === 0) {
-          return; // Skip - no valid parent
-        }
-      }
-      
-      if (parentsInRing.length > 0) {
-        // First, check if this node has a regulatory relationship with any parent
-        const regulatedTargets = regulatoryTargets.get(node.id) || [];
-        const regulatedParent = parentsInRing.find((p) => regulatedTargets.includes(p.id));
-        
-        // Use regulatory parent if found, otherwise fall back to nearest by X position (horizontal layout)
-        const parent = regulatedParent || parentsInRing.reduce((a, b) => {
-          const distA = Math.abs(a.x - node.x);
-          const distB = Math.abs(b.x - node.x);
-          return distA < distB ? a : b;
-        });
-        
+      // Todos os outros nós conectam à Lei central
+      if (leiCentralNode) {
         graphLinks.push({
-          fromId: parent.id,
+          fromId: leiCentralNode.id,
           toId: node.id,
           type: "hierarquia",
-          fromX: parent.x,
-          fromY: parent.y,
+          fromX: leiCentralNode.x,
+          fromY: leiCentralNode.y,
           toX: node.x,
           toY: node.y,
         });
@@ -999,7 +872,7 @@ export const RadialHierarchyView = ({
       nodes: result, 
       links: graphLinks, 
       levelYPositions, 
-      center: { x: cx, y: cfY },
+      center: { x: cx, y: cy },
       regulatesCount,
       regulatedByCount,
       regulatesMap,

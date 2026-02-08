@@ -28,6 +28,7 @@ interface ResultadoDispositivo {
   anchor: string;
   nivel: string;
   texto: string;
+  contexto: string; // Trecho ao redor do match
 }
 
 const formatTipo = (tipo: string) => {
@@ -57,12 +58,51 @@ const formatNivel = (nivel: string) => {
   return niveis[nivel] || nivel;
 };
 
+// Extrai um trecho de contexto ao redor do termo encontrado
+const extrairContexto = (texto: string, termo: string, tamanho = 150): string => {
+  if (!texto || !termo) return texto?.substring(0, tamanho * 2) || "";
+  
+  const textoLower = texto.toLowerCase();
+  const termoLower = termo.toLowerCase();
+  const posicao = textoLower.indexOf(termoLower);
+  
+  if (posicao === -1) return texto.substring(0, tamanho * 2);
+  
+  const inicio = Math.max(0, posicao - tamanho);
+  const fim = Math.min(texto.length, posicao + termo.length + tamanho);
+  
+  let contexto = texto.substring(inicio, fim);
+  if (inicio > 0) contexto = "..." + contexto;
+  if (fim < texto.length) contexto = contexto + "...";
+  
+  return contexto;
+};
+
+// Destaca o termo no texto
+const destacarTermo = (texto: string, termo: string) => {
+  if (!termo || !texto) return texto;
+  
+  const regex = new RegExp(`(${termo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+  const partes = texto.split(regex);
+  
+  return partes.map((parte, i) =>
+    regex.test(parte) ? (
+      <mark key={i} className="bg-primary/20 text-foreground px-0.5 rounded font-medium">
+        {parte}
+      </mark>
+    ) : (
+      parte
+    )
+  );
+};
+
 const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resultados, setResultados] = useState<ResultadoDispositivo[]>([]);
   const [dispositivoSelecionado, setDispositivoSelecionado] = useState<DispositivoSelecionado | null>(null);
   const [searchRealizada, setSearchRealizada] = useState(false);
+  const [termoBuscado, setTermoBuscado] = useState("");
   const dispositivoDetalheRef = useRef<HTMLDivElement>(null);
 
   // Scroll to dispositivo detail when selected
@@ -77,6 +117,8 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
 
     setIsLoading(true);
     setSearchRealizada(true);
+    setTermoBuscado(searchTerm.trim());
+    
     try {
       const term = searchTerm.toLowerCase().trim();
 
@@ -104,10 +146,9 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
           if (!Array.isArray(dispositivos)) continue;
 
           for (const disp of dispositivos) {
-            const anchorMatch = disp.anchor?.toLowerCase().includes(term);
             const textoMatch = disp.texto?.toLowerCase().includes(term);
 
-            if (anchorMatch || textoMatch) {
+            if (textoMatch) {
               matchedDispositivos.push({
                 normaId: norma.id,
                 normaTipo: norma.tipo,
@@ -115,6 +156,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
                 anchor: disp.anchor,
                 nivel: disp.nivel,
                 texto: disp.texto,
+                contexto: extrairContexto(disp.texto, term, 120),
               });
             }
 
@@ -171,7 +213,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
           <div className="flex gap-2">
             <Input
               type="search"
-              placeholder="Ex: Art. 75, §1º, dispensa, inexigibilidade..."
+              placeholder="Ex: Art. 75, §1º, dispensa, inexigibilidade, credenciamento..."
               className="h-12"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -198,7 +240,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
 
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-muted-foreground">Exemplos:</span>
-            {["Art. 75", "§1º", "dispensa", "inexigibilidade", "pregão"].map((term) => (
+            {["Art. 75", "dispensa", "inexigibilidade", "credenciamento", "pregão"].map((term) => (
               <button
                 key={term}
                 className="text-sm text-primary hover:underline underline-offset-2"
@@ -221,7 +263,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
                   Dispositivos Encontrados ({resultados.length})
                 </CardTitle>
                 <CardDescription>
-                  Clique em um dispositivo para visualizar o conteúdo completo
+                  Resultados para "<span className="font-medium text-foreground">{termoBuscado}</span>" • Clique para ver o texto completo
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -253,8 +295,8 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
                               {formatNivel(resultado.nivel)}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {resultado.texto.substring(0, 200)}...
+                          <p className="text-sm text-muted-foreground">
+                            {destacarTermo(resultado.contexto, termoBuscado)}
                           </p>
                         </div>
                       </div>
@@ -266,7 +308,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
-                Nenhum dispositivo encontrado para "{searchTerm}"
+                Nenhum dispositivo encontrado para "{termoBuscado}"
               </CardContent>
             </Card>
           )}
@@ -303,7 +345,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
               <ScrollArea type="always" className="max-h-[500px]">
                 <div className="p-6">
                   <p className="text-foreground leading-relaxed whitespace-pre-line text-justify">
-                    {dispositivoSelecionado.texto}
+                    {destacarTermo(dispositivoSelecionado.texto, termoBuscado)}
                   </p>
                 </div>
               </ScrollArea>

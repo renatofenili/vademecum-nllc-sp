@@ -31,7 +31,7 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
             className="h-10 w-auto object-contain"
           />
           <span 
-            className="text-lg font-semibold text-foreground"
+            className="text-sm font-semibold text-foreground"
             style={{ 
               textShadow: '0 0 4px hsl(0 72% 50% / 0.4), 0 0 8px hsl(0 72% 50% / 0.2)' 
             }}

@@ -11,16 +11,9 @@ const Hero = ({ onNavigate }: HeroProps) => {
     <section className="bg-hero py-20 md:py-32">
       <div className="container text-center">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-4">
-          Normas de{" "}
-          <span className="text-primary relative inline-block">
-            Licitações
-            <span className="absolute -bottom-2 left-0 right-0 h-1 bg-primary/30 rounded-full"></span>
-          </span>
-          {" "}e Contratos
+          Normas de Licitações e Contratos
           <br />
-          <span className="text-muted-foreground text-2xl md:text-3xl lg:text-4xl font-medium mt-2 block">
-            do Estado de São Paulo
-          </span>
+          <span className="text-primary">do Estado de São Paulo</span>
         </h1>
         
         <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">

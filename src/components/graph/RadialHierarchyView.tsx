@@ -529,11 +529,19 @@ export const RadialHierarchyView = ({
 
     const nodeSizeByRing: Record<number, { minWidth: number; maxWidth: number; height: number }> = {
       0: { minWidth: 130, maxWidth: 220, height: 52 },   // Lei central (maior)
-      1: { minWidth: 100, maxWidth: 170, height: 36 },   // Decretos
-      2: { minWidth: 90, maxWidth: 155, height: 32 },    // INs/Resoluções
+      1: { minWidth: 90, maxWidth: 170, height: 36 },    // Decretos
+      2: { minWidth: 80, maxWidth: 155, height: 32 },    // INs/Resoluções
     };
 
     const getNodeLabel = (act: ActNode, ring: number): string => {
+      if (
+        act.tipo === "lei" ||
+        act.tipo === "lei_federal" ||
+        act.tipo === "lei_estadual" ||
+        act.tipo === "lei_complementar"
+      ) {
+        return `Lei nº ${act.numero}`;
+      }
       return `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`;
     };
 
@@ -636,6 +644,7 @@ export const RadialHierarchyView = ({
           `Dec. ${nShort}`,
           `Dec. ${onlyNum}`,
           onlyNum,
+          "•",
         ]);
       }
       if (act.tipo === "instrucao_normativa") {
@@ -643,6 +652,7 @@ export const RadialHierarchyView = ({
           full,
           `IN ${nShort}`,
           onlyNum,
+          "•",
         ]);
       }
       if (act.tipo === "resolucao") {
@@ -650,6 +660,7 @@ export const RadialHierarchyView = ({
           full,
           `Res. ${nShort}`,
           onlyNum,
+          "•",
         ]);
       }
       if (act.tipo === "portaria") {
@@ -657,28 +668,35 @@ export const RadialHierarchyView = ({
           full,
           `Port. ${nShort}`,
           onlyNum,
+          "•",
         ]);
       }
 
       const tipoShort = (tipoLabels[act.tipo] || act.tipo).replace(/\b(Instrução Normativa)\b/i, "IN");
-      return unique([full, `${tipoShort} ${nShort}`, onlyNum]);
+      return unique([full, `${tipoShort} ${nShort}`, onlyNum, "•"]);
     };
 
     const estimateSizeForLabel = (label: string, ring: number): { w: number; h: number } => {
       const cfg = nodeSizeByRing[ring] || nodeSizeByRing[2];
       // Ajuste leve de largura por caracteres (mantém determinístico)
       const estimatedWidth = Math.max(cfg.minWidth, label.length * 6.2 + 26);
+
       // Se encurtou muito, permitir um nó mais estreito (ajuda a evitar colisão)
-      const minW = label.length <= 10 ? Math.min(cfg.minWidth, 76) : cfg.minWidth;
+      const minW = label.length <= 6
+        ? 44
+        : label.length <= 10
+          ? 60
+          : cfg.minWidth;
+
       return {
         w: Math.min(Math.max(estimatedWidth, minW), cfg.maxWidth),
         h: cfg.height,
       };
     };
 
-    const BASE_JITTER_DEG = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10];
-    const BASE_RADIAL_OFFSETS = [0, 8, -8, 16, -16];
-    const RADIAL_BAND_PX = 18; // faixa estreita ao redor do raio do nível
+    const BASE_JITTER_DEG = [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8, 10, -10];
+    const BASE_RADIAL_OFFSETS = [0, 8, -8, 16, -16, 24, -24];
+    const RADIAL_BAND_PX = 24; // faixa estreita ao redor do raio do nível
 
     const placeRing = (opts: {
       acts: ActNode[];
@@ -693,70 +711,98 @@ export const RadialHierarchyView = ({
       if (count === 0) return;
 
       const slotSpanDeg = 360 / count;
-      const sectorHalfDeg = Math.min(10, slotSpanDeg * 0.45);
-      const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= sectorHalfDeg + 1e-6);
+      const sectorHalfDeg = Math.max(0.5, slotSpanDeg * 0.49);
+      const maxJitterDeg = Math.min(10, sectorHalfDeg);
+      const jitterDeltas = BASE_JITTER_DEG.filter((d) => Math.abs(d) <= maxJitterDeg + 1e-6);
 
-      sorted.forEach((act, idx) => {
+      type Cand = { x: number; y: number; angle: number; r: number; w: number; h: number; label: string };
+
+      // Pré-gerar candidatos determinísticos por nó (label → jitter → offset radial)
+      const candidatesByIdx: Cand[][] = sorted.map((act, idx) => {
         const baseAngle = degToRad(startDeg + (idx / count) * 360);
         const variants = labelVariantsFor(act, ring);
-
-        let placed: { x: number; y: number; angle: number; r: number; w: number; h: number; label: string } | null = null;
+        const cands: Cand[] = [];
 
         for (const label of variants) {
           const { w, h } = estimateSizeForLabel(label, ring);
-
           for (const deltaDeg of jitterDeltas) {
             const angle = baseAngle + degToRad(deltaDeg);
-
             for (const ro of BASE_RADIAL_OFFSETS) {
               const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
               const x = cx + r * Math.cos(angle);
               const y = cy + r * Math.sin(angle);
-
-              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
-              if (!collides) {
-                placed = { x, y, angle, r, w, h, label };
-                break;
-              }
+              cands.push({ x, y, angle, r, w, h, label });
             }
-            if (placed) break;
           }
-          if (placed) break;
         }
 
-        // Fallback extremo: se nada couber, reduzir o label ao número e tentar de novo
-        // (mantém raio fixo; evita sobreposição de labels)
-        if (!placed) {
-          const minimal = unique([shortYear(act.numero), act.numero, "…"]).find(Boolean) || "…";
-          const { w, h } = estimateSizeForLabel(minimal, ring);
+        // limitar para evitar explosão combinatória (mantém determinístico)
+        return cands.slice(0, 120);
+      });
 
-          // tentar um pouco mais de offsets, mas sempre dentro da faixa do nível
-          const extraRadial = [0, 8, -8, 16, -16, 18, -18].filter((v) => Math.abs(v) <= RADIAL_BAND_PX);
+      const chosen: (Cand | null)[] = new Array(count).fill(null);
 
-          outer: for (const deltaDeg of jitterDeltas) {
+      const overlapsAny = (cand: Cand, obstacles: { x: number; y: number; w: number; h: number }[]) => {
+        return obstacles.some((p) => rectsOverlap(cand.x, cand.y, cand.w, cand.h, p.x, p.y, p.w, p.h));
+      };
+
+      // Backtracking determinístico para GARANTIR ausência de overlap dentro do nível
+      const solve = (
+        i: number,
+        obstacles: { x: number; y: number; w: number; h: number }[]
+      ): boolean => {
+        if (i >= count) return true;
+
+        for (const cand of candidatesByIdx[i]) {
+          if (overlapsAny(cand, obstacles)) continue;
+          chosen[i] = cand;
+          obstacles.push({ x: cand.x, y: cand.y, w: cand.w, h: cand.h });
+          if (solve(i + 1, obstacles)) return true;
+          obstacles.pop();
+          chosen[i] = null;
+        }
+
+        return false;
+      };
+
+      const ok = solve(0, [...placedObstacles]);
+
+      // Se não houver solução com pills normais dentro da faixa do nível,
+      // degradar deterministicamente para marca mínima (•) e tentar novamente.
+      if (!ok) {
+        const forcedCandidatesByIdx: Cand[][] = sorted.map((act, idx) => {
+          const baseAngle = degToRad(startDeg + (idx / count) * 360);
+          const label = "•";
+          const { w, h } = estimateSizeForLabel(label, ring);
+          const cands: Cand[] = [];
+
+          for (const deltaDeg of jitterDeltas) {
             const angle = baseAngle + degToRad(deltaDeg);
-            for (const ro of extraRadial) {
+            for (const ro of BASE_RADIAL_OFFSETS) {
               const r = Math.max(baseRadius - RADIAL_BAND_PX, Math.min(baseRadius + RADIAL_BAND_PX, baseRadius + ro));
               const x = cx + r * Math.cos(angle);
               const y = cy + r * Math.sin(angle);
-              const collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
-              if (!collides) {
-                placed = { x, y, angle, r, w, h, label: minimal };
-                break outer;
-              }
+              cands.push({ x, y, angle, r, w, h, label });
             }
           }
-        }
 
-        // Se ainda assim não couber, colocar no ângulo base e aceitar label mínimo.
-        // (situação patológica; ao menos evita estouro de raio e mantém determinístico)
-        if (!placed) {
-          const label = unique([shortYear(act.numero), act.numero, "…"]).find(Boolean) || "…";
-          const { w, h } = estimateSizeForLabel(label, ring);
-          const x = cx + baseRadius * Math.cos(baseAngle);
-          const y = cy + baseRadius * Math.sin(baseAngle);
-          placed = { x, y, angle: baseAngle, r: baseRadius, w, h, label };
+          return cands;
+        });
+
+        candidatesByIdx.splice(0, candidatesByIdx.length, ...forcedCandidatesByIdx);
+        chosen.fill(null);
+        const ok2 = solve(0, [...placedObstacles]);
+        if (!ok2) {
+          // Último recurso: não colocar nós que não cabem (melhor do que sobrepor)
+          // (mantém a regra "jamais sobreposição" acima de tudo)
+          console.warn(`[MAPA] Anel ${ring}: densidade extrema — alguns labels foram suprimidos.`);
         }
+      }
+
+      // Commit: inserir posições escolhidas SEMPRE sem overlap
+      sorted.forEach((act, idx) => {
+        const placed = chosen[idx];
+        if (!placed) return;
 
         placedObstacles.push({ x: placed.x, y: placed.y, w: placed.w, h: placed.h });
         nodePositions.set(act.id, { x: placed.x, y: placed.y, ring, angle: placed.angle });
@@ -1858,8 +1904,9 @@ export const RadialHierarchyView = ({
                 };
                 
                 const sizeConfig = nodeSizeByRing[node.ring] || nodeSizeByRing[2];
-                const estimatedWidth = Math.max(sizeConfig.minWidth, label.length * 6 + 20);
-                const nodeWidth = Math.min(estimatedWidth, sizeConfig.maxWidth);
+                const estimatedWidth = Math.max(sizeConfig.minWidth, label.length * 6.2 + 26);
+                const minW = label.length <= 6 ? 44 : label.length <= 10 ? 60 : sizeConfig.minWidth;
+                const nodeWidth = Math.min(Math.max(estimatedWidth, minW), sizeConfig.maxWidth);
                 const nodeHeight = sizeConfig.height;
                 const fontSize = sizeConfig.fontSize;
                 

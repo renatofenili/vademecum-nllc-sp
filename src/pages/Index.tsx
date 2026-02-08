@@ -13,6 +13,7 @@ import MapaCalorTab from "@/components/tabs/MapaCalorTab";
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [initialSearch, setInitialSearch] = useState<string>("");
+  const [selectedNormaId, setSelectedNormaId] = useState<string | null>(null);
 
   const handleNavigate = (tab: TabType, searchTerm?: string) => {
     if (searchTerm) {
@@ -22,10 +23,17 @@ const Index = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Reset initial search when tab changes
+  const handleNavigateToNorma = (normaId: string) => {
+    setSelectedNormaId(normaId);
+    setActiveTab("normas");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Reset states when tab changes
   useEffect(() => {
     if (activeTab !== "normas") {
       setInitialSearch("");
+      setSelectedNormaId(null);
     }
   }, [activeTab]);
 
@@ -42,7 +50,7 @@ const Index = () => {
       case "normas":
         return (
           <div className="container py-6 md:py-8">
-            <NormasTab initialSearch={initialSearch} />
+            <NormasTab initialSearch={initialSearch} selectedNormaId={selectedNormaId} />
           </div>
         );
       case "relatorios":
@@ -54,7 +62,7 @@ const Index = () => {
       case "consultas":
         return (
           <div className="container py-6 md:py-8">
-            <ConsultasTab />
+            <ConsultasTab onNavigateToNorma={handleNavigateToNorma} />
           </div>
         );
       case "mapas":

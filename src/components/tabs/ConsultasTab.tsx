@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, FileText, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Search, FileText, Loader2, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+
+interface ConsultasTabProps {
+  onNavigateToNorma?: (normaId: string) => void;
+}
 
 interface DispositivoSelecionado {
   normaId: string;
@@ -53,12 +57,20 @@ const formatNivel = (nivel: string) => {
   return niveis[nivel] || nivel;
 };
 
-const ConsultasTab = () => {
+const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resultados, setResultados] = useState<ResultadoDispositivo[]>([]);
   const [dispositivoSelecionado, setDispositivoSelecionado] = useState<DispositivoSelecionado | null>(null);
   const [searchRealizada, setSearchRealizada] = useState(false);
+  const dispositivoDetalheRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to dispositivo detail when selected
+  useEffect(() => {
+    if (dispositivoSelecionado && dispositivoDetalheRef.current) {
+      dispositivoDetalheRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [dispositivoSelecionado]);
 
   const handlePesquisar = async () => {
     if (!searchTerm.trim() || searchTerm.length < 2) return;
@@ -263,40 +275,53 @@ const ConsultasTab = () => {
 
       {/* Dispositivo Selecionado */}
       {dispositivoSelecionado && (
-        <Card>
-          <CardHeader className="border-b border-border bg-muted/30">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge>{formatTipo(dispositivoSelecionado.normaTipo)}</Badge>
-                  <Badge variant="outline" className="font-mono">
-                    {dispositivoSelecionado.anchor}
-                  </Badge>
+        <div ref={dispositivoDetalheRef}>
+          <Card>
+            <CardHeader className="border-b border-border bg-muted/30">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge>{formatTipo(dispositivoSelecionado.normaTipo)}</Badge>
+                    <Badge variant="outline" className="font-mono">
+                      {dispositivoSelecionado.anchor}
+                    </Badge>
+                  </div>
+                  <CardTitle className="text-lg">
+                    {formatTipo(dispositivoSelecionado.normaTipo)} {dispositivoSelecionado.normaNumero}
+                  </CardTitle>
                 </div>
-                <CardTitle className="text-lg">
-                  {formatTipo(dispositivoSelecionado.normaTipo)} {dispositivoSelecionado.normaNumero}
-                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDispositivoSelecionado(null)}
+                >
+                  Fechar
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDispositivoSelecionado(null)}
-              >
-                <Search className="h-4 w-4 mr-1" />
-                Voltar
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea type="always" className="max-h-[500px]">
-              <div className="p-6">
-                <p className="text-foreground leading-relaxed whitespace-pre-line text-justify">
-                  {dispositivoSelecionado.texto}
-                </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea type="always" className="max-h-[500px]">
+                <div className="p-6">
+                  <p className="text-foreground leading-relaxed whitespace-pre-line text-justify">
+                    {dispositivoSelecionado.texto}
+                  </p>
+                </div>
+              </ScrollArea>
+              
+              {/* Link para norma completa */}
+              <div className="border-t border-border bg-muted/30 px-6 py-4">
+                <Button
+                  variant="outline"
+                  onClick={() => onNavigateToNorma?.(dispositivoSelecionado.normaId)}
+                  className="gap-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Ver norma completa: {formatTipo(dispositivoSelecionado.normaTipo)} {dispositivoSelecionado.normaNumero}
+                </Button>
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -233,7 +233,7 @@ const MapaCalorTab = () => {
             <span className="text-muted-foreground text-[10px]">Alta</span>
           </div>
           <div className="flex items-center gap-1 ml-3 pl-3 border-l border-border">
-            <span className="text-muted-foreground">Número = qtd. de normas</span>
+            <span className="text-muted-foreground">Número = qtde de normas que tocam a temática</span>
           </div>
         </div>
       </div>

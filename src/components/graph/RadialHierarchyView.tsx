@@ -1491,24 +1491,8 @@ export const RadialHierarchyView = ({
   return (
     <div className="flex-1 flex flex-col">
       {/* Info bar - Row 1: Stats and Link toggles */}
-      {/* Diagnóstico: Backend envia CF/88, mas ela é intencionalmente ignorada no render */}
+      {/* Zoom indicator */}
       <div className="p-2 bg-muted/50 border-b text-xs text-muted-foreground flex flex-wrap items-center gap-4">
-        {(() => {
-          // Contar nós intencionalmente excluídos (CF/88)
-          const cfCount = data.nodes.filter(n => n.tipo === 'constituicao').length;
-          const expectedRendered = data.nodes.length - cfCount;
-          const hasDivergence = nodes.length !== expectedRendered;
-          
-          return (
-            <>
-              <span>📊 Backend: {data.nodes.length} | Renderizado: {nodes.length}{cfCount > 0 ? ` (−${cfCount} CF)` : ''}</span>
-              {hasDivergence && (
-                <span className="text-red-500 font-bold">⚠️ DIVERGÊNCIA! (esperado: {expectedRendered})</span>
-              )}
-            </>
-          );
-        })()}
-        <span>🎯 Raiz: Lei 14.133/2021</span>
         <span>🔍 Zoom: {Math.round(zoom * 100)}%</span>
         
         <Separator orientation="vertical" className="h-4" />

@@ -1729,19 +1729,7 @@ export const RadialHierarchyView = ({
                 />
               ))}
 
-              {/* Level labels on the left */}
-              {levelYPositions.map((yPos: number, index: number) => (
-                <text
-                  key={`level-label-${index}`}
-                  x={20}
-                  y={yPos}
-                  textAnchor="start"
-                  dominantBaseline="middle"
-                  className="fill-muted-foreground text-[10px] font-medium"
-                >
-                  {ringLabels[index] || ''}
-                </text>
-              ))}
+              {/* Level labels removed for cleaner visualization */}
 
               {/* Connection links with types - filtered by visibility toggles */}
               {/* REGRA: Linhas retas quando possível, curvas apenas para evitar cruzamentos */}

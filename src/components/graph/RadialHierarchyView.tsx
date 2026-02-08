@@ -478,13 +478,13 @@ export const RadialHierarchyView = ({
     return { ring: minRing, offset: maxOffset };
   }, [expandedDispositivosMap, data?.nodes]);
 
-  // Build radial nodes and links
-  const { nodes, links, ringRadii, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
+  // Build hierarchical vertical nodes and links
+  const { nodes, links, levelYPositions, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
     if (!data || !data.nodes.length) {
       return { 
         nodes: [], 
         links: [], 
-        ringRadii: [], 
+        levelYPositions: [], 
         center: { x: 0, y: 0 },
         regulatesCount: new Map<string, number>(),
         regulatedByCount: new Map<string, number>(),
@@ -494,34 +494,27 @@ export const RadialHierarchyView = ({
     }
 
     const cx = dimensions.width / 2;
-    const cy = dimensions.height / 2;
+    const topPadding = 60;
+    const bottomPadding = 40;
+    const availableHeight = dimensions.height - topPadding - bottomPadding;
     
-    // Calculate dynamic ring spacing based on container size
-    // Ensure minimum 120px between rings to prevent node overlap
-    const minRingSpacing = 140;
-    const numRings = 4; // 0=CF, 1=Laws, 2=Decrees, 3=Others
-    const minTotalRadius = minRingSpacing * (numRings - 1);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LAYOUT HIERÁRQUICO VERTICAL: fundamento → regulamentação → operacionalização
+    // CF no topo → Leis → Decretos → INs/Resoluções na base
+    // ═══════════════════════════════════════════════════════════════════════════
+    const numLevels = 4;
+    const levelSpacing = availableHeight / (numLevels - 1);
     
-    // Use the larger of: proportional to container OR minimum spacing
-    const containerRadius = Math.min(cx, cy) - 40;
-    const effectiveRadius = Math.max(containerRadius, minTotalRadius);
-    
-    // Calculate ring radii with guaranteed spacing
-    const ringSpacing = effectiveRadius / (numRings - 1);
-    const baseRadii = [0, ringSpacing, ringSpacing * 2, ringSpacing * 3];
-    
-    
-    // Apply expansion offset to rings beyond the expanded one
-    const radii = baseRadii.map((r, ringIdx) => {
-      if (expansionOffset.ring >= 0 && ringIdx > expansionOffset.ring) {
-        return r + expansionOffset.offset;
-      }
-      return r;
-    });
+    // Y positions for each level (top to bottom)
+    const levelY: Record<number, number> = {
+      0: topPadding,                           // CF - topo
+      1: topPadding + levelSpacing,            // Leis
+      2: topPadding + levelSpacing * 2,        // Decretos
+      3: topPadding + levelSpacing * 3,        // INs/Resoluções
+    };
 
     // Build a map of regulatory relationships from edges data
-    // This tells us which nodes actually regulate which (based on extracted references)
-    const regulatoryTargets = new Map<string, string[]>(); // nodeId -> list of target act IDs it regulates
+    const regulatoryTargets = new Map<string, string[]>();
     if (data.edges) {
       data.edges.forEach((edge) => {
         if (edge.relation_type === "regulates" || edge.relation_type === "implements") {
@@ -533,8 +526,8 @@ export const RadialHierarchyView = ({
       });
     }
 
-    // Group nodes by ring
-    const nodesByRing: Map<number, ActNode[]> = new Map([
+    // Group nodes by level
+    const nodesByLevel: Map<number, ActNode[]> = new Map([
       [0, []],
       [1, []],
       [2, []],
@@ -542,19 +535,21 @@ export const RadialHierarchyView = ({
     ]);
 
     data.nodes.forEach((node) => {
-      const ring = tipoToRing[node.tipo] ?? 3;
-      nodesByRing.get(ring)!.push(node);
+      const level = tipoToRing[node.tipo] ?? 3;
+      nodesByLevel.get(level)!.push(node);
     });
 
-    // Calculate positions - process rings from inner to outer
-    // Outer rings position nodes near their regulatory targets
     const result: RingNode[] = [];
     const nodePositions = new Map<string, { x: number; y: number; ring: number; angle: number }>();
 
-    // First, position ring 0 (center)
-    const ring0Nodes = nodesByRing.get(0) || [];
-    ring0Nodes.forEach((act) => {
-      nodePositions.set(act.id, { x: cx, y: cy, ring: 0, angle: 0 });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NÍVEL 0: CF/1988 - posição fixa no topo central
+    // ═══════════════════════════════════════════════════════════════════════════
+    const level0Nodes = nodesByLevel.get(0) || [];
+    level0Nodes.forEach((act) => {
+      const x = cx;
+      const y = levelY[0];
+      nodePositions.set(act.id, { x, y, ring: 0, angle: 0 });
       result.push({
         id: act.id,
         label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
@@ -562,53 +557,101 @@ export const RadialHierarchyView = ({
         act,
         ring: 0,
         angle: 0,
-        x: cx,
-        y: cy,
+        x,
+        y,
       });
     });
 
-    // Process rings 1, 2, 3 in order
-    for (let ringIdx = 1; ringIdx <= 3; ringIdx++) {
-      const nodesInRing = nodesByRing.get(ringIdx) || [];
-      const radius = radii[ringIdx];
-      const count = nodesInRing.length;
-      
-      if (count === 0) continue;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NÍVEL 1: Leis - centralizadas abaixo da CF
+    // ═══════════════════════════════════════════════════════════════════════════
+    const level1Nodes = nodesByLevel.get(1) || [];
+    const sortedLevel1 = [...level1Nodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
+    
+    const level1Width = Math.min(dimensions.width * 0.6, sortedLevel1.length * 180);
+    const level1StartX = cx - level1Width / 2;
+    const level1Spacing = sortedLevel1.length > 1 ? level1Width / (sortedLevel1.length - 1) : 0;
+    
+    sortedLevel1.forEach((act, idx) => {
+      const x = sortedLevel1.length === 1 ? cx : level1StartX + idx * level1Spacing;
+      const y = levelY[1];
+      nodePositions.set(act.id, { x, y, ring: 1, angle: 0 });
+      result.push({
+        id: act.id,
+        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+        tipo: act.tipo,
+        act,
+        ring: 1,
+        angle: 0,
+        x,
+        y,
+      });
+    });
 
-      // ═══════════════════════════════════════════════════════════════════
-      // REGRA: Nós em cada anel são EQUIDISTANTES (distribuição uniforme)
-      // Começamos do topo (−π/2) e distribuímos no sentido horário
-      // ═══════════════════════════════════════════════════════════════════
-      const angleStep = (2 * Math.PI) / count;
-      const startAngle = -Math.PI / 2; // Topo do círculo (12 horas)
-      
-      // Ordenar nós por número para consistência visual
-      const sortedNodes = [...nodesInRing].sort((a, b) => {
-        // Extrair número para ordenação
-        const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
-        const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
-        return numA - numB;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NÍVEL 2: Decretos - distribuídos em arco horizontal abaixo das Leis
+    // ═══════════════════════════════════════════════════════════════════════════
+    const level2Nodes = nodesByLevel.get(2) || [];
+    const sortedLevel2 = [...level2Nodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
+    
+    // Wider spread for decrees - use more horizontal space
+    const level2Width = Math.min(dimensions.width * 0.85, sortedLevel2.length * 140);
+    const level2StartX = cx - level2Width / 2;
+    const level2Spacing = sortedLevel2.length > 1 ? level2Width / (sortedLevel2.length - 1) : 0;
+    
+    sortedLevel2.forEach((act, idx) => {
+      const x = sortedLevel2.length === 1 ? cx : level2StartX + idx * level2Spacing;
+      const y = levelY[2];
+      nodePositions.set(act.id, { x, y, ring: 2, angle: 0 });
+      result.push({
+        id: act.id,
+        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+        tipo: act.tipo,
+        act,
+        ring: 2,
+        angle: 0,
+        x,
+        y,
       });
-      
-      sortedNodes.forEach((act, idx) => {
-        const angle = startAngle + idx * angleStep;
-        
-        const x = cx + radius * Math.cos(angle);
-        const y = cy + radius * Math.sin(angle);
-        
-        nodePositions.set(act.id, { x, y, ring: ringIdx, angle });
-        result.push({
-          id: act.id,
-          label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
-          tipo: act.tipo,
-          act,
-          ring: ringIdx,
-          angle,
-          x,
-          y,
-        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NÍVEL 3: INs/Resoluções - nível mais baixo, distribuição horizontal
+    // ═══════════════════════════════════════════════════════════════════════════
+    const level3Nodes = nodesByLevel.get(3) || [];
+    const sortedLevel3 = [...level3Nodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
+    
+    const level3Width = Math.min(dimensions.width * 0.9, sortedLevel3.length * 120);
+    const level3StartX = cx - level3Width / 2;
+    const level3Spacing = sortedLevel3.length > 1 ? level3Width / (sortedLevel3.length - 1) : 0;
+    
+    sortedLevel3.forEach((act, idx) => {
+      const x = sortedLevel3.length === 1 ? cx : level3StartX + idx * level3Spacing;
+      const y = levelY[3];
+      nodePositions.set(act.id, { x, y, ring: 3, angle: 0 });
+      result.push({
+        id: act.id,
+        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+        tipo: act.tipo,
+        act,
+        ring: 3,
+        angle: 0,
+        x,
+        y,
       });
-    }
+    });
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CORREÇÃO CIRÚRGICA: Validar presença do Decreto 12.807/2025
@@ -681,10 +724,10 @@ export const RadialHierarchyView = ({
         const regulatedTargets = regulatoryTargets.get(node.id) || [];
         const regulatedParent = parentsInRing.find((p) => regulatedTargets.includes(p.id));
         
-        // Use regulatory parent if found, otherwise fall back to nearest by angle
+        // Use regulatory parent if found, otherwise fall back to nearest by X position (horizontal layout)
         const parent = regulatedParent || parentsInRing.reduce((a, b) => {
-          const distA = Math.abs(a.angle - node.angle);
-          const distB = Math.abs(b.angle - node.angle);
+          const distA = Math.abs(a.x - node.x);
+          const distB = Math.abs(b.x - node.x);
           return distA < distB ? a : b;
         });
         
@@ -803,8 +846,8 @@ export const RadialHierarchyView = ({
     return { 
       nodes: result, 
       links: graphLinks, 
-      ringRadii: radii, 
-      center: { x: cx, y: cy },
+      levelYPositions: Object.values(levelY), 
+      center: { x: cx, y: levelY[0] },
       regulatesCount,
       regulatedByCount,
       regulatesMap,
@@ -831,18 +874,14 @@ export const RadialHierarchyView = ({
         const indexInRing = idx % maxPerRing;
         const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
         
-        const baseRadius = 75;
-        const ringSpacing = 35;
-        const artigoRadius = baseRadius + ringIndex * ringSpacing;
+        // Para layout vertical, distribuir artigos horizontalmente abaixo do nó pai
+        const baseOffset = 50 + ringIndex * 30;
+        const artigoSpread = Math.min(300, countInThisRing * 25);
+        const artigoStartX = -artigoSpread / 2;
+        const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
         
-        const angleSpread = Math.min(Math.PI * 1.8, countInThisRing * 0.18);
-        const startAngle = node.angle - angleSpread / 2;
-        const artigoAngle = countInThisRing > 1 
-          ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
-          : node.angle;
-        
-        const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
-        const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
+        const artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
+        const artigoY = node.y + baseOffset;
         
         // Key: "actId:anchor" (e.g., "uuid:art.74")
         const rawAnchor = group.artigo.anchor;
@@ -1508,31 +1547,32 @@ export const RadialHierarchyView = ({
             className="overflow-visible"
           >
             <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-              {/* Ring circles */}
-              {ringRadii.slice(1).map((radius, index) => (
-                <circle
-                  key={`ring-${index + 1}`}
-                  cx={center.x}
-                  cy={center.y}
-                  r={radius}
-                  fill="none"
+              {/* Horizontal level guidelines */}
+              {levelYPositions.slice(1).map((yPos, index) => (
+                <line
+                  key={`level-line-${index + 1}`}
+                  x1={40}
+                  y1={yPos}
+                  x2={dimensions.width - 40}
+                  y2={yPos}
                   stroke="hsl(220, 10%, 85%)"
                   strokeWidth={0.5}
                   strokeDasharray="4 4"
-                  opacity={0.4}
+                  opacity={0.3}
                 />
               ))}
 
-              {/* Ring labels */}
-              {ringRadii.slice(1).map((radius, index) => (
+              {/* Level labels on the left */}
+              {levelYPositions.map((yPos, index) => (
                 <text
-                  key={`ring-label-${index + 1}`}
-                  x={center.x}
-                  y={center.y - radius - 8}
-                  textAnchor="middle"
+                  key={`level-label-${index}`}
+                  x={20}
+                  y={yPos}
+                  textAnchor="start"
+                  dominantBaseline="middle"
                   className="fill-muted-foreground text-[10px] font-medium"
                 >
-                  {ringLabels[index + 1]}
+                  {ringLabels[index]}
                 </text>
               ))}
 
@@ -1871,19 +1911,14 @@ export const RadialHierarchyView = ({
                       const indexInRing = idx % maxPerRing;
                       const countInThisRing = Math.min(maxPerRing, count - ringIndex * maxPerRing);
                       
-                      const baseRadius = 75; // Adjusted for larger pill nodes
-                      const ringSpacing = 35;
-                      const artigoRadius = baseRadius + ringIndex * ringSpacing;
+                      // Para layout vertical, distribuir artigos horizontalmente abaixo do nó pai
+                      const baseOffset = 50 + ringIndex * 30;
+                      const artigoSpread = Math.min(300, countInThisRing * 25);
+                      const artigoStartX = -artigoSpread / 2;
+                      const artigoSpacing = countInThisRing > 1 ? artigoSpread / (countInThisRing - 1) : 0;
                       
-                      // Distribute around parent node
-                      const angleSpread = Math.min(Math.PI * 1.8, countInThisRing * 0.18);
-                      const startAngle = node.angle - angleSpread / 2;
-                      const artigoAngle = countInThisRing > 1 
-                        ? startAngle + (indexInRing / (countInThisRing - 1)) * angleSpread
-                        : node.angle;
-                      
-                      const artigoX = node.x + artigoRadius * Math.cos(artigoAngle);
-                      const artigoY = node.y + artigoRadius * Math.sin(artigoAngle);
+                      const artigoX = node.x + (countInThisRing === 1 ? 0 : artigoStartX + indexInRing * artigoSpacing);
+                      const artigoY = node.y + baseOffset;
 
                       // Check if this article is a target of a connection line and get source color
                       const artigoKey = `${node.id}:${normalizeAnchor(group.artigo.anchor)}`;

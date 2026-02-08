@@ -30,7 +30,7 @@ const categories: Category[] = [
   },
   {
     icon: Network,
-    title: "Mapas",
+    title: "Mapa Relacional",
     description: "Visualize grafos de dependências normativas, dispositivos centrais e caminhos entre normas.",
     tab: "mapas",
   },

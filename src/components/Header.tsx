@@ -13,7 +13,7 @@ const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Relatórios", tab: "relatorios", icon: FileBarChart },
   { label: "Consultas", tab: "consultas", icon: Search },
-  { label: "Mapas", tab: "mapas", icon: Network },
+  { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
 ];
 

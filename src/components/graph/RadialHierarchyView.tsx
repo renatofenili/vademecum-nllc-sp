@@ -478,7 +478,7 @@ export const RadialHierarchyView = ({
     return { ring: minRing, offset: maxOffset };
   }, [expandedDispositivosMap, data?.nodes]);
 
-  // Build hierarchical vertical nodes and links
+  // Build hierarchical nodes with parallel regulatory domains
   const { nodes, links, levelYPositions, center, regulatesCount, regulatedByCount, regulatesMap, regulatedByMap } = useMemo(() => {
     if (!data || !data.nodes.length) {
       return { 
@@ -494,25 +494,20 @@ export const RadialHierarchyView = ({
     }
 
     const cx = dimensions.width / 2;
-    const topPadding = 60;
-    const bottomPadding = 40;
+    const topPadding = 50;
+    const bottomPadding = 30;
     const availableHeight = dimensions.height - topPadding - bottomPadding;
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // LAYOUT HIERÁRQUICO VERTICAL: fundamento → regulamentação → operacionalização
-    // CF no topo → Leis → Decretos → INs/Resoluções na base
+    // LAYOUT COM PARALELISMO NORMATIVO
+    // CF (topo) → Lei (centro) → Três domínios paralelos de regulamentação
     // ═══════════════════════════════════════════════════════════════════════════
-    const numLevels = 4;
-    const levelSpacing = availableHeight / (numLevels - 1);
     
-    // Y positions for each level (top to bottom)
-    const levelY: Record<number, number> = {
-      0: topPadding,                           // CF - topo
-      1: topPadding + levelSpacing,            // Leis
-      2: topPadding + levelSpacing * 2,        // Decretos
-      3: topPadding + levelSpacing * 3,        // INs/Resoluções
-    };
-
+    // Vertical positions
+    const cfY = topPadding;                              // CF no topo
+    const leiY = topPadding + availableHeight * 0.25;    // Lei abaixo da CF
+    const regulamentacaoY = topPadding + availableHeight * 0.65; // Centro dos arcos
+    
     // Build a map of regulatory relationships from edges data
     const regulatoryTargets = new Map<string, string[]>();
     if (data.edges) {
@@ -526,17 +521,32 @@ export const RadialHierarchyView = ({
       });
     }
 
-    // Group nodes by level
-    const nodesByLevel: Map<number, ActNode[]> = new Map([
-      [0, []],
-      [1, []],
-      [2, []],
-      [3, []],
-    ]);
+    // Separate nodes by type for the three domains
+    const cfNodes: ActNode[] = [];
+    const leiNodes: ActNode[] = [];
+    const decretoNodes: ActNode[] = [];      // Regulamentação executiva (esquerda)
+    const inNodes: ActNode[] = [];           // Regulamentação administrativa (centro-baixo)
+    const resolucaoNodes: ActNode[] = [];    // Regulamentação colegiada (direita)
 
     data.nodes.forEach((node) => {
-      const level = tipoToRing[node.tipo] ?? 3;
-      nodesByLevel.get(level)!.push(node);
+      const tipo = node.tipo;
+      if (tipo === 'constituicao') {
+        cfNodes.push(node);
+      } else if (tipo === 'lei' || tipo === 'lei_federal' || tipo === 'lei_estadual' || tipo === 'lei_complementar') {
+        leiNodes.push(node);
+      } else if (tipo === 'decreto') {
+        decretoNodes.push(node);
+      } else if (tipo === 'instrucao_normativa') {
+        inNodes.push(node);
+      } else if (tipo === 'resolucao') {
+        resolucaoNodes.push(node);
+      } else if (tipo === 'portaria') {
+        // Portarias vão para INs (regulamentação administrativa)
+        inNodes.push(node);
+      } else {
+        // Outros tipos vão para INs por padrão
+        inNodes.push(node);
+      }
     });
 
     const result: RingNode[] = [];
@@ -545,10 +555,9 @@ export const RadialHierarchyView = ({
     // ═══════════════════════════════════════════════════════════════════════════
     // NÍVEL 0: CF/1988 - posição fixa no topo central
     // ═══════════════════════════════════════════════════════════════════════════
-    const level0Nodes = nodesByLevel.get(0) || [];
-    level0Nodes.forEach((act) => {
+    cfNodes.forEach((act) => {
       const x = cx;
-      const y = levelY[0];
+      const y = cfY;
       nodePositions.set(act.id, { x, y, ring: 0, angle: 0 });
       result.push({
         id: act.id,
@@ -563,22 +572,21 @@ export const RadialHierarchyView = ({
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 1: Leis - centralizadas abaixo da CF
+    // NÍVEL 1: Lei - eixo central, abaixo da CF
     // ═══════════════════════════════════════════════════════════════════════════
-    const level1Nodes = nodesByLevel.get(1) || [];
-    const sortedLevel1 = [...level1Nodes].sort((a, b) => {
+    const sortedLeis = [...leiNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
       const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
       return numA - numB;
     });
     
-    const level1Width = Math.min(dimensions.width * 0.6, sortedLevel1.length * 180);
-    const level1StartX = cx - level1Width / 2;
-    const level1Spacing = sortedLevel1.length > 1 ? level1Width / (sortedLevel1.length - 1) : 0;
+    const leiWidth = Math.min(dimensions.width * 0.4, sortedLeis.length * 180);
+    const leiStartX = cx - leiWidth / 2;
+    const leiSpacing = sortedLeis.length > 1 ? leiWidth / (sortedLeis.length - 1) : 0;
     
-    sortedLevel1.forEach((act, idx) => {
-      const x = sortedLevel1.length === 1 ? cx : level1StartX + idx * level1Spacing;
-      const y = levelY[1];
+    sortedLeis.forEach((act, idx) => {
+      const x = sortedLeis.length === 1 ? cx : leiStartX + idx * leiSpacing;
+      const y = leiY;
       nodePositions.set(act.id, { x, y, ring: 1, angle: 0 });
       result.push({
         id: act.id,
@@ -592,66 +600,121 @@ export const RadialHierarchyView = ({
       });
     });
 
+    // Ponto de referência: centro da Lei (para os arcos partirem dela)
+    const leiCenterX = cx;
+    const leiCenterY = leiY;
+    const arcRadius = availableHeight * 0.35; // Raio dos arcos
+
     // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 2: Decretos - distribuídos em arco horizontal abaixo das Leis
+    // DOMÍNIO 1: Regulamentação Executiva (Decretos) - ARCO LATERAL ESQUERDO
+    // Ângulo: 180° a 240° (setor esquerdo-inferior)
     // ═══════════════════════════════════════════════════════════════════════════
-    const level2Nodes = nodesByLevel.get(2) || [];
-    const sortedLevel2 = [...level2Nodes].sort((a, b) => {
+    const sortedDecretos = [...decretoNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
       const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
       return numA - numB;
     });
     
-    // Wider spread for decrees - use more horizontal space
-    const level2Width = Math.min(dimensions.width * 0.85, sortedLevel2.length * 140);
-    const level2StartX = cx - level2Width / 2;
-    const level2Spacing = sortedLevel2.length > 1 ? level2Width / (sortedLevel2.length - 1) : 0;
+    const decretoStartAngle = Math.PI * 0.65;  // ~117° (esquerda-baixo)
+    const decretoEndAngle = Math.PI * 1.1;     // ~198° (esquerda-baixo)
+    const decretoAngleSpread = decretoEndAngle - decretoStartAngle;
     
-    sortedLevel2.forEach((act, idx) => {
-      const x = sortedLevel2.length === 1 ? cx : level2StartX + idx * level2Spacing;
-      const y = levelY[2];
-      nodePositions.set(act.id, { x, y, ring: 2, angle: 0 });
+    sortedDecretos.forEach((act, idx) => {
+      const count = sortedDecretos.length;
+      const angle = count === 1 
+        ? (decretoStartAngle + decretoEndAngle) / 2 
+        : decretoStartAngle + (idx / (count - 1)) * decretoAngleSpread;
+      
+      const x = leiCenterX + arcRadius * Math.cos(angle);
+      const y = leiCenterY + arcRadius * Math.sin(angle);
+      
+      nodePositions.set(act.id, { x, y, ring: 2, angle });
       result.push({
         id: act.id,
         label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
         tipo: act.tipo,
         act,
         ring: 2,
-        angle: 0,
+        angle,
         x,
         y,
       });
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NÍVEL 3: INs/Resoluções - nível mais baixo, distribuição horizontal
+    // DOMÍNIO 2: Regulamentação Administrativa (INs/Portarias) - ARCO INFERIOR CENTRAL
+    // Ângulo: 240° a 300° (setor inferior)
     // ═══════════════════════════════════════════════════════════════════════════
-    const level3Nodes = nodesByLevel.get(3) || [];
-    const sortedLevel3 = [...level3Nodes].sort((a, b) => {
+    const sortedINs = [...inNodes].sort((a, b) => {
       const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
       const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
       return numA - numB;
     });
     
-    const level3Width = Math.min(dimensions.width * 0.9, sortedLevel3.length * 120);
-    const level3StartX = cx - level3Width / 2;
-    const level3Spacing = sortedLevel3.length > 1 ? level3Width / (sortedLevel3.length - 1) : 0;
+    const inStartAngle = Math.PI * 1.15;   // ~207° (centro-baixo esquerda)
+    const inEndAngle = Math.PI * 1.85;     // ~333° (centro-baixo direita)
+    const inAngleSpread = inEndAngle - inStartAngle;
     
-    sortedLevel3.forEach((act, idx) => {
-      const x = sortedLevel3.length === 1 ? cx : level3StartX + idx * level3Spacing;
-      const y = levelY[3];
-      nodePositions.set(act.id, { x, y, ring: 3, angle: 0 });
+    sortedINs.forEach((act, idx) => {
+      const count = sortedINs.length;
+      const angle = count === 1 
+        ? Math.PI * 1.5  // Exatamente embaixo (270°)
+        : inStartAngle + (idx / (count - 1)) * inAngleSpread;
+      
+      const x = leiCenterX + arcRadius * Math.cos(angle);
+      const y = leiCenterY + arcRadius * Math.sin(angle);
+      
+      nodePositions.set(act.id, { x, y, ring: 3, angle });
       result.push({
         id: act.id,
         label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
         tipo: act.tipo,
         act,
         ring: 3,
-        angle: 0,
+        angle,
         x,
         y,
       });
     });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DOMÍNIO 3: Regulamentação Colegiada (Resoluções) - ARCO LATERAL DIREITO
+    // Ângulo: 300° a 360° (setor direito-inferior)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const sortedResolucoes = [...resolucaoNodes].sort((a, b) => {
+      const numA = parseInt(a.numero?.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.numero?.replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
+    
+    const resolucaoStartAngle = Math.PI * 1.9;  // ~342° (direita-baixo)
+    const resolucaoEndAngle = Math.PI * 2.35;   // ~423° = 63° (direita-baixo)
+    const resolucaoAngleSpread = resolucaoEndAngle - resolucaoStartAngle;
+    
+    sortedResolucoes.forEach((act, idx) => {
+      const count = sortedResolucoes.length;
+      const angle = count === 1 
+        ? (resolucaoStartAngle + resolucaoEndAngle) / 2 
+        : resolucaoStartAngle + (idx / (count - 1)) * resolucaoAngleSpread;
+      
+      const x = leiCenterX + arcRadius * Math.cos(angle);
+      const y = leiCenterY + arcRadius * Math.sin(angle);
+      
+      nodePositions.set(act.id, { x, y, ring: 3, angle });
+      result.push({
+        id: act.id,
+        label: `${tipoLabels[act.tipo] || act.tipo} ${act.numero}`,
+        tipo: act.tipo,
+        act,
+        ring: 3,
+        angle,
+        x,
+        y,
+      });
+    });
+
+    // Y positions for level labels (approximate)
+    const levelYPositions = [cfY, leiY, regulamentacaoY, regulamentacaoY + 60];
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CORREÇÃO CIRÚRGICA: Validar presença do Decreto 12.807/2025
@@ -846,8 +909,8 @@ export const RadialHierarchyView = ({
     return { 
       nodes: result, 
       links: graphLinks, 
-      levelYPositions: Object.values(levelY), 
-      center: { x: cx, y: levelY[0] },
+      levelYPositions, 
+      center: { x: cx, y: cfY },
       regulatesCount,
       regulatedByCount,
       regulatesMap,
@@ -1548,7 +1611,7 @@ export const RadialHierarchyView = ({
           >
             <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
               {/* Horizontal level guidelines */}
-              {levelYPositions.slice(1).map((yPos, index) => (
+              {levelYPositions.slice(1).map((yPos: number, index: number) => (
                 <line
                   key={`level-line-${index + 1}`}
                   x1={40}
@@ -1563,7 +1626,7 @@ export const RadialHierarchyView = ({
               ))}
 
               {/* Level labels on the left */}
-              {levelYPositions.map((yPos, index) => (
+              {levelYPositions.map((yPos: number, index: number) => (
                 <text
                   key={`level-label-${index}`}
                   x={20}
@@ -1572,7 +1635,7 @@ export const RadialHierarchyView = ({
                   dominantBaseline="middle"
                   className="fill-muted-foreground text-[10px] font-medium"
                 >
-                  {ringLabels[index]}
+                  {ringLabels[index] || ''}
                 </text>
               ))}
 

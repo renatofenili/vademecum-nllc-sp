@@ -1940,6 +1940,17 @@ export const RadialHierarchyView = ({
                            normAnchor === "art.60" || normAnchor === "art60" ||
                            normAnchor === "art.156" || normAnchor === "art156";
                   }
+
+                  // Decreto 68.021 -> Lei 14.133 art. 19
+                  if (link.fromNodeId === decreto68021ActId) {
+                    return normAnchor === "art.19" || normAnchor === "art19";
+                  }
+
+                  // Decreto 68.185 -> Lei 14.133 arts. 6 e 40
+                  if (link.fromNodeId === decreto68185ActId) {
+                    return normAnchor === "art.6" || normAnchor === "art6" ||
+                           normAnchor === "art.40" || normAnchor === "art40";
+                  }
                   
                   return false;
                 })

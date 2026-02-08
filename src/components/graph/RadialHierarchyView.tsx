@@ -555,7 +555,7 @@ export const RadialHierarchyView = ({
         return { line1: "Decreto", line2: numero };
       }
       if (act.tipo === "instrucao_normativa") {
-        return { line1: "Instrução", line2: `Normativa ${numero}` };
+        return { line1: "IN", line2: numero };
       }
       if (act.tipo === "resolucao") {
         return { line1: "Resolução", line2: numero };

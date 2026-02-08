@@ -253,51 +253,66 @@ const MapaCalorTab = () => {
           <div className="bg-slate-800 rounded-xl p-6 md:p-8 overflow-x-auto">
             <div className="min-w-[900px]">
               {/* Main Flow */}
-              <div className="flex items-center gap-2 mb-8">
+              {/* Main Flow - Horizontal line */}
+              <div className="flex items-start gap-2 mb-8">
                 <FlowBox label="PCA" count={getBoxCount("PCA")} maxCount={maxCount} rounded="left" />
-                <Arrow />
+                <Arrow className="mt-4" />
                 <FlowBox label="ETP" count={getBoxCount("ETP")} maxCount={maxCount} />
-                <Arrow />
+                <Arrow className="mt-4" />
                 <FlowBox label="Pesquisa de preços" count={getBoxCount("Pesquisa de preços")} maxCount={maxCount} />
-                <Arrow />
+                <Arrow className="mt-4" />
                 <FlowBox label="Termo de referência" count={getBoxCount("Termo de referência")} maxCount={maxCount} />
                 
-                {/* Bifurcation after Termo de referência */}
-                <div className="flex flex-col items-start">
-                  {/* Arrow splitting down */}
-                  <div className="flex">
-                    <svg width="40" height="80" viewBox="0 0 40 80" fill="none" className="text-muted-foreground">
-                      <path d="M0 40H20V10H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                      <path d="M29 4L35 10L29 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M20 40V70H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                      <path d="M29 64L35 70L29 76" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                {/* Bifurcation: Licitação (top) / Contratação direta (bottom) */}
+                <div className="flex flex-col items-start relative">
+                  {/* Vertical split line from center */}
+                  <svg width="40" height="200" viewBox="0 0 40 200" fill="none" className="text-muted-foreground absolute left-0 top-0">
+                    {/* Line from left to center, then splits up and down */}
+                    <path d="M0 55H20V20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M14 26L20 20L26 26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M20 55V150" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M14 144L20 150L26 144" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  
+                  <div className="ml-10 flex flex-col">
+                    {/* Top row: Licitação → Gestão de contrato */}
+                    <div className="flex items-center gap-2 mb-16">
+                      <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
+                      {/* Curved arrow going right then down to Gestão de contrato */}
+                      <svg width="180" height="60" viewBox="0 0 180 60" fill="none" className="text-muted-foreground">
+                        <path d="M0 10H160V55" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M154 49L160 55L166 49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                     
-                    <div className="flex flex-col gap-6">
-                      {/* Top path: Licitação → Gestão de contrato */}
-                      <div className="flex items-center gap-2">
-                        <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
-                        <Arrow />
-                        <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
-                      </div>
+                    {/* Bottom section: Contratação direta with its sub-branches */}
+                    <div className="flex items-start gap-2">
+                      <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
                       
-                      {/* Bottom path: Contratação direta → Dispensa/Inexigibilidade → Gestão de contrato */}
-                      <div className="flex items-center gap-2">
-                        <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
-                        <Arrow />
+                      {/* Sub-split for Dispensa and Inexigibilidade */}
+                      <div className="flex flex-col items-start relative">
+                        <svg width="40" height="120" viewBox="0 0 40 120" fill="none" className="text-muted-foreground absolute left-0 top-0">
+                          <path d="M0 35H20V10H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M29 4L35 10L29 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M20 35V95H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M29 89L35 95L29 101" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
                         
-                        {/* Sub-bifurcation for Dispensa and Inexigibilidade */}
-                        <div className="flex flex-col gap-2">
+                        <div className="ml-10 flex flex-col gap-8">
+                          {/* Dispensa de licitação → Gestão de contrato */}
                           <div className="flex items-center gap-2">
                             <FlowBox label="Dispensa de licitação" count={getBoxCount("Dispensa de licitação")} maxCount={maxCount} />
-                            <svg width="50" height="20" viewBox="0 0 50 20" fill="none" className="text-muted-foreground">
-                              <path d="M0 10H30C40 10 40 -15 60 -15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                            </svg>
+                            <Arrow />
+                            <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
                           </div>
+                          
+                          {/* Inexigibilidade → (arrow up to Gestão de contrato) */}
                           <div className="flex items-center gap-2">
                             <FlowBox label="Inexigibilidade" count={getBoxCount("Inexigibilidade")} maxCount={maxCount} />
-                            <svg width="50" height="20" viewBox="0 0 50 20" fill="none" className="text-muted-foreground">
-                              <path d="M0 10H30C40 10 40 -40 60 -40" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                            {/* Curved arrow going up to Gestão de contrato */}
+                            <svg width="100" height="50" viewBox="0 0 100 50" fill="none" className="text-muted-foreground">
+                              <path d="M0 25H60V0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                              <path d="M54 6L60 0L66 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </div>
                         </div>

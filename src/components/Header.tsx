@@ -36,7 +36,7 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
               textShadow: '0 0 4px hsl(0 72% 50% / 0.4), 0 0 8px hsl(0 72% 50% / 0.2)' 
             }}
           >
-            Vade-Mécum em Licitações
+            Vade-Mécum em Licitações SGGD SP
           </span>
         </button>
 

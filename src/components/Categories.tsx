@@ -24,8 +24,8 @@ const categories: Category[] = [
   },
   {
     icon: Search,
-    title: "Consultas",
-    description: "Descreva uma situação ou evento e receba os dispositivos normativos aplicáveis de forma estruturada.",
+    title: "Consulta por Dispositivo",
+    description: "Pesquise por artigo, parágrafo ou inciso específico de qualquer norma cadastrada.",
     tab: "consultas",
   },
   {

@@ -10,7 +10,7 @@ const Footer = ({ onTabChange }: FooterProps) => {
     { label: "Início", tab: "home" },
     { label: "Normas", tab: "normas" },
     { label: "Relatórios", tab: "relatorios" },
-    { label: "Consultas", tab: "consultas" },
+    { label: "Consulta por Dispositivo", tab: "consultas" },
     { label: "Mapa Relacional", tab: "mapas" },
     { label: "Mapa de Calor", tab: "mapacalor" },
   ];

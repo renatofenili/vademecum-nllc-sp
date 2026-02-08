@@ -20,10 +20,19 @@ const Hero = ({ onNavigate }: HeroProps) => {
           />
         </div>
         
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-foreground mb-4">
           Normas de Licitações e Contratos
           <br />
           <span className="text-primary">do Estado de São Paulo</span>
+          {" "}
+          <span 
+            className="text-primary font-extrabold animate-pulse"
+            style={{ 
+              textShadow: '0 0 10px hsl(0, 72%, 50%), 0 0 20px hsl(0, 72%, 50%), 0 0 30px hsl(0, 72%, 60%)' 
+            }}
+          >
+            SP
+          </span>
         </h1>
         
         <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">

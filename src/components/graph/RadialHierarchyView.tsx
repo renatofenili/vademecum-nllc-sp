@@ -2145,30 +2145,49 @@ export const RadialHierarchyView = ({
                             }}
                             className="cursor-pointer"
                           >
-                            {/* Glow filter for linked articles - same color as source decree */}
+                            {/* Glow filter for linked articles - VERMELHO com gloss */}
                             {isLinkedArticle && (
-                              <circle
-                                r={22}
-                                fill="none"
-                                stroke={linkedColor}
-                                strokeWidth={3}
-                                opacity={0.6}
-                                className="animate-pulse"
-                              />
+                              <>
+                                {/* Outer glow - soft red halo */}
+                                <circle
+                                  r={26}
+                                  fill="none"
+                                  stroke="hsl(0, 80%, 50%)"
+                                  strokeWidth={4}
+                                  opacity={0.3}
+                                  style={{ filter: "blur(4px)" }}
+                                />
+                                {/* Inner glow ring - pulsing */}
+                                <circle
+                                  r={20}
+                                  fill="none"
+                                  stroke="hsl(0, 85%, 55%)"
+                                  strokeWidth={3}
+                                  opacity={0.7}
+                                  className="animate-pulse"
+                                />
+                              </>
                             )}
                             <circle
                               r={14}
-                              fill={isLinkedArticle ? `color-mix(in srgb, ${linkedColor} 15%, white 85%)` : "white"}
-                              stroke={isLinkedArticle ? linkedColor : color}
+                              fill={isLinkedArticle ? "hsl(0, 90%, 97%)" : "white"}
+                              stroke={isLinkedArticle ? "hsl(0, 80%, 50%)" : color}
                               strokeWidth={isLinkedArticle ? 2.5 : 2}
                               strokeOpacity={isLinkedArticle ? 1 : 0.6}
                               className="transition-all duration-200 hover:brightness-95"
+                              style={isLinkedArticle ? { 
+                                filter: "drop-shadow(0 0 6px hsl(0, 80%, 60%))",
+                              } : undefined}
                             />
                             <text
                               textAnchor="middle"
                               dominantBaseline="central"
-                              className="fill-foreground font-semibold pointer-events-none"
-                              style={{ fontSize: 7 }}
+                              className="pointer-events-none"
+                              style={{ 
+                                fontSize: 7, 
+                                fontWeight: isLinkedArticle ? 700 : 600,
+                                fill: isLinkedArticle ? "hsl(0, 70%, 35%)" : "hsl(220, 15%, 20%)"
+                              }}
                             >
                               {group.artigo.anchor.replace(/^art\.?/i, "").trim() || `A${idx + 1}`}
                             </text>

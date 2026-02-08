@@ -257,6 +257,8 @@ Deno.serve(async (req) => {
     "68.304": ["art.74", "art.75"], // Decreto 68.304/2024 -> arts. 74 e 75
     "68.422": ["art.31"],  // Decreto 68.422/2024 -> art. 31
     "69.233": ["art.174"], // Decreto 69.233/2024 -> art. 174
+    "68.021": ["art.19"],  // Decreto 68.021/2023 -> art. 19
+    "68.185": ["art.6", "art.40"], // Decreto 68.185/2023 -> arts. 6 e 40
 
     // NOVAS RELAÇÕES (toggle "Regulamenta")
     "12.807": ["art.182"], // Decreto 12.807/2025 -> art. 182

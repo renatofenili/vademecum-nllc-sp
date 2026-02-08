@@ -159,10 +159,10 @@ const RelatoriosTab = () => {
               <Card
                 key={norma.id}
                 className={cn(
-                  "group transition-all duration-300 overflow-hidden",
+                  "group transition-all duration-300 overflow-hidden border",
                   temAnalise 
-                    ? "cursor-pointer hover:shadow-xl hover:scale-[1.02] hover:border-primary/40" 
-                    : "bg-muted/60 opacity-70",
+                    ? "cursor-pointer hover:shadow-xl hover:scale-[1.02] border-primary/30 bg-card shadow-md" 
+                    : "bg-slate-800/90 dark:bg-slate-900 border-slate-700",
                   selectedNorma?.id === norma.id && "ring-2 ring-primary"
                 )}
                 onClick={() => temAnalise && setSelectedNorma(norma)}
@@ -171,7 +171,7 @@ const RelatoriosTab = () => {
                   <div className="flex items-start justify-between gap-2">
                     <div className={cn(
                       "flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-300",
-                      temAnalise ? getTipoColor(norma.tipo) : "bg-muted-foreground/20 text-muted-foreground",
+                      temAnalise ? getTipoColor(norma.tipo) : "bg-slate-600 text-slate-400",
                       temAnalise && "group-hover:scale-110"
                     )}>
                       <Icon className="h-5 w-5" />
@@ -180,7 +180,7 @@ const RelatoriosTab = () => {
                       variant="outline" 
                       className={cn(
                         "text-xs border", 
-                        temAnalise ? getTipoColor(norma.tipo) : "bg-muted text-muted-foreground border-muted-foreground/30"
+                        temAnalise ? getTipoColor(norma.tipo) : "bg-slate-700 text-slate-400 border-slate-600"
                       )}
                     >
                       {formatTipo(norma.tipo)}
@@ -188,37 +188,46 @@ const RelatoriosTab = () => {
                   </div>
                   <CardTitle className={cn(
                     "text-lg mt-3 transition-colors line-clamp-1",
-                    temAnalise ? "group-hover:text-primary" : "text-muted-foreground"
+                    temAnalise ? "text-foreground group-hover:text-primary" : "text-slate-400"
                   )}>
                     {formatTipo(norma.tipo)} {norma.numero}
                   </CardTitle>
-                  <CardDescription className="line-clamp-2 text-sm">
+                  <CardDescription className={cn(
+                    "line-clamp-2 text-sm",
+                    !temAnalise && "text-slate-500"
+                  )}>
                     {norma.ementa}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className={cn(
                     "rounded-lg p-3 mb-3",
-                    temAnalise ? "bg-muted/40" : "bg-muted/20"
+                    temAnalise ? "bg-muted/40" : "bg-slate-700/50"
                   )}>
-                    <p className="text-sm text-muted-foreground line-clamp-3">
+                    <p className={cn(
+                      "text-sm line-clamp-3",
+                      temAnalise ? "text-muted-foreground" : "text-slate-500"
+                    )}>
                       {temAnalise 
                         ? `${extrairResumo(norma.analise_norma, 150)}...`
                         : "Texto em linguagem simples em breve..."
                       }
                     </p>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className={cn(
+                    "flex items-center justify-between text-xs",
+                    temAnalise ? "text-muted-foreground" : "text-slate-500"
+                  )}>
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {formatDateBR(norma.data_publicacao)}
                     </span>
                     {temAnalise ? (
-                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs group-hover:text-primary">
+                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
                         Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                       </Button>
                     ) : (
-                      <Badge variant="outline" className="text-xs bg-muted/50 text-muted-foreground border-muted-foreground/30">
+                      <Badge variant="outline" className="text-xs bg-slate-700 text-slate-400 border-slate-600">
                         Em breve
                       </Badge>
                     )}

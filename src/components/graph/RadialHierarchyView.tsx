@@ -587,7 +587,8 @@ export const RadialHierarchyView = ({
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 1: DECRETOS (mais próximo da Lei)
+    // ANEL 1: DECRETOS - RAIO FIXO, equidistantes da Lei
+    // Distribuição angular uniforme, sem empurro radial
     // ═══════════════════════════════════════════════════════════════════════════
     const sortByNumero = (a: ActNode, b: ActNode) => {
       const numA = parseInt(a.numero?.replace(/\D/g, "") || "0", 10);
@@ -597,29 +598,17 @@ export const RadialHierarchyView = ({
 
     const sortedDecretos = [...decretoNodes].sort(sortByNumero);
     const decretosCount = sortedDecretos.length;
-    const baseRadiusRing1 = Math.min(dimensions.width, dimensions.height) * 0.22;
+    
+    // Raio fixo para todos os decretos
+    const RADIUS_DECRETOS = Math.min(dimensions.width, dimensions.height) * 0.28;
 
     sortedDecretos.forEach((act, idx) => {
       const { w, h } = estimateNodeSize(act, 1);
       
       // Distribuir uniformemente em 360° (começando de 270° = topo)
       const angle = degToRad(270 + (idx / decretosCount) * 360);
-      let radius = baseRadiusRing1;
-      let x = cx + radius * Math.cos(angle);
-      let y = cy + radius * Math.sin(angle);
-      
-      // Empurrar radialmente até não colidir
-      let collides = true;
-      let iterations = 0;
-      while (collides && iterations < 200) {
-        collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
-        if (collides) {
-          radius += h + MIN_GAP / 2;
-          x = cx + radius * Math.cos(angle);
-          y = cy + radius * Math.sin(angle);
-        }
-        iterations++;
-      }
+      const x = cx + RADIUS_DECRETOS * Math.cos(angle);
+      const y = cy + RADIUS_DECRETOS * Math.sin(angle);
 
       placedObstacles.push({ x, y, w, h });
       nodePositions.set(act.id, { x, y, ring: 1, angle });
@@ -636,39 +625,22 @@ export const RadialHierarchyView = ({
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ANEL 2: INs e RESOLUÇÕES (mais distantes da Lei)
+    // ANEL 2: INs e RESOLUÇÕES - RAIO FIXO, equidistantes da Lei
+    // Distribuição angular uniforme com offset para não alinhar com decretos
     // ═══════════════════════════════════════════════════════════════════════════
     const sortedINsResolucoes = [...inResolucaoNodes].sort(sortByNumero);
     const insCount = sortedINsResolucoes.length;
     
-    // Raio maior para o anel 2 (após todos os decretos)
-    const maxDecretoRadius = placedObstacles.reduce((max, p) => {
-      const dist = Math.hypot(p.x - cx, p.y - cy) + Math.max(p.w, p.h) / 2;
-      return Math.max(max, dist);
-    }, baseRadiusRing1);
-    const baseRadiusRing2 = maxDecretoRadius + 80;
+    // Raio fixo para INs/Resoluções (maior que decretos)
+    const RADIUS_INS = RADIUS_DECRETOS + 120;
 
     sortedINsResolucoes.forEach((act, idx) => {
       const { w, h } = estimateNodeSize(act, 2);
       
       // Distribuir uniformemente em 360° (offset de 15° para não alinhar com decretos)
       const angle = degToRad(285 + (idx / insCount) * 360);
-      let radius = baseRadiusRing2;
-      let x = cx + radius * Math.cos(angle);
-      let y = cy + radius * Math.sin(angle);
-      
-      // Empurrar radialmente até não colidir
-      let collides = true;
-      let iterations = 0;
-      while (collides && iterations < 200) {
-        collides = placedObstacles.some((p) => rectsOverlap(x, y, w, h, p.x, p.y, p.w, p.h));
-        if (collides) {
-          radius += h + MIN_GAP / 2;
-          x = cx + radius * Math.cos(angle);
-          y = cy + radius * Math.sin(angle);
-        }
-        iterations++;
-      }
+      const x = cx + RADIUS_INS * Math.cos(angle);
+      const y = cy + RADIUS_INS * Math.sin(angle);
 
       placedObstacles.push({ x, y, w, h });
       nodePositions.set(act.id, { x, y, ring: 2, angle });

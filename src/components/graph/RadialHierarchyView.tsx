@@ -267,9 +267,9 @@ export const RadialHierarchyView = ({
   };
 
   // Function to load dispositivos for a node (supports multiple expansions)
-  const loadDispositivos = useCallback(async (actId: string) => {
-    // If already expanded for this node, collapse it
-    if (expandedDispositivosMap.has(actId) && !expandedDispositivosMap.get(actId)?.isLoading) {
+  const loadDispositivos = useCallback(async (actId: string, forceExpand = false) => {
+    // If already expanded for this node and not forcing, collapse it (toggle behavior)
+    if (!forceExpand && expandedDispositivosMap.has(actId) && !expandedDispositivosMap.get(actId)?.isLoading) {
       setExpandedDispositivosMap(prev => {
         const newMap = new Map(prev);
         newMap.delete(actId);
@@ -404,8 +404,8 @@ export const RadialHierarchyView = ({
     (actId: string) => {
       const expanded = expandedDispositivosMap.get(actId);
       if (expanded && (expanded.isLoading || expanded.artigoGroups.length > 0)) return;
-      // Only expand when not already expanded/loading (avoid the toggle-collapse behavior)
-      void loadDispositivos(actId);
+      // Force expand (don't toggle) - used for automatic expansion when Regulamenta is enabled
+      void loadDispositivos(actId, true);
     },
     [expandedDispositivosMap, loadDispositivos]
   );

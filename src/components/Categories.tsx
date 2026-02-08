@@ -17,12 +17,6 @@ const categories: Category[] = [
     tab: "normas",
   },
   {
-    icon: FileBarChart,
-    title: "Relatórios",
-    description: "Relatórios pré-definidos e análises consolidadas sobre cadeias normativas, inexigibilidade e outros temas.",
-    tab: "relatorios",
-  },
-  {
     icon: Search,
     title: "Busca por Dispositivo",
     description: "Pesquise por artigo, parágrafo ou inciso específico de qualquer norma cadastrada.",
@@ -39,6 +33,12 @@ const categories: Category[] = [
     title: "Mapa de Calor",
     description: "Visualize a jornada da contratação pública com a intensidade normativa de cada etapa.",
     tab: "mapacalor",
+  },
+  {
+    icon: FileBarChart,
+    title: "Linguagem Simples!",
+    description: "Traduza normas jurídicas complexas para uma linguagem acessível e compreensível.",
+    tab: "relatorios",
   },
 ];
 

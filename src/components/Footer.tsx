@@ -24,7 +24,7 @@ const Footer = ({ onTabChange }: FooterProps) => {
               <FileText className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <span className="font-semibold text-foreground">Vade-Mécum SGGD SP</span>
+              <span className="font-semibold text-foreground"><em>Vade Mecum</em> SGGD SP</span>
               <p className="text-sm text-muted-foreground">
                 Secretaria de Gestão e Governo Digital
               </p>

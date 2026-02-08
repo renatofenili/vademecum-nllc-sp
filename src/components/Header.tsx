@@ -36,7 +36,7 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
               textShadow: '0 0 4px hsl(0 72% 50% / 0.4), 0 0 8px hsl(0 72% 50% / 0.2)' 
             }}
           >
-            <span>Vade-Mécum em Licitações</span>
+            <span><em>Vade Mecum</em> em Licitações</span>
             <span className="text-xs">SGGD SP</span>
           </span>
         </button>

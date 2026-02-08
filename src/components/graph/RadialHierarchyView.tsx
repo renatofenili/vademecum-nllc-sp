@@ -85,9 +85,9 @@ interface GraphLink {
 }
 
 const linkStyles: Record<LinkType, { stroke: string; strokeWidth: number; dashArray: string; label: string }> = {
-  hierarquia: { stroke: "hsl(0, 0%, 15%)", strokeWidth: 1.5, dashArray: "", label: "Hierarquia" },
-  regulamenta: { stroke: "hsl(0, 0%, 25%)", strokeWidth: 1.5, dashArray: "8 4", label: "Regulamenta" },
-  remete: { stroke: "hsl(0, 0%, 35%)", strokeWidth: 1, dashArray: "3 3", label: "Remete" },
+  hierarquia: { stroke: "hsl(220, 10%, 70%)", strokeWidth: 1, dashArray: "", label: "Hierarquia" },
+  regulamenta: { stroke: "hsl(220, 10%, 65%)", strokeWidth: 1, dashArray: "6 3", label: "Regulamenta" },
+  remete: { stroke: "hsl(220, 10%, 75%)", strokeWidth: 0.75, dashArray: "3 3", label: "Remete" },
 };
 
 // Ring assignments by normative type
@@ -111,12 +111,20 @@ const ringLabels: Record<number, string> = {
   3: "Portarias / Resoluções / INs",
 };
 
-// Refined professional palette - balanced contrast with warmth
+// Paleta jurídica sóbria - hierarquia visual imediata
 const ringColors: Record<number, string> = {
-  0: "hsl(220, 45%, 30%)",     // Deep indigo for CF/88 - gravitas
-  1: "hsl(200, 55%, 45%)",     // Ocean blue for Laws - clarity
-  2: "hsl(170, 40%, 40%)",     // Teal for Decrees - distinction
-  3: "hsl(240, 25%, 55%)",     // Muted violet for others
+  0: "hsl(220, 25%, 18%)",     // Quase preto/azul-marinho escuro (CF/88)
+  1: "hsl(210, 60%, 40%)",     // Azul forte institucional (Leis)
+  2: "hsl(215, 15%, 45%)",     // Cinza-azulado/slate neutro (Decretos)
+  3: "hsl(220, 10%, 65%)",     // Cinza claro (INs/Resoluções)
+};
+
+// Cores de texto por anel (para garantir contraste)
+const ringTextColors: Record<number, string> = {
+  0: "hsl(0, 0%, 100%)",       // Branco (fundo escuro)
+  1: "hsl(0, 0%, 100%)",       // Branco (fundo azul)
+  2: "hsl(0, 0%, 100%)",       // Branco (fundo slate)
+  3: "hsl(220, 15%, 20%)",     // Preto/cinza escuro (fundo claro)
 };
 
 const tipoLabels: Record<string, string> = {
@@ -1487,7 +1495,7 @@ export const RadialHierarchyView = ({
 
         <div
           ref={containerRef}
-          className="w-full h-[550px] bg-gradient-to-br from-background to-muted/30 cursor-grab active:cursor-grabbing"
+          className="w-full h-[550px] bg-white cursor-grab active:cursor-grabbing"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -1508,10 +1516,10 @@ export const RadialHierarchyView = ({
                   cy={center.y}
                   r={radius}
                   fill="none"
-                  stroke="hsl(var(--border))"
-                  strokeWidth={1}
+                  stroke="hsl(220, 10%, 85%)"
+                  strokeWidth={0.5}
                   strokeDasharray="4 4"
-                  opacity={0.5}
+                  opacity={0.4}
                 />
               ))}
 
@@ -1608,8 +1616,8 @@ export const RadialHierarchyView = ({
                         stroke={style.stroke}
                         strokeWidth={style.strokeWidth}
                         strokeDasharray={style.dashArray}
-                        opacity={highlightedNormaIds ? (linkHighlighted ? 0.8 : 0.1) : 0.6}
-                        className="transition-opacity duration-300"
+                        opacity={highlightedNormaIds ? (linkHighlighted ? 0.5 : 0.08) : 0.35}
+                        className="transition-all duration-300 hover:opacity-70 hover:stroke-[1.5]"
                       />
                     );
                   }
@@ -1646,8 +1654,8 @@ export const RadialHierarchyView = ({
                       stroke={style.stroke}
                       strokeWidth={style.strokeWidth}
                       strokeDasharray={style.dashArray}
-                      opacity={highlightedNormaIds ? (linkHighlighted ? 0.8 : 0.1) : 0.6}
-                      className="transition-opacity duration-300"
+                      opacity={highlightedNormaIds ? (linkHighlighted ? 0.5 : 0.08) : 0.35}
+                      className="transition-all duration-300 hover:opacity-70 hover:stroke-[1.5]"
                     />
                   );
                 });
@@ -1767,11 +1775,13 @@ export const RadialHierarchyView = ({
                   : `${tipoLabels[node.act.tipo] || node.act.tipo} ${node.act.numero}`;
                 
                 // Estimate width: ~6px per character + padding
-                const estimatedWidth = Math.max(isCenter ? 85 : 100, fullLabel.length * 6 + 16);
+                // CF/88 ligeiramente maior que os demais
+                const estimatedWidth = Math.max(isCenter ? 95 : 100, fullLabel.length * 6 + 16);
                 const nodeWidth = Math.min(estimatedWidth, 160); // Cap at 160px
-                const nodeHeight = isCenter ? 42 : 32;
+                const nodeHeight = isCenter ? 46 : 32;
                 
                 const color = ringColors[node.ring];
+                const textColor = ringTextColors[node.ring];
                 const nodeExpanded = expandedDispositivosMap.get(node.id);
                 const hasExpandedDispositivos = !!nodeExpanded && !nodeExpanded.isLoading && nodeExpanded.artigoGroups.length > 0;
                 const artigoGroups = hasExpandedDispositivos ? nodeExpanded.artigoGroups : [];
@@ -1803,11 +1813,15 @@ export const RadialHierarchyView = ({
                         rx={nodeHeight / 2}
                         ry={nodeHeight / 2}
                         fill={color}
-                        stroke={selectedNode?.id === node.id ? "hsl(var(--primary))" : isHighlighted && highlightedNormaIds ? "hsl(45, 70%, 50%)" : "hsl(0, 0%, 95%)"}
-                        strokeWidth={selectedNode?.id === node.id ? 3 : isHighlighted && highlightedNormaIds ? 2 : 1.5}
+                        stroke={selectedNode?.id === node.id ? "hsl(210, 70%, 50%)" : isHighlighted && highlightedNormaIds ? "hsl(45, 70%, 50%)" : node.ring === 3 ? "hsl(220, 15%, 50%)" : "transparent"}
+                        strokeWidth={selectedNode?.id === node.id ? 3 : isHighlighted && highlightedNormaIds ? 2 : node.ring === 3 ? 1.5 : 0}
                         className="transition-all duration-300"
                         style={{
-                          filter: hoveredNode?.id === node.id ? "brightness(1.15) drop-shadow(0 2px 4px rgba(0,0,0,0.2))" : "none",
+                          filter: hoveredNode?.id === node.id 
+                            ? "brightness(1.1) drop-shadow(0 3px 8px rgba(0,0,0,0.25))" 
+                            : selectedNode?.id === node.id 
+                              ? "drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))" 
+                              : "none",
                         }}
                       />
                       
@@ -1815,8 +1829,8 @@ export const RadialHierarchyView = ({
                       <text
                         textAnchor="middle"
                         dominantBaseline="central"
-                        className="fill-white font-medium pointer-events-none select-none"
-                        style={{ fontSize: isCenter ? 13 : 10 }}
+                        className="font-medium pointer-events-none select-none"
+                        style={{ fontSize: isCenter ? 14 : 10, fill: textColor }}
                       >
                         {fullLabel}
                       </text>

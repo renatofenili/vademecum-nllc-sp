@@ -24,7 +24,7 @@ const categories: Category[] = [
   },
   {
     icon: Search,
-    title: "Consulta por Dispositivo",
+    title: "Busca por Dispositivo",
     description: "Pesquise por artigo, parágrafo ou inciso específico de qualquer norma cadastrada.",
     tab: "consultas",
   },

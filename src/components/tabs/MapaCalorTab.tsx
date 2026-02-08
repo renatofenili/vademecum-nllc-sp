@@ -9,161 +9,120 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface ThemeCount {
-  tema: string;
-  count: number;
+interface MacroStage {
+  id: string;
+  title: string;
+  description: string;
+  themes: string[];
 }
 
-// Mapeamento de temas do banco para labels do fluxograma
-const themeMapping: Record<string, string[]> = {
-  "PCA": ["PCA"],
-  "ETP": ["ETP"],
-  "Gestão de riscos": ["Gestão de riscos"],
-  "Pesquisa de preços": ["Pesquisa de Preços"],
-  "Termo de referência": ["TR / Projeto Básico"],
-  "Licitação": ["Seleção do fornecedor", "Modalidades", "Critério de julgamento", "Publicação do edital", "Minuta de edital"],
-  "Contratação direta": ["Dispensa e inexigibilidade de licitação"],
-  "Dispensa de licitação": ["Dispensa e inexigibilidade de licitação"],
-  "Inexigibilidade": ["Dispensa e inexigibilidade de licitação"],
-  "Gestão de contrato": ["Gestão do contrato", "Fiscalização contratual", "Sanções"],
-  // Transversais
-  "A Lei nº 14.133/21": ["Valores da Lei nº 14.133/21"],
-  "Governança": ["Governança", "Controle", "Análise jurídica"],
-  "Sustentabilidade": ["Contratações sustentáveis"],
-  "SRP": ["Sistema de Registro de Preços"],
-  "Credenciamento": ["Credenciamento"],
-  "Inovação em logística": ["Inovação"],
-  "Terceirização": [],
-};
+// Macroetapas do fluxo de contratação pública
+const macroStages: MacroStage[] = [
+  {
+    id: "planejamento",
+    title: "Planejamento",
+    description: "Fase de preparação e estudos preliminares",
+    themes: [
+      "Fase preparatória",
+      "ETP",
+      "Pesquisa de Preços",
+      "TR / Projeto Básico",
+      "PCA",
+    ],
+  },
+  {
+    id: "selecao",
+    title: "Seleção do Fornecedor",
+    description: "Procedimentos licitatórios e contratação direta",
+    themes: [
+      "Modalidades",
+      "Critério de julgamento",
+      "Dispensa e inexigibilidade de licitação",
+      "Publicação do edital",
+      "Minuta de edital",
+      "Impugnação / pedido de esclarecimento",
+      "Credenciamento",
+      "Aviso de contratação direta",
+      "Seleção do fornecedor",
+    ],
+  },
+  {
+    id: "execucao",
+    title: "Execução Contratual",
+    description: "Gestão, fiscalização e acompanhamento",
+    themes: [
+      "Gestão do contrato",
+      "Fiscalização contratual",
+      "Sanções",
+      "Contrato de eficiência",
+      "Assinatura de contrato / ata de registro de preços",
+      "Reequilíbrio / reajuste / repactuação",
+      "Pagamento",
+      "Regime de execução",
+      "Aditivos e apostilamentos",
+      "Sistema de Registro de Preços",
+    ],
+  },
+  {
+    id: "governanca",
+    title: "Governança e Controle",
+    description: "Transparência, inovação e compliance",
+    themes: [
+      "Governança",
+      "Controle",
+      "Análise jurídica",
+      "Contratações sustentáveis",
+      "Inovação",
+      "Transparência",
+      "PNCP",
+      "Valores da Lei nº 14.133/21",
+      "Agentes que atuam no processo de contratação",
+    ],
+  },
+];
 
-// Função para calcular cor baseada na intensidade
-const getHeatStyle = (count: number, maxCount: number) => {
-  if (count === 0) {
-    return {
-      backgroundColor: "hsl(220, 10%, 92%)",
-      borderColor: "hsl(220, 10%, 80%)",
-      textColor: "hsl(220, 10%, 50%)",
-      opacity: 0.6,
-    };
-  }
+// Função para interpolar cores do azul frio ao vermelho quente
+const getHeatColor = (intensity: number): string => {
+  // intensity: 0 = frio (azul), 1 = quente (vermelho)
+  // Gradiente: Azul → Ciano → Verde → Amarelo → Laranja → Vermelho
   
-  const intensity = count / maxCount;
-  
-  if (intensity <= 0.2) {
-    return {
-      backgroundColor: "hsl(200, 60%, 85%)",
-      borderColor: "hsl(200, 60%, 60%)",
-      textColor: "hsl(200, 60%, 30%)",
-      opacity: 0.7,
-    };
+  if (intensity <= 0) {
+    return "hsl(220, 70%, 50%)"; // Azul
+  } else if (intensity <= 0.2) {
+    const t = intensity / 0.2;
+    const h = 220 - t * 40; // 220 → 180
+    return `hsl(${h}, 70%, ${50 + t * 5}%)`;
   } else if (intensity <= 0.4) {
-    return {
-      backgroundColor: "hsl(180, 50%, 75%)",
-      borderColor: "hsl(180, 50%, 50%)",
-      textColor: "hsl(180, 50%, 25%)",
-      opacity: 0.8,
-    };
+    const t = (intensity - 0.2) / 0.2;
+    const h = 180 - t * 60; // 180 → 120
+    return `hsl(${h}, 70%, ${55 + t * 5}%)`;
   } else if (intensity <= 0.6) {
-    return {
-      backgroundColor: "hsl(45, 80%, 70%)",
-      borderColor: "hsl(45, 80%, 45%)",
-      textColor: "hsl(45, 80%, 20%)",
-      opacity: 0.9,
-    };
+    const t = (intensity - 0.4) / 0.2;
+    const h = 120 - t * 70; // 120 → 50
+    return `hsl(${h}, 80%, ${60 - t * 5}%)`;
   } else if (intensity <= 0.8) {
-    return {
-      backgroundColor: "hsl(25, 85%, 60%)",
-      borderColor: "hsl(25, 85%, 40%)",
-      textColor: "hsl(25, 85%, 15%)",
-      opacity: 0.95,
-    };
+    const t = (intensity - 0.6) / 0.2;
+    const h = 50 - t * 25; // 50 → 25
+    return `hsl(${h}, 85%, ${55 - t * 5}%)`;
   } else {
-    return {
-      backgroundColor: "hsl(5, 75%, 55%)",
-      borderColor: "hsl(5, 75%, 35%)",
-      textColor: "white",
-      opacity: 1,
-    };
+    const t = (intensity - 0.8) / 0.2;
+    const h = 25 - t * 20; // 25 → 5
+    return `hsl(${h}, 80%, ${50 - t * 5}%)`;
   }
 };
 
-interface FlowBoxProps {
-  label: string;
-  count: number;
-  maxCount: number;
-  rounded?: "left" | "right" | "full" | "none";
-  className?: string;
-}
-
-const FlowBox = ({ label, count, maxCount, rounded = "none", className = "" }: FlowBoxProps) => {
-  const style = getHeatStyle(count, maxCount);
-  
-  const roundedClass = {
-    left: "rounded-l-2xl rounded-r-md",
-    right: "rounded-r-2xl rounded-l-md",
-    full: "rounded-2xl",
-    none: "rounded-md",
-  }[rounded];
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
-          className={`relative px-4 py-3 min-w-[100px] text-center font-medium text-sm border-2 cursor-pointer transition-transform hover:scale-105 hover:shadow-lg ${roundedClass} ${className}`}
-          style={{
-            backgroundColor: style.backgroundColor,
-            borderColor: style.borderColor,
-            color: style.textColor,
-            opacity: style.opacity,
-          }}
-        >
-          <span className="block">{label}</span>
-          {count > 0 && (
-            <span 
-              className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold flex items-center justify-center"
-              style={{ 
-                backgroundColor: style.borderColor,
-                color: "white",
-              }}
-            >
-              {count}
-            </span>
-          )}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="font-semibold">{label}</p>
-        <p className="text-sm text-muted-foreground">
-          {count} {count === 1 ? "norma" : "normas"}
-        </p>
-      </TooltipContent>
-    </Tooltip>
-  );
+const getHeatLabel = (intensity: number): string => {
+  if (intensity <= 0.2) return "Muito baixa";
+  if (intensity <= 0.4) return "Baixa";
+  if (intensity <= 0.6) return "Média";
+  if (intensity <= 0.8) return "Alta";
+  return "Muito alta";
 };
-
-const Arrow = ({ className = "" }: { className?: string }) => (
-  <div className={`flex items-center justify-center ${className}`}>
-    <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-muted-foreground">
-      <path d="M0 8H20M20 8L14 2M20 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  </div>
-);
-
-const VerticalArrow = ({ direction = "down" }: { direction?: "up" | "down" }) => (
-  <div className="flex items-center justify-center h-6">
-    <svg width="16" height="20" viewBox="0 0 16 20" fill="none" className="text-muted-foreground">
-      {direction === "down" ? (
-        <path d="M8 0V16M8 16L2 10M8 16L14 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      ) : (
-        <path d="M8 20V4M8 4L2 10M8 4L14 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      )}
-    </svg>
-  </div>
-);
 
 const MapaCalorTab = () => {
   const [themeCounts, setThemeCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [globalMax, setGlobalMax] = useState(1);
 
   useEffect(() => {
     const loadThemes = async () => {
@@ -181,6 +140,7 @@ const MapaCalorTab = () => {
         });
 
         setThemeCounts(counts);
+        setGlobalMax(Math.max(...Object.values(counts), 1));
       } catch (err) {
         console.error("Erro ao carregar temas:", err);
       } finally {
@@ -191,16 +151,27 @@ const MapaCalorTab = () => {
     loadThemes();
   }, []);
 
-  // Calcula contagem para cada box do fluxograma
-  const getBoxCount = (boxLabel: string): number => {
-    const dbThemes = themeMapping[boxLabel] || [];
-    return dbThemes.reduce((sum, tema) => sum + (themeCounts[tema] || 0), 0);
-  };
+  const totalNormas = Object.values(themeCounts).reduce((sum, c) => sum + c, 0);
 
-  const maxCount = useMemo(() => {
-    const allBoxLabels = Object.keys(themeMapping);
-    const counts = allBoxLabels.map(getBoxCount);
-    return Math.max(...counts, 1);
+  // Pre-calculate all theme data for the heatmap
+  const stageData = useMemo(() => {
+    return macroStages.map((stage) => {
+      const themes = stage.themes
+        .map((tema) => ({
+          tema,
+          count: themeCounts[tema] || 0,
+        }))
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      const stageTotal = themes.reduce((sum, t) => sum + t.count, 0);
+
+      return {
+        ...stage,
+        themes,
+        stageTotal,
+      };
+    });
   }, [themeCounts]);
 
   return (
@@ -215,189 +186,151 @@ const MapaCalorTab = () => {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Fluxo da contratação pública × intensidade de regulamentação
+            Intensidade de regulamentação por área temática
           </p>
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Heat gradient legend */}
       <div className="flex justify-center">
-        <div className="flex items-center gap-4 text-xs bg-card border border-border rounded-lg px-4 py-2">
+        <div className="flex items-center gap-3 text-xs bg-card border border-border rounded-xl px-5 py-3 shadow-sm">
           <span className="text-muted-foreground font-medium">Intensidade:</span>
           <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(200, 60%, 85%)", borderColor: "hsl(200, 60%, 60%)" }} />
-            <span className="text-muted-foreground">Baixa</span>
+            <span className="text-muted-foreground text-[10px]">Baixa</span>
+            <div 
+              className="w-32 h-4 rounded-full"
+              style={{
+                background: "linear-gradient(to right, hsl(220, 70%, 50%), hsl(180, 70%, 55%), hsl(120, 70%, 60%), hsl(50, 80%, 55%), hsl(25, 85%, 50%), hsl(5, 80%, 45%))"
+              }}
+            />
+            <span className="text-muted-foreground text-[10px]">Alta</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(45, 80%, 70%)", borderColor: "hsl(45, 80%, 45%)" }} />
-            <span className="text-muted-foreground">Média</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border" style={{ backgroundColor: "hsl(5, 75%, 55%)", borderColor: "hsl(5, 75%, 35%)" }} />
-            <span className="text-muted-foreground">Alta</span>
-          </div>
-          <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
-            <span className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">5</span>
-            <span className="text-muted-foreground">nº de normas</span>
+          <div className="flex items-center gap-1 ml-3 pl-3 border-l border-border">
+            <span className="text-muted-foreground">Número = qtd. de normas</span>
           </div>
         </div>
       </div>
 
-      {/* Flowchart */}
+      {/* Heatmap Grid */}
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Skeleton className="h-96 w-full max-w-5xl rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 rounded-xl" />
+          ))}
         </div>
       ) : (
         <TooltipProvider>
-          <div className="bg-slate-800 rounded-xl p-6 md:p-8 overflow-x-auto">
-            <div className="min-w-[900px]">
-              {/* Main Flow */}
-              {/* Main Flow - Horizontal line */}
-              <div className="flex items-start gap-2 mb-8">
-                <FlowBox label="PCA" count={getBoxCount("PCA")} maxCount={maxCount} rounded="left" />
-                <Arrow className="mt-4" />
-                <FlowBox label="ETP" count={getBoxCount("ETP")} maxCount={maxCount} />
-                <Arrow className="mt-4" />
-                <FlowBox label="Pesquisa de preços" count={getBoxCount("Pesquisa de preços")} maxCount={maxCount} />
-                <Arrow className="mt-4" />
-                <FlowBox label="Termo de referência" count={getBoxCount("Termo de referência")} maxCount={maxCount} />
-                
-                {/* Bifurcation: Licitação (top) / Contratação direta (bottom) */}
-                <div className="flex flex-col items-start relative">
-                  {/* Vertical split line from center */}
-                  <svg width="40" height="200" viewBox="0 0 40 200" fill="none" className="text-muted-foreground absolute left-0 top-0">
-                    {/* Line from left to center, then splits up and down */}
-                    <path d="M0 55H20V20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path d="M14 26L20 20L26 26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M20 55V150" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path d="M14 144L20 150L26 144" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  
-                  <div className="ml-10 flex flex-col">
-                    {/* Top row: Licitação → Gestão de contrato */}
-                    <div className="flex items-center gap-2 mb-16">
-                      <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
-                      {/* Curved arrow going right then down to Gestão de contrato */}
-                      <svg width="180" height="60" viewBox="0 0 180 60" fill="none" className="text-muted-foreground">
-                        <path d="M0 10H160V55" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                        <path d="M154 49L160 55L166 49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    
-                    {/* Bottom section: Contratação direta with its sub-branches */}
-                    <div className="flex items-start gap-2">
-                      <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
-                      
-                      {/* Sub-split for Dispensa and Inexigibilidade */}
-                      <div className="flex flex-col items-start relative">
-                        <svg width="40" height="120" viewBox="0 0 40 120" fill="none" className="text-muted-foreground absolute left-0 top-0">
-                          <path d="M0 35H20V10H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                          <path d="M29 4L35 10L29 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          <path d="M20 35V95H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                          <path d="M29 89L35 95L29 101" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        
-                        <div className="ml-10 flex flex-col gap-8">
-                          {/* Dispensa de licitação → Gestão de contrato */}
-                          <div className="flex items-center gap-2">
-                            <FlowBox label="Dispensa de licitação" count={getBoxCount("Dispensa de licitação")} maxCount={maxCount} />
-                            <Arrow />
-                            <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
-                          </div>
-                          
-                          {/* Inexigibilidade → (arrow up to Gestão de contrato) */}
-                          <div className="flex items-center gap-2">
-                            <FlowBox label="Inexigibilidade" count={getBoxCount("Inexigibilidade")} maxCount={maxCount} />
-                            {/* Curved arrow going up to Gestão de contrato */}
-                            <svg width="100" height="50" viewBox="0 0 100 50" fill="none" className="text-muted-foreground">
-                              <path d="M0 25H60V0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                              <path d="M54 6L60 0L66 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {stageData.map((stage) => {
+              if (stage.themes.length === 0) return null;
 
-              {/* Transversal content section */}
-              <div className="border-t-2 border-dashed border-slate-600 pt-6 mt-6">
-                <h3 className="text-orange-400 font-semibold text-lg mb-4 underline underline-offset-4">
-                  Conteúdos transversais ou específicos
-                </h3>
-                
-                <div className="flex flex-wrap gap-4">
-                  {/* Row 1 */}
-                  <div className="flex items-center gap-3">
-                    <FlowBox 
-                      label="A Lei nº 14.133/21" 
-                      count={getBoxCount("A Lei nº 14.133/21")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-500/80 !border-stone-400"
-                    />
-                    <FlowBox 
-                      label="Governança" 
-                      count={getBoxCount("Governança")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-500/80 !border-stone-400"
-                    />
-                    <FlowBox 
-                      label="Sustentabilidade" 
-                      count={getBoxCount("Sustentabilidade")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-500/80 !border-stone-400"
-                    />
+              return (
+                <div
+                  key={stage.id}
+                  className="bg-card border border-border rounded-xl overflow-hidden shadow-sm"
+                >
+                  {/* Stage Header */}
+                  <div className="px-4 py-3 bg-muted/50 border-b border-border">
+                    <h2 className="font-bold text-foreground">{stage.title}</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {stage.description} • {stage.stageTotal} classificações
+                    </p>
                   </div>
-                  
-                  {/* Row 2 */}
-                  <div className="flex items-center gap-3 mt-2">
-                    <FlowBox 
-                      label="SRP" 
-                      count={getBoxCount("SRP")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-600/80 !border-stone-500"
-                    />
-                    <FlowBox 
-                      label="Credenciamento" 
-                      count={getBoxCount("Credenciamento")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-600/80 !border-stone-500"
-                    />
-                    <FlowBox 
-                      label="Inovação em logística" 
-                      count={getBoxCount("Inovação em logística")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-600/80 !border-stone-500"
-                    />
-                    <FlowBox 
-                      label="Terceirização" 
-                      count={getBoxCount("Terceirização")} 
-                      maxCount={maxCount} 
-                      rounded="full"
-                      className="!bg-stone-600/80 !border-stone-500"
-                    />
+
+                  {/* Heatmap cells */}
+                  <div className="p-3">
+                    <div className="flex flex-wrap gap-2">
+                      {stage.themes.map((theme) => {
+                        const intensity = theme.count / globalMax;
+                        const heatColor = getHeatColor(intensity);
+                        const heatLabel = getHeatLabel(intensity);
+                        const percentage = ((theme.count / totalNormas) * 100).toFixed(1);
+
+                        // Determine text color based on intensity
+                        const textColor = intensity > 0.5 ? "white" : "hsl(220, 20%, 20%)";
+
+                        return (
+                          <Tooltip key={theme.tema}>
+                            <TooltipTrigger asChild>
+                              <div
+                                className="relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg hover:z-10"
+                                style={{
+                                  backgroundColor: heatColor,
+                                  boxShadow: `0 2px 8px ${heatColor}40`,
+                                }}
+                              >
+                                <span
+                                  className="text-xs font-medium block max-w-[140px] truncate"
+                                  style={{ color: textColor }}
+                                >
+                                  {theme.tema}
+                                </span>
+                                <span
+                                  className="text-lg font-bold block"
+                                  style={{ color: textColor }}
+                                >
+                                  {theme.count}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <div className="space-y-1">
+                                <p className="font-semibold">{theme.tema}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {theme.count} normas ({percentage}% do total)
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Intensidade: {heatLabel}
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </TooltipProvider>
       )}
+
+      {/* Overall Stats */}
+      <div className="flex justify-center">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl w-full">
+          {stageData.map((stage) => {
+            const avgIntensity = stage.themes.length > 0
+              ? stage.themes.reduce((sum, t) => sum + t.count, 0) / stage.themes.length / globalMax
+              : 0;
+            const heatColor = getHeatColor(avgIntensity);
+
+            return (
+              <div
+                key={stage.id}
+                className="text-center p-4 rounded-xl border border-border bg-card"
+              >
+                <div
+                  className="w-10 h-10 rounded-full mx-auto mb-2"
+                  style={{
+                    backgroundColor: heatColor,
+                    boxShadow: `0 0 20px ${heatColor}60`,
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">{stage.title}</p>
+                <p className="text-lg font-bold text-foreground">{stage.stageTotal}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Info footer */}
       <div className="flex justify-center pt-4">
         <div className="inline-flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
           <Info className="h-3.5 w-3.5" />
           <span>
-            A intensidade das cores reflete a quantidade de normas que tratam cada tema. Passe o mouse para ver detalhes.
+            As cores refletem a densidade de regulamentação: azul (baixa) → vermelho (alta).
           </span>
         </div>
       </div>

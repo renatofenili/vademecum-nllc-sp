@@ -261,29 +261,47 @@ const MapaCalorTab = () => {
                 <FlowBox label="Pesquisa de preços" count={getBoxCount("Pesquisa de preços")} maxCount={maxCount} />
                 <Arrow />
                 <FlowBox label="Termo de referência" count={getBoxCount("Termo de referência")} maxCount={maxCount} />
-                <Arrow />
                 
-                {/* Bifurcation */}
-                <div className="flex flex-col gap-4">
-                  {/* Top path: Licitação */}
-                  <div className="flex items-center gap-2">
-                    <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
-                    <Arrow />
-                    <FlowBox label="Dispensa de licitação" count={getBoxCount("Dispensa de licitação")} maxCount={maxCount} />
-                    <Arrow />
-                    <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
-                  </div>
-                  
-                  {/* Bottom path: Contratação direta */}
-                  <div className="flex items-center gap-2">
-                    <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
-                    <Arrow />
-                    <FlowBox label="Inexigibilidade" count={getBoxCount("Inexigibilidade")} maxCount={maxCount} />
-                    <div className="flex items-center">
-                      <svg width="60" height="40" viewBox="0 0 60 40" fill="none" className="text-muted-foreground">
-                        <path d="M0 20H40C50 20 50 0 50 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                        <path d="M44 26L50 20L44 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                {/* Bifurcation after Termo de referência */}
+                <div className="flex flex-col items-start">
+                  {/* Arrow splitting down */}
+                  <div className="flex">
+                    <svg width="40" height="80" viewBox="0 0 40 80" fill="none" className="text-muted-foreground">
+                      <path d="M0 40H20V10H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M29 4L35 10L29 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M20 40V70H35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M29 64L35 70L29 76" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    
+                    <div className="flex flex-col gap-6">
+                      {/* Top path: Licitação → Gestão de contrato */}
+                      <div className="flex items-center gap-2">
+                        <FlowBox label="Licitação" count={getBoxCount("Licitação")} maxCount={maxCount} rounded="full" />
+                        <Arrow />
+                        <FlowBox label="Gestão de contrato" count={getBoxCount("Gestão de contrato")} maxCount={maxCount} rounded="right" />
+                      </div>
+                      
+                      {/* Bottom path: Contratação direta → Dispensa/Inexigibilidade → Gestão de contrato */}
+                      <div className="flex items-center gap-2">
+                        <FlowBox label="Contratação direta" count={getBoxCount("Contratação direta")} maxCount={maxCount} rounded="full" />
+                        <Arrow />
+                        
+                        {/* Sub-bifurcation for Dispensa and Inexigibilidade */}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <FlowBox label="Dispensa de licitação" count={getBoxCount("Dispensa de licitação")} maxCount={maxCount} />
+                            <svg width="50" height="20" viewBox="0 0 50 20" fill="none" className="text-muted-foreground">
+                              <path d="M0 10H30C40 10 40 -15 60 -15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                            </svg>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <FlowBox label="Inexigibilidade" count={getBoxCount("Inexigibilidade")} maxCount={maxCount} />
+                            <svg width="50" height="20" viewBox="0 0 50 20" fill="none" className="text-muted-foreground">
+                              <path d="M0 10H30C40 10 40 -40 60 -40" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

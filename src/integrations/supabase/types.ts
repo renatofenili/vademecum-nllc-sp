@@ -49,6 +49,7 @@ export type Database = {
           texto_extraido_status: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at: string
+          video_storage_path: string | null
         }
         Insert: {
           analise_norma?: string | null
@@ -84,6 +85,7 @@ export type Database = {
           texto_extraido_status?: string | null
           tipo: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
+          video_storage_path?: string | null
         }
         Update: {
           analise_norma?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           texto_extraido_status?: string | null
           tipo?: Database["public"]["Enums"]["norm_type"]
           updated_at?: string
+          video_storage_path?: string | null
         }
         Relationships: []
       }

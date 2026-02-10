@@ -77,6 +77,7 @@ const getVideoUrl = (path: string | null): string | null => {
 
 const RelatoriosTab = () => {
   const [selectedNorma, setSelectedNorma] = useState<NormaSimplificada | null>(null);
+  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
 
   const { data: normas, isLoading } = useQuery({
     queryKey: ["normas-linguagem-simples"],
@@ -209,6 +210,31 @@ const RelatoriosTab = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
+                  {/* Miniatura do vídeo */}
+                  {temVideo && (
+                    <div 
+                      className="relative rounded-lg overflow-hidden mb-3 cursor-pointer group/video"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = getVideoUrl(norma.video_storage_path);
+                        if (url) setPlayingVideoUrl(url);
+                      }}
+                    >
+                      <AspectRatio ratio={16 / 9} className="bg-muted">
+                        <video
+                          src={getVideoUrl(norma.video_storage_path) || ""}
+                          preload="metadata"
+                          muted
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/video:bg-black/30 transition-colors">
+                          <div className="h-12 w-12 rounded-full bg-primary/90 flex items-center justify-center shadow-lg group-hover/video:scale-110 transition-transform">
+                            <Play className="h-5 w-5 text-primary-foreground ml-0.5" />
+                          </div>
+                        </div>
+                      </AspectRatio>
+                    </div>
+                  )}
                   <div className={cn(
                     "rounded-lg p-3 mb-3",
                     temAnalise ? "bg-muted/40" : "bg-slate-700/50"
@@ -232,17 +258,9 @@ const RelatoriosTab = () => {
                       {formatDateBR(norma.data_publicacao)}
                     </span>
                     {temAnalise ? (
-                      <div className="flex items-center gap-1.5">
-                        {temVideo && (
-                          <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 gap-1">
-                            <Play className="h-2.5 w-2.5" />
-                            Vídeo
-                          </Badge>
-                        )}
-                        <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
-                          Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                        </Button>
-                      </div>
+                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
+                        Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </Button>
                     ) : (
                       <Badge variant="outline" className="text-xs bg-slate-700 text-slate-400 border-slate-600">
                         Em breve
@@ -335,6 +353,35 @@ const RelatoriosTab = () => {
               </ScrollArea>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Modal de Vídeo Expandido */}
+      {playingVideoUrl && (
+        <div 
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPlayingVideoUrl(null)}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPlayingVideoUrl(null)}
+            className="absolute top-4 right-4 text-white hover:bg-white/20 z-10"
+          >
+            <X className="h-6 w-6" />
+          </Button>
+          <div className="w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+            <AspectRatio ratio={16 / 9} className="overflow-hidden rounded-lg">
+              <video
+                controls
+                autoPlay
+                className="h-full w-full object-contain bg-black"
+                src={playingVideoUrl}
+              >
+                Seu navegador não suporta vídeos.
+              </video>
+            </AspectRatio>
+          </div>
         </div>
       )}
     </div>

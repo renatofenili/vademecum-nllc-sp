@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { TabType } from "./Header";
 import logoSGGD from "@/assets/logo-sggd.jpg";
+import logoLaboratorio from "@/assets/logo-laboratorio.png";
 
 interface HeroProps {
   onNavigate: (tab: TabType) => void;
@@ -12,7 +13,12 @@ const Hero = ({ onNavigate }: HeroProps) => {
     <section className="bg-hero py-16 md:py-24">
       <div className="container text-center">
         {/* Logo SGGD centralizado com destaque */}
-        <div className="mb-8 flex justify-center">
+        <div className="mb-8 flex items-center justify-center gap-6 md:gap-8">
+          <img 
+            src={logoLaboratorio} 
+            alt="Laboratório de Inovação em Logística Pública" 
+            className="h-24 md:h-32 lg:h-40 w-auto object-contain"
+          />
           <img 
             src={logoSGGD} 
             alt="SGGD - Gestão e Governo Digital" 

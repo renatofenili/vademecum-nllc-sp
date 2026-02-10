@@ -102,9 +102,6 @@ const RelatoriosTab = () => {
       });
       
       return sorted;
-      
-      if (error) throw error;
-      return data as NormaSimplificada[];
     },
   });
 

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X } from "lucide-react";
+import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X, Play } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateBR } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ interface NormaSimplificada {
   data_publicacao: string;
   orgao_emissor: string | null;
   analise_norma: string;
+  video_storage_path: string | null;
 }
 
 const formatTipo = (tipo: string) => {
@@ -67,6 +69,12 @@ const extrairResumo = (analise: string, maxLength = 200): string => {
   return resumo || texto.substring(0, maxLength);
 };
 
+const getVideoUrl = (path: string | null): string | null => {
+  if (!path) return null;
+  const { data } = supabase.storage.from("normas-videos").getPublicUrl(path);
+  return data?.publicUrl || null;
+};
+
 const RelatoriosTab = () => {
   const [selectedNorma, setSelectedNorma] = useState<NormaSimplificada | null>(null);
 
@@ -75,7 +83,7 @@ const RelatoriosTab = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("normas")
-        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma");
+        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma, video_storage_path");
       
       if (error) throw error;
       
@@ -155,6 +163,7 @@ const RelatoriosTab = () => {
           normas?.map((norma) => {
             const Icon = getIconForTipo(norma.tipo);
             const temAnalise = !!norma.analise_norma;
+            const temVideo = !!norma.video_storage_path;
             return (
               <Card
                 key={norma.id}
@@ -223,9 +232,17 @@ const RelatoriosTab = () => {
                       {formatDateBR(norma.data_publicacao)}
                     </span>
                     {temAnalise ? (
-                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
-                        Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        {temVideo && (
+                          <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 gap-1">
+                            <Play className="h-2.5 w-2.5" />
+                            Vídeo
+                          </Badge>
+                        )}
+                        <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
+                          Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                        </Button>
+                      </div>
                     ) : (
                       <Badge variant="outline" className="text-xs bg-slate-700 text-slate-400 border-slate-600">
                         Em breve
@@ -286,6 +303,25 @@ const RelatoriosTab = () => {
             <CardContent className="p-0 flex-1 overflow-hidden">
               <ScrollArea type="always" className="h-full">
                 <div className="p-6">
+                  {/* Vídeo explicativo */}
+                  {selectedNorma.video_storage_path && (
+                    <div className="mb-6">
+                      <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full mb-3">
+                        <Play className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">Vídeo Explicativo</span>
+                      </div>
+                      <AspectRatio ratio={16 / 9} className="overflow-hidden rounded-lg bg-muted">
+                        <video
+                          controls
+                          className="h-full w-full object-contain"
+                          src={getVideoUrl(selectedNorma.video_storage_path) || ""}
+                          preload="metadata"
+                        >
+                          Seu navegador não suporta vídeos.
+                        </video>
+                      </AspectRatio>
+                    </div>
+                  )}
                   <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full mb-4">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span className="text-xs font-medium">Análise em Linguagem Simples</span>

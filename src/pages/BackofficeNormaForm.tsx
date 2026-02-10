@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File, AlertCircle, CheckCircle2, RefreshCw, Video } from 'lucide-react';
 
 type NormType =
   | 'decreto'
@@ -156,12 +156,14 @@ const BackofficeNormaForm = () => {
   const [isLoadingNorma, setIsLoadingNorma] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [isExtractingText, setIsExtractingText] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<'pendente' | 'extraido' | 'erro' | null>(null);
   const [extractionStats, setExtractionStats] = useState<{ ementa: number; preambulo: number; artigos: number; incisos: number; paragrafos: number; alineas: number } | null>(null);
   const [extractionOrigin, setExtractionOrigin] = useState<string | null>(null);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const isMountedRef = useRef(true);
   const autoResumeAttemptedRef = useRef(false);
 
@@ -283,6 +285,7 @@ const BackofficeNormaForm = () => {
   
   const [temasComIntensidade, setTemasComIntensidade] = useState<TemaComIntensidade[]>([]);
   const [fasesComIntensidade, setFasesComIntensidade] = useState<FaseComIntensidade[]>([]);
+  const [videoStoragePath, setVideoStoragePath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -432,6 +435,9 @@ const BackofficeNormaForm = () => {
       } else {
         setExtractionProgress(null);
       }
+
+      // Load video
+      setVideoStoragePath((normaData as any).video_storage_path || null);
 
       if (temasData && temasData.length > 0) {
         setTemasComIntensidade(
@@ -900,6 +906,7 @@ const BackofficeNormaForm = () => {
         pdf_tamanho: pdfData.pdf_tamanho,
         pdf_mime_type: pdfData.pdf_mime_type,
         pdf_upload_em: pdfData.pdf_upload_em,
+        video_storage_path: videoStoragePath,
       };
 
       // Se o PDF foi alterado, limpar dados de extração para forçar re-extração limpa
@@ -1601,6 +1608,121 @@ const BackofficeNormaForm = () => {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Apenas arquivos PDF são aceitos
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Bloco: Vídeo Explicativo */}
+              <div className="space-y-4 rounded-lg border border-border p-4">
+                <h3 className="text-sm font-medium text-foreground">Vídeo Explicativo (Linguagem Simples)</h3>
+                
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/ogg"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsUploadingVideo(true);
+                    try {
+                      // Remove previous video if exists
+                      if (videoStoragePath) {
+                        try {
+                          await supabase.storage.from('normas-videos').remove([videoStoragePath]);
+                        } catch (err) {
+                          console.error('Erro ao remover vídeo anterior:', err);
+                        }
+                      }
+                      const timestamp = Date.now();
+                      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                      const storagePath = `${timestamp}_${sanitizedName}`;
+                      const { error: uploadError } = await supabase.storage
+                        .from('normas-videos')
+                        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+                      if (uploadError) throw uploadError;
+                      setVideoStoragePath(storagePath);
+                      // Persist immediately if editing
+                      if (isEditing && id) {
+                        await supabase.from('normas').update({ video_storage_path: storagePath } as any).eq('id', id);
+                      }
+                      toast({ title: 'Vídeo carregado!', description: 'O vídeo foi enviado com sucesso.' });
+                    } catch (error: any) {
+                      toast({ title: 'Erro no upload do vídeo', description: error.message, variant: 'destructive' });
+                    } finally {
+                      setIsUploadingVideo(false);
+                      if (videoInputRef.current) videoInputRef.current.value = '';
+                    }
+                  }}
+                />
+
+                {videoStoragePath ? (
+                  <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
+                    <Video className="h-8 w-8 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{videoStoragePath.replace(/^\d+_/, '')}</p>
+                      <p className="text-xs text-muted-foreground">Vídeo vinculado</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a
+                          href={supabase.storage.from('normas-videos').getPublicUrl(videoStoragePath).data?.publicUrl || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Visualizar
+                        </a>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={async () => {
+                          if (videoStoragePath) {
+                            try {
+                              await supabase.storage.from('normas-videos').remove([videoStoragePath]);
+                            } catch (err) {
+                              console.error('Erro ao remover vídeo:', err);
+                            }
+                          }
+                          setVideoStoragePath(null);
+                          if (isEditing && id) {
+                            await supabase.from('normas').update({ video_storage_path: null } as any).eq('id', id);
+                          }
+                          toast({ title: 'Vídeo removido' });
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                    onClick={() => videoInputRef.current?.click()}
+                  >
+                    {isUploadingVideo ? (
+                      <>
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Enviando vídeo...</p>
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          Clique para selecionar um vídeo
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Formatos aceitos: MP4, WebM, OGG
                         </p>
                       </>
                     )}

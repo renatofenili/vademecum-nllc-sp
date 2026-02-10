@@ -1207,7 +1207,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Download PDF from storage
+    // Check admin role (this is an admin-only operation)
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (!roleData) {
+      console.log(`User ${userData.user.id} is not an admin`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const bucket = "normas-pdf";
     const storage = supabase.storage.from(bucket);
     let pdfData: Blob | null = null;

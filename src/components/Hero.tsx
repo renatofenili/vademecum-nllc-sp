@@ -15,14 +15,14 @@ const Hero = ({ onNavigate }: HeroProps) => {
         {/* Logo SGGD centralizado com destaque */}
         <div className="mb-8 flex items-center justify-center gap-6 md:gap-8">
           <img 
-            src={logoLaboratorio} 
-            alt="Laboratório de Inovação em Logística Pública" 
-            className="h-24 md:h-32 lg:h-40 w-auto object-contain"
-          />
-          <img 
             src={logoSGGD} 
             alt="SGGD - Gestão e Governo Digital" 
             className="h-24 md:h-32 lg:h-40 w-auto object-contain rounded-lg shadow-lg"
+          />
+          <img 
+            src={logoLaboratorio} 
+            alt="Laboratório de Inovação em Logística Pública" 
+            className="h-24 md:h-32 lg:h-40 w-auto object-contain"
           />
         </div>
         

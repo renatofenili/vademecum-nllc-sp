@@ -51,7 +51,7 @@ const MudancasTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               O que Mudou
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-10 md:h-12 w-auto object-contain" />
+            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Acompanhe alterações normativas e impactos no sistema jurídico

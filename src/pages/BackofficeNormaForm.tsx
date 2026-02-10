@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Loader2, ArrowLeft, LogOut, Plus, Trash2, Upload, X, File, AlertCircle, CheckCircle2, RefreshCw, Video } from 'lucide-react';
+import { getSafeErrorMessage } from '@/lib/errorHandling';
 
 type NormType =
   | 'decreto'
@@ -368,9 +369,10 @@ const BackofficeNormaForm = () => {
       .single();
 
     if (normaError) {
+      console.error('Erro ao carregar norma:', normaError);
       toast({
         title: 'Erro ao carregar norma',
-        description: normaError.message,
+        description: getSafeErrorMessage(normaError, { operation: 'carregar', entity: 'norma' }),
         variant: 'destructive',
       });
       navigate('/backoffice');
@@ -604,9 +606,10 @@ const BackofficeNormaForm = () => {
         description: 'O arquivo foi enviado com sucesso.',
       });
     } catch (error: any) {
+      console.error('Erro no upload do PDF:', error);
       toast({
         title: 'Erro no upload',
-        description: error.message,
+        description: getSafeErrorMessage(error, { operation: 'upload', entity: 'PDF' }),
         variant: 'destructive',
       });
     } finally {
@@ -831,7 +834,7 @@ const BackofficeNormaForm = () => {
       setExtractionStatus('erro');
       toast({
         title: 'Erro na extração',
-        description: error.message || 'Falha ao extrair texto do PDF.',
+        description: getSafeErrorMessage(error, { operation: 'extrair texto do', entity: 'PDF' }),
         variant: 'destructive',
       });
     } finally {
@@ -1015,9 +1018,10 @@ const BackofficeNormaForm = () => {
 
       navigate('/backoffice');
     } catch (error: any) {
+      console.error('Erro ao salvar norma:', error);
       toast({
         title: 'Erro ao salvar',
-        description: error.message,
+        description: getSafeErrorMessage(error, { operation: 'salvar', entity: 'norma' }),
         variant: 'destructive',
       });
     } finally {

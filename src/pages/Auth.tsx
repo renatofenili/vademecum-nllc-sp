@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { getSafeErrorMessage } from '@/lib/errorHandling';
 import { FileText, Loader2 } from 'lucide-react';
 
 const authSchema = z.object({
@@ -73,9 +74,10 @@ const Auth = () => {
               variant: 'destructive',
             });
           } else {
+            console.error('Erro no login:', error);
             toast({
               title: 'Erro no login',
-              description: error.message,
+              description: getSafeErrorMessage(error),
               variant: 'destructive',
             });
           }
@@ -96,9 +98,10 @@ const Auth = () => {
               variant: 'destructive',
             });
           } else {
+            console.error('Erro no cadastro:', error);
             toast({
               title: 'Erro no cadastro',
-              description: error.message,
+              description: getSafeErrorMessage(error),
               variant: 'destructive',
             });
           }

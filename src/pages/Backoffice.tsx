@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { getSafeErrorMessage } from '@/lib/errorHandling';
 import { FileText, Plus, Trash2, Edit, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDateBR } from '@/lib/date';
 
@@ -96,9 +97,10 @@ const Backoffice = () => {
       .order('data_publicacao', { ascending: false });
 
     if (error) {
+      console.error('Erro ao carregar normas:', error);
       toast({
         title: 'Erro ao carregar normas',
-        description: error.message,
+        description: getSafeErrorMessage(error, { operation: 'carregar', entity: 'normas' }),
         variant: 'destructive',
       });
     } else {
@@ -113,9 +115,10 @@ const Backoffice = () => {
     const { error } = await supabase.from('normas').delete().eq('id', id);
 
     if (error) {
+      console.error('Erro ao excluir norma:', error);
       toast({
         title: 'Erro ao excluir',
-        description: error.message,
+        description: getSafeErrorMessage(error, { operation: 'excluir', entity: 'norma' }),
         variant: 'destructive',
       });
     } else {

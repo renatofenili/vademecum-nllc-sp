@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X, Play } from "lucide-react";
+import logoLaboratorio from "@/assets/logo-laboratorio.png";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -114,9 +115,12 @@ const RelatoriosTab = () => {
             <Sparkles className="h-4 w-4" />
             <span className="text-sm font-medium">Análise em Linguagem Acessível</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-            Linguagem Simples!
-          </h1>
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+              Linguagem Simples!
+            </h1>
+            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-10 md:h-12 w-auto object-contain" />
+          </div>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Normas jurídicas traduzidas para uma linguagem clara e objetiva. 
             Entenda o que cada lei, decreto ou resolução significa na prática.

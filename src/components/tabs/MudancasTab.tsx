@@ -1,4 +1,5 @@
 import { useState } from "react";
+import logoLaboratorio from "@/assets/logo-laboratorio.png";
 import { RefreshCw, Calendar, GitCompare, AlertCircle, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,9 +47,12 @@ const MudancasTab = () => {
       {/* Hero Section */}
       <div className="bg-hero py-8 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 border-b border-border">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-            O que Mudou
-          </h1>
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+              O que Mudou
+            </h1>
+            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-10 md:h-12 w-auto object-contain" />
+          </div>
           <p className="text-muted-foreground text-lg">
             Acompanhe alterações normativas e impactos no sistema jurídico
           </p>

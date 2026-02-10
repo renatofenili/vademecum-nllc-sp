@@ -219,7 +219,7 @@ const MapaCalorTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Mapa de Calor Temático
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-10 md:h-12 w-auto object-contain" />
+            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Intensidade de regulamentação por área temática

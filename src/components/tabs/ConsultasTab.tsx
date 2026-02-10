@@ -194,7 +194,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Busca por Dispositivo
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-10 md:h-12 w-auto object-contain" />
+            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Pesquise por artigo, parágrafo, inciso ou texto de qualquer norma cadastrada

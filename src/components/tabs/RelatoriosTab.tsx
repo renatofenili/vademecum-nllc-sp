@@ -89,7 +89,7 @@ const RelatoriosTab = () => {
       
       if (error) throw error;
       
-      // Ordenar manualmente: Decreto 67.985 primeiro, depois 12.807/2025, depois os demais por data
+      // Ordenar manualmente: Decreto 67.985 primeiro, depois por data, 12.807/2025 em terceiro
        const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
          // Normas COM análise vêm primeiro
          if (a.analise_norma && !b.analise_norma) return -1;
@@ -98,8 +98,11 @@ const RelatoriosTab = () => {
          if (a.analise_norma && b.analise_norma) {
            if (a.numero === "67.985/2023") return -1;
            if (b.numero === "67.985/2023") return 1;
-           if (a.numero === "12.807/2025") return -1;
-           if (b.numero === "12.807/2025") return 1;
+           // Depois ordena por data, exceto 12.807/2025 que vai em terceiro
+           const aIsEspecial = a.numero === "12.807/2025";
+           const bIsEspecial = b.numero === "12.807/2025";
+           if (aIsEspecial && !bIsEspecial) return 1;
+           if (bIsEspecial && !aIsEspecial) return -1;
          }
          return new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime();
        });

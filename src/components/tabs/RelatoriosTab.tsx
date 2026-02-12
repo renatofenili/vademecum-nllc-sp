@@ -89,18 +89,20 @@ const RelatoriosTab = () => {
       
       if (error) throw error;
       
-      // Ordenar manualmente: Decreto 67.985 primeiro, depois por data
-      const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
-        // Normas COM análise vêm primeiro
-        if (a.analise_norma && !b.analise_norma) return -1;
-        if (!a.analise_norma && b.analise_norma) return 1;
-        // Dentro das que têm análise, Decreto 67.985 primeiro
-        if (a.analise_norma && b.analise_norma) {
-          if (a.numero === "67.985/2023") return -1;
-          if (b.numero === "67.985/2023") return 1;
-        }
-        return new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime();
-      });
+      // Ordenar manualmente: Decreto 67.985 primeiro, depois 12.807/2025, depois os demais por data
+       const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
+         // Normas COM análise vêm primeiro
+         if (a.analise_norma && !b.analise_norma) return -1;
+         if (!a.analise_norma && b.analise_norma) return 1;
+         // Dentro das que têm análise: prioridade fixa
+         if (a.analise_norma && b.analise_norma) {
+           if (a.numero === "67.985/2023") return -1;
+           if (b.numero === "67.985/2023") return 1;
+           if (a.numero === "12.807/2025") return -1;
+           if (b.numero === "12.807/2025") return 1;
+         }
+         return new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime();
+       });
       
       return sorted;
     },

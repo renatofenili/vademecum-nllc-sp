@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X, Play } from "lucide-react";
+import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X, Play, ExternalLink } from "lucide-react";
 import logoLaboratorio from "@/assets/logo-laboratorio.png";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ interface NormaSimplificada {
   orgao_emissor: string | null;
   analise_norma: string;
   video_storage_path: string | null;
+  link_externo: string | null;
 }
 
 const formatTipo = (tipo: string) => {
@@ -85,7 +86,7 @@ const RelatoriosTab = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("normas")
-        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma, video_storage_path");
+        .select("id, tipo, numero, ementa, data_publicacao, orgao_emissor, analise_norma, video_storage_path, link_externo");
       
       if (error) throw error;
       
@@ -263,15 +264,30 @@ const RelatoriosTab = () => {
                       <Calendar className="h-3 w-3" />
                       {formatDateBR(norma.data_publicacao)}
                     </span>
-                    {temAnalise ? (
-                      <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
-                        Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </Button>
-                    ) : (
-                      <Badge variant="outline" className="text-xs bg-slate-700 text-slate-400 border-slate-600">
-                        Em breve
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {norma.link_externo && (
+                        <a
+                          href={norma.link_externo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-primary transition-colors"
+                          title="Ver publicação oficial"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Oficial
+                        </a>
+                      )}
+                      {temAnalise ? (
+                        <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs text-primary hover:text-primary hover:bg-primary/10 font-medium">
+                          Ler análise <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                        </Button>
+                      ) : (
+                        <Badge variant="outline" className="text-xs bg-slate-700 text-slate-400 border-slate-600">
+                          Em breve
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

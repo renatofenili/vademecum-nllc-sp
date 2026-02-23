@@ -95,6 +95,7 @@ const RelatoriosTab = () => {
           "67.985/2023": 1,
           "12.807/2025": 3,
           "68.422/2024": 4,
+          "60/2025": 5,
         };
         const sorted = (data as NormaSimplificada[])?.sort((a, b) => {
           // Normas COM análise vêm primeiro

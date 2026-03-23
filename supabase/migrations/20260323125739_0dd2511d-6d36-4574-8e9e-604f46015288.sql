@@ -1,0 +1,1 @@
+UPDATE normas SET video_storage_path = 'decreto-69861.mp4' WHERE id = 'c1b7f7f0-f25a-4e4d-a03b-5f08d4314a05';

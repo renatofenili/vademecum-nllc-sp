@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
-import { FileText, FileBarChart, Search, Network, Flame } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, Flame, Scale } from "lucide-react";
 import logoSGGD from "@/assets/logo-sggd.jpg";
 
-export type TabType = "home" | "normas" | "relatorios" | "consultas" | "mapas" | "mapacalor";
+export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor";
 
 interface HeaderProps {
   activeTab?: TabType;

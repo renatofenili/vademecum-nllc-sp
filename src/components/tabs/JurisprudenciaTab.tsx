@@ -146,7 +146,6 @@ const JurisprudenciaTab = () => {
 
     return chunks.filter((p) => p.length > 0);
   };
-  };
 
   // Group temas by frequency for showing popular ones first
   const temasByFrequency = useMemo(() => {

@@ -315,7 +315,7 @@ const JurisprudenciaTab = () => {
                             {item.numero_tc}
                           </span>
                           <a
-                            href={`https://www.tce.sp.gov.br/jurisprudencia/pesquisar?txtNumeroTc=${encodeURIComponent(item.numero_tc)}`}
+                            href={`https://www.google.com/search?q=site%3Atce.sp.gov.br+%22${encodeURIComponent(item.numero_tc)}%22&btnI=1`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}

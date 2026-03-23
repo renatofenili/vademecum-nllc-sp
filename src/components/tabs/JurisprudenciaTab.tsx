@@ -100,11 +100,13 @@ const JurisprudenciaTab = () => {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-primary/10">
-            <Scale className="h-6 w-6 text-primary" />
-          </div>
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <img 
+            src={logoTCESP} 
+            alt="Tribunal de Contas do Estado de São Paulo" 
+            className="h-16 md:h-20 w-auto object-contain"
+          />
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Jurisprudência TCE/SP

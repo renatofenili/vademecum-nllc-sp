@@ -12,6 +12,7 @@ interface HeaderProps {
 const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Busca por Dispositivo", tab: "consultas", icon: Search },
+  { label: "Jurisprudência", tab: "jurisprudencia", icon: Scale },
   { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "Linguagem Simples!", tab: "relatorios", icon: FileBarChart },

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, FileBarChart, Search, Network, Flame, Scale } from "lucide-react";
 import logoSGGD from "@/assets/logo-sggd.jpg";
+import logoTCESP from "@/assets/logo-tcesp.png";
 
 export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor";
 
@@ -9,10 +10,10 @@ interface HeaderProps {
   onTabChange?: (tab: TabType) => void;
 }
 
-const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
+const navItems: { label: string; tab: TabType; icon: typeof FileText; isNew?: boolean }[] = [
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Busca por Dispositivo", tab: "consultas", icon: Search },
-  { label: "Jurisprudência", tab: "jurisprudencia", icon: Scale },
+  { label: "Jurisprudência TCE/SP", tab: "jurisprudencia", icon: Scale, isNew: true },
   { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "Linguagem Simples!", tab: "relatorios", icon: FileBarChart },

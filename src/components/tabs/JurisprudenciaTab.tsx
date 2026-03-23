@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
 import TemaFilter from "@/components/jurisprudencia/TemaFilter";
+import { buildThemeIntelligence } from "@/components/jurisprudencia/theme-intelligence";
 
 interface Jurisprudencia {
   id: string;
@@ -20,8 +21,6 @@ interface Jurisprudencia {
   boletim_referencia: string | null;
   link_relatorio_voto: string | null;
 }
-
-
 const JurisprudenciaTab = () => {
   const [dados, setDados] = useState<Jurisprudencia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,30 +45,34 @@ const JurisprudenciaTab = () => {
     fetchData();
   }, []);
 
-  // Extract all unique themes
-  const allTemas = useMemo(() => {
-    const temaSet = new Set<string>();
-    dados.forEach((d) => d.temas?.forEach((t) => temaSet.add(t)));
-    return Array.from(temaSet).sort();
-  }, [dados]);
+  const fullThemeIntelligence = useMemo(() => buildThemeIntelligence(dados), [dados]);
 
-  // Filter data
-  const filtered = useMemo(() => {
+  const searchFiltered = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) return dados;
+
     return dados.filter((item) => {
-      const matchSearch =
-        !searchTerm ||
-        item.numero_tc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.objeto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.resumo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.temas?.some((t) => t.toLowerCase().includes(searchTerm.toLowerCase()));
+      const canonicalTemas = fullThemeIntelligence.themesByRecordId[item.id] ?? [];
 
-      const matchTemas =
-        selectedTemas.length === 0 ||
-        selectedTemas.some((st) => item.temas?.includes(st));
-
-      return matchSearch && matchTemas;
+      return (
+        item.numero_tc.toLowerCase().includes(normalizedSearch) ||
+        item.objeto?.toLowerCase().includes(normalizedSearch) ||
+        item.resumo?.toLowerCase().includes(normalizedSearch) ||
+        item.temas?.some((tema) => tema.toLowerCase().includes(normalizedSearch)) ||
+        canonicalTemas.some((tema) => tema.toLowerCase().includes(normalizedSearch))
+      );
     });
-  }, [dados, searchTerm, selectedTemas]);
+  }, [dados, fullThemeIntelligence.themesByRecordId, searchTerm]);
+
+  const menuThemeIntelligence = useMemo(() => buildThemeIntelligence(searchFiltered), [searchFiltered]);
+
+  const filtered = useMemo(() => {
+    return searchFiltered.filter((item) => {
+      const canonicalTemas = fullThemeIntelligence.themesByRecordId[item.id] ?? [];
+      return selectedTemas.length === 0 || selectedTemas.some((tema) => canonicalTemas.includes(tema));
+    });
+  }, [fullThemeIntelligence.themesByRecordId, searchFiltered, selectedTemas]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -148,15 +151,6 @@ const JurisprudenciaTab = () => {
     return chunks.filter((p) => p.length > 0);
   };
 
-  // Group temas by frequency for showing popular ones first
-  const temasWithCount = useMemo(() => {
-    const freq: Record<string, number> = {};
-    dados.forEach((d) => d.temas?.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
-    return allTemas
-      .sort((a, b) => (freq[b] || 0) - (freq[a] || 0))
-      .map((tema) => ({ tema, count: freq[tema] || 0 }));
-  }, [dados, allTemas]);
-
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -199,7 +193,9 @@ const JurisprudenciaTab = () => {
 
       {/* Thematic Filter */}
       <TemaFilter
-        temas={temasWithCount}
+        temas={menuThemeIntelligence.allThemes}
+        featuredTemas={menuThemeIntelligence.featuredThemes}
+        categories={menuThemeIntelligence.categories}
         selectedTemas={selectedTemas}
         onToggleTema={toggleTema}
         onClearAll={() => setSelectedTemas([])}
@@ -293,7 +289,7 @@ const JurisprudenciaTab = () => {
 
                     {/* Tema badges */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {item.temas?.map((tema) => (
+                      {(fullThemeIntelligence.themesByRecordId[item.id] ?? []).map((tema) => (
                         <Badge
                           key={tema}
                           variant="secondary"

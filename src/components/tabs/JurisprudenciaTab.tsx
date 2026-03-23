@@ -19,6 +19,7 @@ interface Jurisprudencia {
   resumo: string | null;
   sessao_data: string | null;
   boletim_referencia: string | null;
+  link_relatorio_voto: string | null;
 }
 
 const JurisprudenciaTab = () => {

@@ -307,8 +307,10 @@ const JurisprudenciaTab = () => {
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         Resumo da Decisão
                       </p>
-                      <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line bg-muted/30 rounded-lg p-4 border">
-                        {item.resumo}
+                      <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3">
+                        {formatResumo(item.resumo).map((paragraph, idx) => (
+                          <p key={idx}>{paragraph}</p>
+                        ))}
                       </div>
                       {item.boletim_referencia && (
                         <p className="text-xs text-muted-foreground italic">

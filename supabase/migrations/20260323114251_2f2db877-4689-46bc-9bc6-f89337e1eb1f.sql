@@ -1,0 +1,1 @@
+UPDATE normas SET analise_norma = REPLACE(analise_norma, 'Gabarito VADMECO aplicado', 'Em síntese:') WHERE numero = '69.861/2025';

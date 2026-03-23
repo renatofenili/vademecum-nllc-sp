@@ -1,0 +1,1 @@
+ALTER TABLE public.jurisprudencia ADD COLUMN IF NOT EXISTS link_relatorio_voto text;

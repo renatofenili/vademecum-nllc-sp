@@ -19,6 +19,7 @@ export type Database = {
           boletim_referencia: string | null
           created_at: string
           id: string
+          link_relatorio_voto: string | null
           materia: string | null
           numero_tc: string
           objeto: string | null
@@ -30,6 +31,7 @@ export type Database = {
           boletim_referencia?: string | null
           created_at?: string
           id?: string
+          link_relatorio_voto?: string | null
           materia?: string | null
           numero_tc: string
           objeto?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           boletim_referencia?: string | null
           created_at?: string
           id?: string
+          link_relatorio_voto?: string | null
           materia?: string | null
           numero_tc?: string
           objeto?: string | null

@@ -314,6 +314,17 @@ const JurisprudenciaTab = () => {
                           <span className="font-mono text-sm font-bold text-primary">
                             {item.numero_tc}
                           </span>
+                          <a
+                            href={`https://www.tce.sp.gov.br/jurisprudencia/pesquisar?txtNumeroTc=${encodeURIComponent(item.numero_tc)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2"
+                            title="Ver inteiro teor no TCE/SP"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Inteiro teor
+                          </a>
                           {item.sessao_data && (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <Calendar className="h-3 w-3" />

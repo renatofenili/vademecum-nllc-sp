@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
+import { Search, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
+import TemaFilter from "@/components/jurisprudencia/TemaFilter";
 
 interface Jurisprudencia {
   id: string;

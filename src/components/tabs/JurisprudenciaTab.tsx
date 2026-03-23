@@ -296,7 +296,6 @@ const JurisprudenciaTab = () => {
                       ))}
                     </div>
                   </CardHeader>
-                </button>
 
                 {isExpanded && item.resumo && (
                   <CardContent className="px-5 pb-5 pt-0">

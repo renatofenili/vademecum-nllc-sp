@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, Filter, X, BookOpen } from "lucide-react";
+import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, Filter, X, BookOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -314,6 +314,17 @@ const JurisprudenciaTab = () => {
                           <span className="font-mono text-sm font-bold text-primary">
                             {item.numero_tc}
                           </span>
+                          <a
+                            href={`https://www.tce.sp.gov.br/jurisprudencia/pesquisar?txtNumeroTc=${encodeURIComponent(item.numero_tc)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2"
+                            title="Ver inteiro teor no TCE/SP"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Inteiro teor
+                          </a>
                           {item.sessao_data && (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <Calendar className="h-3 w-3" />
@@ -363,7 +374,7 @@ const JurisprudenciaTab = () => {
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         Resumo da Decisão
                       </p>
-                      <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3">
+                      <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3 text-justify">
                         {formatResumo(item.resumo).map((paragraph, idx) => (
                           <p key={idx}>{paragraph}</p>
                         ))}

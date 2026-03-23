@@ -60,12 +60,12 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
               <div className="flex items-center gap-1.5">
                 <item.icon className="h-4 w-4" />
                 <span>{item.label}</span>
-                {item.isNew && (
-                  <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full leading-none animate-pulse">
-                    NOVO!
-                  </span>
-                )}
               </div>
+              {item.isNew && (
+                <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                  NOVO!
+                </span>
+              )}
             </button>
           ))}
         </nav>

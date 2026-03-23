@@ -150,10 +150,12 @@ const JurisprudenciaTab = () => {
   };
 
   // Group temas by frequency for showing popular ones first
-  const temasByFrequency = useMemo(() => {
+  const temasWithCount = useMemo(() => {
     const freq: Record<string, number> = {};
     dados.forEach((d) => d.temas?.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
-    return allTemas.sort((a, b) => (freq[b] || 0) - (freq[a] || 0));
+    return allTemas
+      .sort((a, b) => (freq[b] || 0) - (freq[a] || 0))
+      .map((tema) => ({ tema, count: freq[tema] || 0 }));
   }, [dados, allTemas]);
 
   return (

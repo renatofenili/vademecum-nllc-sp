@@ -7,6 +7,7 @@ import SearchSection from "@/components/SearchSection";
 import NormasTab from "@/components/tabs/NormasTab";
 import RelatoriosTab from "@/components/tabs/RelatoriosTab";
 import ConsultasTab from "@/components/tabs/ConsultasTab";
+import JurisprudenciaTab from "@/components/tabs/JurisprudenciaTab";
 import MapasTab from "@/components/tabs/MapasTab";
 import MapaCalorTab from "@/components/tabs/MapaCalorTab";
 
@@ -63,6 +64,12 @@ const Index = () => {
         return (
           <div className="container py-6 md:py-8">
             <ConsultasTab onNavigateToNorma={handleNavigateToNorma} />
+          </div>
+        );
+      case "jurisprudencia":
+        return (
+          <div className="container py-6 md:py-8">
+            <JurisprudenciaTab />
           </div>
         );
       case "mapas":

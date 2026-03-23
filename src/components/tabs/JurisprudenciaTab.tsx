@@ -22,13 +22,15 @@ interface Jurisprudencia {
   link_relatorio_voto: string | null;
 }
 
+const INITIAL_TEMAS_VISIBLE = 12;
+
 const JurisprudenciaTab = () => {
   const [dados, setDados] = useState<Jurisprudencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTemas, setSelectedTemas] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  
+  const [showAllTemas, setShowAllTemas] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {

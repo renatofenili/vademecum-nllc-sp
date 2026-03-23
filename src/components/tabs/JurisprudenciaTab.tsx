@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
+import { Search, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
+import TemaFilter from "@/components/jurisprudencia/TemaFilter";
 
 interface Jurisprudencia {
   id: string;
@@ -22,7 +21,6 @@ interface Jurisprudencia {
   link_relatorio_voto: string | null;
 }
 
-const INITIAL_TEMAS_VISIBLE = 12;
 
 const JurisprudenciaTab = () => {
   const [dados, setDados] = useState<Jurisprudencia[]>([]);
@@ -30,7 +28,7 @@ const JurisprudenciaTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTemas, setSelectedTemas] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showAllTemas, setShowAllTemas] = useState(false);
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -151,10 +149,12 @@ const JurisprudenciaTab = () => {
   };
 
   // Group temas by frequency for showing popular ones first
-  const temasByFrequency = useMemo(() => {
+  const temasWithCount = useMemo(() => {
     const freq: Record<string, number> = {};
     dados.forEach((d) => d.temas?.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
-    return allTemas.sort((a, b) => (freq[b] || 0) - (freq[a] || 0));
+    return allTemas
+      .sort((a, b) => (freq[b] || 0) - (freq[a] || 0))
+      .map((tema) => ({ tema, count: freq[tema] || 0 }));
   }, [dados, allTemas]);
 
   return (
@@ -197,70 +197,13 @@ const JurisprudenciaTab = () => {
         )}
       </div>
 
-      {/* Thematic Menu */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Tag className="h-3.5 w-3.5" />
-            Filtrar por Temática
-          </p>
-          {selectedTemas.length > 0 && (
-            <button
-              onClick={() => setSelectedTemas([])}
-              className="text-xs text-destructive hover:text-destructive/80 font-medium flex items-center gap-1"
-            >
-              <X className="h-3 w-3" />
-              Limpar ({selectedTemas.length})
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {(showAllTemas ? temasByFrequency : temasByFrequency.slice(0, INITIAL_TEMAS_VISIBLE)).map((tema) => {
-            const isSelected = selectedTemas.includes(tema);
-            const count = dados.filter((d) => d.temas?.includes(tema)).length;
-            return (
-              <button
-                key={tema}
-                onClick={() => toggleTema(tema)}
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all",
-                  isSelected
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                {tema}
-                <span className={cn(
-                  "text-[10px] font-bold opacity-70",
-                  isSelected ? "text-primary-foreground" : "text-muted-foreground"
-                )}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-
-          {temasByFrequency.length > INITIAL_TEMAS_VISIBLE && (
-            <button
-              onClick={() => setShowAllTemas(!showAllTemas)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-primary hover:bg-primary/10 transition-all"
-            >
-              {showAllTemas ? (
-                <>
-                  <ChevronUp className="h-3 w-3" />
-                  Menos temas
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3 w-3" />
-                  +{temasByFrequency.length - INITIAL_TEMAS_VISIBLE} temas
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Thematic Filter */}
+      <TemaFilter
+        temas={temasWithCount}
+        selectedTemas={selectedTemas}
+        onToggleTema={toggleTema}
+        onClearAll={() => setSelectedTemas([])}
+      />
 
       {/* Results Counter */}
       <div className="flex items-center justify-between">

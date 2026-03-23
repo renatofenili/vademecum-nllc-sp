@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, FileBarChart, Search, Network, Flame, Scale } from "lucide-react";
 import logoSGGD from "@/assets/logo-sggd.jpg";
+import logoTCESP from "@/assets/logo-tcesp.png";
 
 export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor";
 
@@ -9,10 +10,10 @@ interface HeaderProps {
   onTabChange?: (tab: TabType) => void;
 }
 
-const navItems: { label: string; tab: TabType; icon: typeof FileText }[] = [
+const navItems: { label: string; tab: TabType; icon: typeof FileText; isNew?: boolean }[] = [
   { label: "Normas", tab: "normas", icon: FileText },
   { label: "Busca por Dispositivo", tab: "consultas", icon: Search },
-  { label: "Jurisprudência", tab: "jurisprudencia", icon: Scale },
+  { label: "Jurisprudência TCE/SP", tab: "jurisprudencia", icon: Scale, isNew: true },
   { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "Linguagem Simples!", tab: "relatorios", icon: FileBarChart },
@@ -47,14 +48,24 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
             <button
               key={item.tab}
               onClick={() => onTabChange?.(item.tab)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`relative flex flex-col items-center gap-0.5 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 activeTab === item.tab
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              {item.tab === "jurisprudencia" && (
+                <img src={logoTCESP} alt="TCE/SP" className="h-4 w-auto object-contain" />
+              )}
+              <div className="flex items-center gap-1.5">
+                <item.icon className="h-4 w-4" />
+                <span>{item.label}</span>
+                {item.isNew && (
+                  <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                    NOVO!
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </nav>

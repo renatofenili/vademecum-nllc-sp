@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      jurisprudencia: {
+        Row: {
+          boletim_referencia: string | null
+          created_at: string
+          id: string
+          materia: string | null
+          numero_tc: string
+          objeto: string | null
+          resumo: string | null
+          sessao_data: string | null
+          temas: string[]
+        }
+        Insert: {
+          boletim_referencia?: string | null
+          created_at?: string
+          id?: string
+          materia?: string | null
+          numero_tc: string
+          objeto?: string | null
+          resumo?: string | null
+          sessao_data?: string | null
+          temas?: string[]
+        }
+        Update: {
+          boletim_referencia?: string | null
+          created_at?: string
+          id?: string
+          materia?: string | null
+          numero_tc?: string
+          objeto?: string | null
+          resumo?: string | null
+          sessao_data?: string | null
+          temas?: string[]
+        }
+        Relationships: []
+      }
       normas: {
         Row: {
           analise_norma: string | null

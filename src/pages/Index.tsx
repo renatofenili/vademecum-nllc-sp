@@ -66,6 +66,12 @@ const Index = () => {
             <ConsultasTab onNavigateToNorma={handleNavigateToNorma} />
           </div>
         );
+      case "jurisprudencia":
+        return (
+          <div className="container py-6 md:py-8">
+            <JurisprudenciaTab />
+          </div>
+        );
       case "mapas":
         return (
           <div className="container py-6 md:py-8">

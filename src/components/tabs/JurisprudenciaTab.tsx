@@ -28,7 +28,7 @@ const JurisprudenciaTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTemas, setSelectedTemas] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showAllTemas, setShowAllTemas] = useState(false);
+  
 
   useEffect(() => {
     const fetchData = async () => {

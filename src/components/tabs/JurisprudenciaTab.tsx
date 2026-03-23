@@ -242,15 +242,12 @@ const JurisprudenciaTab = () => {
             return (
               <Card
                 key={item.id}
+                onClick={() => toggleExpand(item.id)}
                 className={cn(
-                  "rounded-xl transition-all duration-200 hover:shadow-md border-l-4",
+                  "rounded-xl transition-all duration-200 hover:shadow-md border-l-4 cursor-pointer",
                   isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40"
                 )}
               >
-                <button
-                  onClick={() => toggleExpand(item.id)}
-                  className="w-full text-left"
-                >
                   <CardHeader className="pb-3 pt-4 px-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1.5 flex-1 min-w-0">

@@ -198,70 +198,13 @@ const JurisprudenciaTab = () => {
         )}
       </div>
 
-      {/* Thematic Menu */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Tag className="h-3.5 w-3.5" />
-            Filtrar por Temática
-          </p>
-          {selectedTemas.length > 0 && (
-            <button
-              onClick={() => setSelectedTemas([])}
-              className="text-xs text-destructive hover:text-destructive/80 font-medium flex items-center gap-1"
-            >
-              <X className="h-3 w-3" />
-              Limpar ({selectedTemas.length})
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {(showAllTemas ? temasByFrequency : temasByFrequency.slice(0, INITIAL_TEMAS_VISIBLE)).map((tema) => {
-            const isSelected = selectedTemas.includes(tema);
-            const count = dados.filter((d) => d.temas?.includes(tema)).length;
-            return (
-              <button
-                key={tema}
-                onClick={() => toggleTema(tema)}
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all",
-                  isSelected
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                {tema}
-                <span className={cn(
-                  "text-[10px] font-bold opacity-70",
-                  isSelected ? "text-primary-foreground" : "text-muted-foreground"
-                )}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-
-          {temasByFrequency.length > INITIAL_TEMAS_VISIBLE && (
-            <button
-              onClick={() => setShowAllTemas(!showAllTemas)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-primary hover:bg-primary/10 transition-all"
-            >
-              {showAllTemas ? (
-                <>
-                  <ChevronUp className="h-3 w-3" />
-                  Menos temas
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3 w-3" />
-                  +{temasByFrequency.length - INITIAL_TEMAS_VISIBLE} temas
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Thematic Filter */}
+      <TemaFilter
+        temas={temasWithCount}
+        selectedTemas={selectedTemas}
+        onToggleTema={toggleTema}
+        onClearAll={() => setSelectedTemas([])}
+      />
 
       {/* Results Counter */}
       <div className="flex items-center justify-between">

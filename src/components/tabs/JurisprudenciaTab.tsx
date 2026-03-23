@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, Filter, X, BookOpen, ExternalLink } from "lucide-react";
+import { Search, Scale, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,7 @@ const JurisprudenciaTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTemas, setSelectedTemas] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showFilters, setShowFilters] = useState(false);
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -195,53 +195,27 @@ const JurisprudenciaTab = () => {
         )}
       </div>
 
-      {/* Filter Toggle & Active Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant={showFilters ? "default" : "outline"}
-          size="sm"
-          onClick={() => setShowFilters(!showFilters)}
-          className="rounded-lg gap-1.5"
-        >
-          <Filter className="h-4 w-4" />
-          Filtrar por Tema
-          {selectedTemas.length > 0 && (
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-              {selectedTemas.length}
-            </Badge>
-          )}
-        </Button>
-
-        {selectedTemas.map((tema) => (
-          <Badge
-            key={tema}
-            variant="default"
-            className="gap-1 cursor-pointer rounded-lg px-2.5 py-1"
-            onClick={() => toggleTema(tema)}
-          >
-            {tema}
-            <X className="h-3 w-3" />
-          </Badge>
-        ))}
-
-        {selectedTemas.length > 0 && (
-          <button
-            onClick={() => setSelectedTemas([])}
-            className="text-xs text-muted-foreground hover:text-foreground underline"
-          >
-            Limpar filtros
-          </button>
-        )}
-      </div>
-
-      {/* Tema Chips Panel */}
-      {showFilters && (
-        <Card className="border-2 border-primary/20 rounded-xl">
-          <CardContent className="p-4">
-            <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">
-              Selecione os temas de interesse
+      {/* Thematic Menu + Active Filters */}
+      <Card className="rounded-xl border-2 border-border/50 shadow-sm">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5" />
+              Filtrar por Temática
             </p>
-            <div className="flex flex-wrap gap-2">
+            {selectedTemas.length > 0 && (
+              <button
+                onClick={() => setSelectedTemas([])}
+                className="text-xs text-destructive hover:text-destructive/80 font-medium flex items-center gap-1"
+              >
+                <X className="h-3 w-3" />
+                Limpar ({selectedTemas.length})
+              </button>
+            )}
+          </div>
+
+          <ScrollArea className="w-full">
+            <div className="flex flex-wrap gap-1.5">
               {temasByFrequency.map((tema) => {
                 const isSelected = selectedTemas.includes(tema);
                 const count = dados.filter((d) => d.temas?.includes(tema)).length;
@@ -250,16 +224,16 @@ const JurisprudenciaTab = () => {
                     key={tema}
                     onClick={() => toggleTema(tema)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border",
                       isSelected
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm scale-[1.02]"
+                        : "bg-card text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground hover:border-accent"
                     )}
                   >
                     {tema}
                     <span className={cn(
-                      "text-xs rounded-full px-1.5 py-0.5",
-                      isSelected ? "bg-primary-foreground/20" : "bg-background"
+                      "text-[10px] rounded-full min-w-[18px] px-1 py-0 text-center font-bold",
+                      isSelected ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
                     )}>
                       {count}
                     </span>
@@ -267,9 +241,9 @@ const JurisprudenciaTab = () => {
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
 
       {/* Results Counter */}
       <div className="flex items-center justify-between">

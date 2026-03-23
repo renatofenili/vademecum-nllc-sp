@@ -21,7 +21,6 @@ interface Jurisprudencia {
   link_relatorio_voto: string | null;
 }
 
-const INITIAL_TEMAS_VISIBLE = 12;
 
 const JurisprudenciaTab = () => {
   const [dados, setDados] = useState<Jurisprudencia[]>([]);

@@ -91,6 +91,58 @@ const JurisprudenciaTab = () => {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
+  /** Limpa o texto extraído do PDF: junta linhas quebradas, remove números de página isolados,
+   *  e separa em parágrafos reais (blocos separados por linha em branco ou que iniciem com marcador). */
+  const formatResumo = (text: string): string[] => {
+    // Remove page numbers (standalone 1-3 digit numbers on their own line)
+    let cleaned = text.replace(/\n\d{1,3}\n/g, "\n");
+    // Remove trailing "ODS:" or "ODS: ..." at the end
+    cleaned = cleaned.replace(/\nODS:.*$/s, "").trim();
+    // Remove "Sessão: DD/MM/YYYY" lines that leaked into the resumo
+    cleaned = cleaned.replace(/\nSessão:\s*\d{2}\/\d{2}\/\d{4}.*$/gm, "");
+
+    // Split into lines
+    const lines = cleaned.split("\n");
+    const paragraphs: string[] = [];
+    let current = "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
+
+      // Empty line → close current paragraph
+      if (line.trim() === "") {
+        if (current.trim()) {
+          paragraphs.push(current.trim());
+          current = "";
+        }
+        continue;
+      }
+
+      // Line starts with a list marker (-, a), b), 1), etc.) → new paragraph
+      const isListItem = /^[\s]*[-–•]/.test(line) || /^[\s]*[a-z]\)/.test(line) || /^[\s]*\d+[\).]/.test(line);
+      if (isListItem && current.trim()) {
+        paragraphs.push(current.trim());
+        current = line.trim();
+        continue;
+      }
+
+      // Otherwise, join with previous line (fixing PDF line breaks)
+      if (current) {
+        // If current ends with hyphen followed by lowercase → join words
+        if (current.endsWith("-")) {
+          current = current.slice(0, -1) + line.trim();
+        } else {
+          current += " " + line.trim();
+        }
+      } else {
+        current = line.trim();
+      }
+    }
+    if (current.trim()) paragraphs.push(current.trim());
+
+    return paragraphs.filter((p) => p.length > 0);
+  };
+
   // Group temas by frequency for showing popular ones first
   const temasByFrequency = useMemo(() => {
     const freq: Record<string, number> = {};
@@ -307,8 +359,10 @@ const JurisprudenciaTab = () => {
                       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         Resumo da Decisão
                       </p>
-                      <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line bg-muted/30 rounded-lg p-4 border">
-                        {item.resumo}
+                      <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3">
+                        {formatResumo(item.resumo).map((paragraph, idx) => (
+                          <p key={idx}>{paragraph}</p>
+                        ))}
                       </div>
                       {item.boletim_referencia && (
                         <p className="text-xs text-muted-foreground italic">

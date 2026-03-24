@@ -69,7 +69,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-right shadow-sm">
+            <div className="rounded-2xl border border-primary/15 bg-primary/[0.04] px-4 py-3 text-right shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Temas navegáveis
               </p>

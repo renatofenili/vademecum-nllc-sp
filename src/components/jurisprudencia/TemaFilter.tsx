@@ -123,15 +123,35 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
               <Search className="h-3.5 w-3.5" />
               Buscar tema específico
             </div>
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Digite um tema, sinônimo ou palavra-chave..."
-              className="h-11 rounded-2xl border-primary/15 bg-primary/[0.03] focus:border-primary/30"
-            />
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Se você lembrar só de parte do assunto, a busca localiza também variações equivalentes do tema.
-            </p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Ex: pregão, habilitação, contrato..."
+                className="h-11 rounded-2xl border-primary/15 bg-primary/[0.03] pl-10 focus:border-primary/30"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {normalizedQuery ? (
+              <p className="mt-3 flex items-center gap-1.5 text-xs leading-relaxed text-primary/70">
+                <Tag className="h-3 w-3" />
+                {activeThemes.length === 0
+                  ? "Nenhum tema encontrado. Tente outra palavra."
+                  : `${activeThemes.length} tema${activeThemes.length > 1 ? "s" : ""} encontrado${activeThemes.length > 1 ? "s" : ""} — clique para filtrar as decisões.`}
+              </p>
+            ) : (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Digite parte do assunto e clique no tema desejado para filtrar.
+              </p>
+            )}
           </div>
         </div>
 

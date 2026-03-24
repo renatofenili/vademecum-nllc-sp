@@ -49,12 +49,12 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
   const activeCategoryLabel = categories.find((category) => category.id === activeCategory)?.label;
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-border/60 bg-gradient-to-br from-background via-muted/20 to-background shadow-sm">
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/10" />
+    <section className="relative overflow-hidden rounded-[28px] border border-primary/15 bg-gradient-to-br from-primary/[0.03] via-background to-accent/[0.04] shadow-sm">
+      <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.06] via-transparent to-primary/[0.03]" />
       <div className="relative space-y-5 p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
               <Compass className="h-3.5 w-3.5" />
               Navegação temática
             </div>
@@ -69,7 +69,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-right shadow-sm">
+            <div className="rounded-2xl border border-primary/15 bg-primary/[0.04] px-4 py-3 text-right shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Temas navegáveis
               </p>
@@ -84,8 +84,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
-            <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-3xl border border-primary/12 bg-gradient-to-br from-primary/[0.04] to-background p-4 shadow-sm backdrop-blur">
+            <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary/70">
               <Sparkles className="h-3.5 w-3.5" />
               Destaques mais úteis
             </div>
@@ -118,8 +118,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
             </div>
           </div>
 
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-3xl border border-primary/12 bg-gradient-to-br from-accent/[0.03] to-background p-4 shadow-sm backdrop-blur">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary/70">
               <Search className="h-3.5 w-3.5" />
               Buscar tema específico
             </div>
@@ -127,7 +127,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Digite um tema, sinônimo ou palavra-chave..."
-              className="h-11 rounded-2xl border-border/60 bg-muted/30"
+              className="h-11 rounded-2xl border-primary/15 bg-primary/[0.03] focus:border-primary/30"
             />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
               Se você lembrar só de parte do assunto, a busca localiza também variações equivalentes do tema.
@@ -167,8 +167,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                   className={cn(
                     "rounded-3xl border p-4 text-left transition-all duration-200",
                     isActive
-                      ? "border-primary bg-primary/10 shadow-sm"
-                      : "border-border/60 bg-background/70 hover:border-primary/30 hover:bg-muted/30"
+                      ? "border-primary/30 bg-primary/[0.08] shadow-sm shadow-primary/5"
+                      : "border-primary/10 bg-primary/[0.02] hover:border-primary/20 hover:bg-primary/[0.05]"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -176,7 +176,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                       <p className="text-sm font-semibold text-foreground">{category.label}</p>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{category.description}</p>
                     </div>
-                    <div className="rounded-2xl bg-background px-2.5 py-1 text-right shadow-sm">
+                    <div className="rounded-2xl bg-primary/[0.06] px-2.5 py-1 text-right shadow-sm">
                       <div className="text-sm font-semibold text-foreground">{category.count}</div>
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">temas</div>
                     </div>
@@ -187,7 +187,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
           </div>
         )}
 
-        <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
+        <div className="rounded-3xl border border-primary/12 bg-gradient-to-b from-primary/[0.02] to-background p-4 shadow-sm backdrop-blur">
           <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">

@@ -65,7 +65,8 @@ const JurisprudenciaTab = () => {
     });
   }, [dados, fullThemeIntelligence.themesByRecordId, searchTerm]);
 
-  const menuThemeIntelligence = useMemo(() => buildThemeIntelligence(searchFiltered), [searchFiltered]);
+  // Always show full theme menu — search only filters the results list, not the navigator
+  const menuThemeIntelligence = fullThemeIntelligence;
 
   const filtered = useMemo(() => {
     return searchFiltered.filter((item) => {

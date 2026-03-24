@@ -195,7 +195,7 @@ const JurisprudenciaTab = () => {
               : "text-muted-foreground hover:text-foreground hover:bg-card/50"
           )}
         >
-          <TrendingUpIcon className="h-4 w-4" />
+          <TrendingUp className="h-4 w-4" />
           Análise
           <Badge className="text-[10px] px-1.5 py-0 bg-primary text-primary-foreground border-0">
             NOVO

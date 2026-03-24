@@ -65,8 +65,16 @@ const JurisprudenciaTab = () => {
     });
   }, [dados, fullThemeIntelligence.themesByRecordId, searchTerm]);
 
-  // Always show full theme menu — search only filters the results list, not the navigator
-  const menuThemeIntelligence = fullThemeIntelligence;
+  // Compute which themes are present in the search-filtered results (for highlighting)
+  const activeSearchThemes = useMemo(() => {
+    if (!searchTerm.trim()) return new Set<string>();
+    const labels = new Set<string>();
+    searchFiltered.forEach((item) => {
+      const canonical = fullThemeIntelligence.themesByRecordId[item.id] ?? [];
+      canonical.forEach((label) => labels.add(label));
+    });
+    return labels;
+  }, [searchTerm, searchFiltered, fullThemeIntelligence.themesByRecordId]);
 
   const filtered = useMemo(() => {
     return searchFiltered.filter((item) => {

@@ -49,8 +49,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
   const activeCategoryLabel = categories.find((category) => category.id === activeCategory)?.label;
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-border/60 bg-gradient-to-br from-background via-muted/20 to-background shadow-sm">
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/10" />
+    <section className="relative overflow-hidden rounded-[28px] border border-primary/15 bg-gradient-to-br from-primary/[0.03] via-background to-accent/[0.04] shadow-sm">
+      <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.06] via-transparent to-primary/[0.03]" />
       <div className="relative space-y-5 p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">

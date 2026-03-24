@@ -118,8 +118,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
             </div>
           </div>
 
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-3xl border border-primary/12 bg-gradient-to-br from-accent/[0.03] to-background p-4 shadow-sm backdrop-blur">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary/70">
               <Search className="h-3.5 w-3.5" />
               Buscar tema específico
             </div>

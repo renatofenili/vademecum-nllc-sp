@@ -187,7 +187,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
           </div>
         )}
 
-        <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
+        <div className="rounded-3xl border border-primary/12 bg-gradient-to-b from-primary/[0.02] to-background p-4 shadow-sm backdrop-blur">
           <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">

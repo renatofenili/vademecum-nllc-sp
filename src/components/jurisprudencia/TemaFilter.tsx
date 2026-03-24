@@ -84,8 +84,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
-            <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-3xl border border-primary/12 bg-gradient-to-br from-primary/[0.04] to-background p-4 shadow-sm backdrop-blur">
+            <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary/70">
               <Sparkles className="h-3.5 w-3.5" />
               Destaques mais úteis
             </div>

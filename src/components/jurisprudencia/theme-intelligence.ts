@@ -106,8 +106,13 @@ const singularizeToken = (token: string) => {
   return token.slice(0, -1);
 };
 
+// Synonym rules: map variant keys to a canonical key
+const THEME_SYNONYMS: [RegExp, string][] = [
+  [/^registro de preco$/, "sistema de registro de preco"],
+];
+
 const buildThemeKey = (value: string) => {
-  return normalizeWhitespace(
+  let key = normalizeWhitespace(
     stripAccents(value)
       .toLowerCase()
       .replace(/[-/]+/g, " ")
@@ -117,6 +122,16 @@ const buildThemeKey = (value: string) => {
       .map(singularizeToken)
       .join(" ")
   );
+
+  // Apply synonym merging
+  for (const [pattern, canonical] of THEME_SYNONYMS) {
+    if (pattern.test(key)) {
+      key = canonical;
+      break;
+    }
+  }
+
+  return key;
 };
 
 const titleizeChunk = (chunk: string, index: number) => {

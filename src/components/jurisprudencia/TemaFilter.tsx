@@ -237,6 +237,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSea
               <div className="flex flex-wrap gap-2">
                 {visibleThemes.map(({ label, count }) => {
                   const isSelected = selectedTemas.includes(label);
+                  const isHighlighted = activeSearchThemes && activeSearchThemes.size > 0 && activeSearchThemes.has(label);
+                  const isDimmed = activeSearchThemes && activeSearchThemes.size > 0 && !activeSearchThemes.has(label);
                   return (
                     <button
                       key={label}
@@ -246,7 +248,10 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSea
                         "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all duration-200",
                         isSelected
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:bg-muted/40"
+                          : isHighlighted
+                          ? "border-primary/50 bg-primary/10 text-foreground ring-2 ring-primary/20 shadow-sm"
+                          : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:bg-muted/40",
+                        isDimmed && !isSelected && "opacity-40"
                       )}
                     >
                       <span>{label}</span>

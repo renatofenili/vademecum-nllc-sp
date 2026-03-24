@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
-import { TrendingUp, Flame, BarChart3, Scale } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+import { TrendingUp, Flame, BarChart3, Scale, ClipboardList, Award, UserCheck, FlaskConical, Layers, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
 import { buildThemeIntelligence } from "./theme-intelligence";
+import { THEME_SYNTHESES } from "./theme-syntheses";
 
 interface Jurisprudencia {
   id: string;

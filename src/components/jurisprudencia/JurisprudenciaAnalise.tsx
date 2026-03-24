@@ -63,7 +63,7 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
     dados.forEach((item) => {
       if (!item.sessao_data) return;
       const [year, month] = item.sessao_data.split("-");
-      if (parseInt(year) < 2024) return;
+      if (parseInt(year) < 2024) return; // include 2024 and beyond
       const key = `${year}-${month}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink } from "lucide-react";
+import { Search, Calendar, Tag, ChevronDown, ChevronUp, X, BookOpen, ExternalLink, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
 import TemaFilter from "@/components/jurisprudencia/TemaFilter";
 import { buildThemeIntelligence } from "@/components/jurisprudencia/theme-intelligence";
+import JurisprudenciaAnalise from "@/components/jurisprudencia/JurisprudenciaAnalise";
 
 interface Jurisprudencia {
   id: string;
@@ -21,13 +22,16 @@ interface Jurisprudencia {
   boletim_referencia: string | null;
   link_relatorio_voto: string | null;
 }
+
+type SubPage = "pesquisa" | "analise";
+
 const JurisprudenciaTab = () => {
   const [dados, setDados] = useState<Jurisprudencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTemas, setSelectedTemas] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  
+  const [subPage, setSubPage] = useState<SubPage>("pesquisa");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,12 +53,10 @@ const JurisprudenciaTab = () => {
 
   const searchFiltered = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-
     if (!normalizedSearch) return dados;
 
     return dados.filter((item) => {
       const canonicalTemas = fullThemeIntelligence.themesByRecordId[item.id] ?? [];
-
       return (
         item.numero_tc.toLowerCase().includes(normalizedSearch) ||
         item.objeto?.toLowerCase().includes(normalizedSearch) ||
@@ -65,7 +67,6 @@ const JurisprudenciaTab = () => {
     });
   }, [dados, fullThemeIntelligence.themesByRecordId, searchTerm]);
 
-  // Compute which navigable themes are present in the search-filtered results
   const navigableLabels = useMemo(
     () => new Set(fullThemeIntelligence.navigableThemes.map((t) => t.label)),
     [fullThemeIntelligence.navigableThemes]
@@ -111,48 +112,32 @@ const JurisprudenciaTab = () => {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
-  /** Limpa o texto extraído do PDF: junta linhas quebradas, remove artefatos,
-   *  e separa em parágrafos reais. */
   const formatResumo = (text: string): string[] => {
-    // Remove page numbers (standalone 1-3 digit numbers on their own line)
     let cleaned = text.replace(/\n\d{1,3}\n/g, "\n");
-    // Remove trailing "ODS:" or "ODS: ..." at the end
     cleaned = cleaned.replace(/\nODS:.*$/s, "").trim();
-    // Remove "Sessão: DD/MM/YYYY" lines that leaked into the resumo
     cleaned = cleaned.replace(/\nSessão:\s*\d{2}\/\d{2}\/\d{4}.*$/gm, "");
-    // Remove standalone page numbers at start/end of text
     cleaned = cleaned.replace(/^\d{1,3}\s*\n/gm, "");
 
-    // First pass: join ALL lines into continuous text, preserving intentional breaks
-    // An intentional paragraph break = blank line where previous text ended with sentence-ending punctuation
     const lines = cleaned.split("\n");
     const chunks: string[] = [];
     let buf = "";
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-
       if (line === "") {
-        // Blank line: only break paragraph if buffer ends with sentence-ending punctuation
         if (buf && /[.;:!?)""]$/.test(buf.trim())) {
           chunks.push(buf.trim());
           buf = "";
         }
-        // Otherwise ignore the blank line (it's a PDF artifact)
         continue;
       }
-
-      // List item markers start a new paragraph
       const isListItem = /^[-–•]\s/.test(line) || /^[a-z]\)\s/.test(line) || /^\d+[).]\s/.test(line);
       if (isListItem && buf.trim()) {
         chunks.push(buf.trim());
         buf = line;
         continue;
       }
-
-      // Join with previous line
       if (buf) {
-        // Hyphenated word break at end of line
         if (buf.endsWith("-") && /^[a-záàâãéèêíïóôõúüç]/.test(line)) {
           buf = buf.slice(0, -1) + line;
         } else {
@@ -163,7 +148,6 @@ const JurisprudenciaTab = () => {
       }
     }
     if (buf.trim()) chunks.push(buf.trim());
-
     return chunks.filter((p) => p.length > 0);
   };
 
@@ -172,9 +156,9 @@ const JurisprudenciaTab = () => {
       {/* Header Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-4">
-          <img 
-            src={logoTCESP} 
-            alt="Tribunal de Contas do Estado de São Paulo" 
+          <img
+            src={logoTCESP}
+            alt="Tribunal de Contas do Estado de São Paulo"
             className="h-16 md:h-20 w-auto object-contain"
           />
           <div>
@@ -188,164 +172,205 @@ const JurisprudenciaTab = () => {
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input
-          placeholder="Pesquise por número do TC, tema, objeto ou palavras-chave do resumo..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-11 h-12 text-base rounded-xl border-2 border-border/50 focus:border-primary/50 bg-card shadow-sm"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        )}
-      </div>
-
-      {/* Thematic Filter */}
-      <TemaFilter
-        temas={fullThemeIntelligence.allThemes}
-        featuredTemas={fullThemeIntelligence.featuredThemes}
-        categories={fullThemeIntelligence.categories}
-        selectedTemas={selectedTemas}
-        activeSearchThemes={activeSearchThemes}
-        onToggleTema={toggleTema}
-        onClearAll={() => setSelectedTemas([])}
-      />
-
-      {/* Results Counter */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {loading ? "Carregando..." : (
-            <>
-              <span className="font-semibold text-foreground">{filtered.length}</span>
-              {" "}decisão{filtered.length !== 1 ? "ões" : ""} encontrada{filtered.length !== 1 ? "s" : ""}
-            </>
+      {/* Sub-navigation */}
+      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+        <button
+          onClick={() => setSubPage("pesquisa")}
+          className={cn(
+            "px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2",
+            subPage === "pesquisa"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/50"
           )}
-        </p>
+        >
+          <Search className="h-4 w-4" />
+          Pesquisa
+        </button>
+        <button
+          onClick={() => setSubPage("analise")}
+          className={cn(
+            "px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2",
+            subPage === "analise"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+          )}
+        >
+          <TrendingUp className="h-4 w-4" />
+          Análise
+          <Badge className="text-[10px] px-1.5 py-0 bg-primary text-primary-foreground border-0">
+            NOVO
+          </Badge>
+        </button>
       </div>
 
       <Separator />
 
-      {/* Results */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-20 space-y-3">
-          <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/40" />
-          <p className="text-muted-foreground">Nenhuma decisão encontrada para os critérios informados.</p>
-        </div>
+      {/* Content based on sub-page */}
+      {subPage === "analise" ? (
+        <JurisprudenciaAnalise dados={dados} loading={loading} />
       ) : (
-        <div className="space-y-3">
-          {filtered.map((item) => {
-            const isExpanded = expandedIds.has(item.id);
-            return (
-              <Card
-                key={item.id}
-                onClick={() => toggleExpand(item.id)}
-                className={cn(
-                  "rounded-xl transition-all duration-200 hover:shadow-md border-l-4 cursor-pointer",
-                  isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40"
-                )}
+        <>
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              placeholder="Pesquise por número do TC, tema, objeto ou palavras-chave do resumo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-11 h-12 text-base rounded-xl border-2 border-border/50 focus:border-primary/50 bg-card shadow-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted"
               >
-                  <CardHeader className="pb-3 pt-4 px-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1.5 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm font-bold text-primary">
-                            {item.numero_tc}
-                          </span>
-                          {item.link_relatorio_voto && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                window.open(item.link_relatorio_voto!, "_blank", "noopener,noreferrer");
-                              }}
-                              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0"
-                              title="Ver Relatório/Voto no TCE/SP"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Inteiro teor
-                            </button>
-                          )}
-                          {item.sessao_data && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {formatDate(item.sessao_data)}
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* Thematic Filter */}
+          <TemaFilter
+            temas={fullThemeIntelligence.allThemes}
+            featuredTemas={fullThemeIntelligence.featuredThemes}
+            categories={fullThemeIntelligence.categories}
+            selectedTemas={selectedTemas}
+            activeSearchThemes={activeSearchThemes}
+            onToggleTema={toggleTema}
+            onClearAll={() => setSelectedTemas([])}
+          />
+
+          {/* Results Counter */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {loading ? "Carregando..." : (
+                <>
+                  <span className="font-semibold text-foreground">{filtered.length}</span>
+                  {" "}decisão{filtered.length !== 1 ? "ões" : ""} encontrada{filtered.length !== 1 ? "s" : ""}
+                </>
+              )}
+            </p>
+          </div>
+
+          <Separator />
+
+          {/* Results */}
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 space-y-3">
+              <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/40" />
+              <p className="text-muted-foreground">Nenhuma decisão encontrada para os critérios informados.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((item) => {
+                const isExpanded = expandedIds.has(item.id);
+                return (
+                  <Card
+                    key={item.id}
+                    onClick={() => toggleExpand(item.id)}
+                    className={cn(
+                      "rounded-xl transition-all duration-200 hover:shadow-md border-l-4 cursor-pointer",
+                      isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40"
+                    )}
+                  >
+                    <CardHeader className="pb-3 pt-4 px-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-sm font-bold text-primary">
+                              {item.numero_tc}
                             </span>
-                          )}
-                          {item.materia && (
-                            <Badge variant="outline" className="text-xs rounded-md font-normal">
-                              {item.materia}
-                            </Badge>
+                            {item.link_relatorio_voto && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  window.open(item.link_relatorio_voto!, "_blank", "noopener,noreferrer");
+                                }}
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0"
+                                title="Ver Relatório/Voto no TCE/SP"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Inteiro teor
+                              </button>
+                            )}
+                            {item.sessao_data && (
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {formatDate(item.sessao_data)}
+                              </span>
+                            )}
+                            {item.materia && (
+                              <Badge variant="outline" className="text-xs rounded-md font-normal">
+                                {item.materia}
+                              </Badge>
+                            )}
+                          </div>
+                          {item.objeto && (
+                            <p className="text-sm text-foreground/80 line-clamp-2">
+                              {item.objeto}
+                            </p>
                           )}
                         </div>
-                        {item.objeto && (
-                          <p className="text-sm text-foreground/80 line-clamp-2">
-                            {item.objeto}
-                          </p>
-                        )}
+                        <div className="shrink-0 pt-0.5">
+                          {isExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
                       </div>
-                      <div className="shrink-0 pt-0.5">
-                        {isExpanded ? (
-                          <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Tema badges */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {(fullThemeIntelligence.themesByRecordId[item.id] ?? []).map((tema) => (
-                        <Badge
-                          key={tema}
-                          variant="secondary"
-                          className="text-xs rounded-md font-normal px-2 py-0.5"
-                        >
-                          <Tag className="h-3 w-3 mr-1 opacity-60" />
-                          {tema}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardHeader>
-
-                {isExpanded && item.resumo && (
-                  <CardContent className="px-5 pb-5 pt-0">
-                    <Separator className="mb-4" />
-                    <div className="space-y-3">
-                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Resumo da Decisão
-                      </p>
-                      <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3 text-justify">
-                        {formatResumo(item.resumo).map((paragraph, idx) => (
-                          <p key={idx}>{paragraph}</p>
+                      {/* Tema badges */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {(fullThemeIntelligence.themesByRecordId[item.id] ?? []).map((tema) => (
+                          <Badge
+                            key={tema}
+                            variant="secondary"
+                            className="text-xs rounded-md font-normal px-2 py-0.5"
+                          >
+                            <Tag className="h-3 w-3 mr-1 opacity-60" />
+                            {tema}
+                          </Badge>
                         ))}
                       </div>
-                      {item.boletim_referencia && (
-                        <p className="text-xs text-muted-foreground italic">
-                          Fonte: Boletim de Atualização de Licitações e Contratos — {item.boletim_referencia}
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+                    </CardHeader>
+
+                    {isExpanded && item.resumo && (
+                      <CardContent className="px-5 pb-5 pt-0">
+                        <Separator className="mb-4" />
+                        <div className="space-y-3">
+                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Resumo da Decisão
+                          </p>
+                          <div className="text-sm leading-relaxed text-foreground/90 bg-muted/30 rounded-lg p-4 border space-y-3 text-justify">
+                            {formatResumo(item.resumo).map((paragraph, idx) => (
+                              <p key={idx}>{paragraph}</p>
+                            ))}
+                          </div>
+                          {item.boletim_referencia && (
+                            <p className="text-xs text-muted-foreground italic">
+                              Fonte: Boletim de Atualização de Licitações e Contratos — {item.boletim_referencia}
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
+
 
 export default JurisprudenciaTab;

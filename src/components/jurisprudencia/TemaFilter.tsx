@@ -11,13 +11,15 @@ interface TemaFilterProps {
   featuredTemas: SmartTheme[];
   categories: ThemeCategory[];
   selectedTemas: string[];
+  /** Themes present in the current search results — used to highlight matching pills */
+  activeSearchThemes?: Set<string>;
   onToggleTema: (tema: string) => void;
   onClearAll: () => void;
 }
 
 const INITIAL_TEMAS_VISIBLE = 12;
 
-const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleTema, onClearAll }: TemaFilterProps) => {
+const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSearchThemes, onToggleTema, onClearAll }: TemaFilterProps) => {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? "");
   const [expanded, setExpanded] = useState(false);

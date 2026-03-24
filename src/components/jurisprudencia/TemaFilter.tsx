@@ -176,7 +176,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                       <p className="text-sm font-semibold text-foreground">{category.label}</p>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{category.description}</p>
                     </div>
-                    <div className="rounded-2xl bg-background px-2.5 py-1 text-right shadow-sm">
+                    <div className="rounded-2xl bg-primary/[0.06] px-2.5 py-1 text-right shadow-sm">
                       <div className="text-sm font-semibold text-foreground">{category.count}</div>
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">temas</div>
                     </div>

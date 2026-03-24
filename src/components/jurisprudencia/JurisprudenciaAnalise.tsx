@@ -366,7 +366,146 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
           </div>
         </CardContent>
       </Card>
+
+      <Separator />
+
+      {/* 4) THEMATIC SYNTHESES */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <BookOpen className="h-7 w-7 text-primary" />
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Síntese por Temática</h2>
+            <p className="text-sm text-muted-foreground">
+              Análise aprofundada das 5 principais temáticas com base nas decisões do TCE/SP
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {THEME_SYNTHESES.map((synthesis) => (
+            <ThemeSynthesisCard key={synthesis.theme} synthesis={synthesis} />
+          ))}
+        </div>
+      </div>
     </div>
+  );
+};
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  ClipboardList,
+  Award,
+  UserCheck,
+  FlaskConical,
+  Layers,
+};
+
+const ThemeSynthesisCard = ({ synthesis }: { synthesis: typeof THEME_SYNTHESES[number] }) => {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = ICON_MAP[synthesis.icon] || ClipboardList;
+
+  // Simple markdown-to-JSX renderer for the synthesis content
+  const renderContent = (content: string) => {
+    const lines = content.split("\n");
+    const elements: React.ReactNode[] = [];
+    let key = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Skip the main title (## Tema:... or ## Síntese...)
+      if (line.startsWith("## ")) continue;
+
+      // Section headers (### 1. Panorama, etc.)
+      if (line.startsWith("### ")) {
+        const headerText = line.replace(/^###\s*\d*\.?\s*/, "").trim();
+        elements.push(
+          <h4 key={key++} className="text-sm font-bold text-primary mt-4 mb-2 uppercase tracking-wider">
+            {headerText}
+          </h4>
+        );
+        continue;
+      }
+
+      // Bold list items
+      if (line.startsWith("*   **") || line.startsWith("1.  **") || line.match(/^\d+\.\s+\*\*/)) {
+        const cleaned = line
+          .replace(/^\*\s+/, "")
+          .replace(/^\d+\.\s+/, "")
+          .replace(/\*\*(.+?)\*\*/g, "⟨BOLD⟩$1⟨/BOLD⟩");
+
+        const parts = cleaned.split(/⟨\/?BOLD⟩/).map((part, idx) =>
+          idx % 2 === 1 ? <strong key={idx} className="text-foreground">{part}</strong> : part
+        );
+
+        elements.push(
+          <div key={key++} className="flex gap-2 mb-2 text-sm text-foreground/85 leading-relaxed">
+            <span className="text-primary font-bold mt-0.5 shrink-0">•</span>
+            <span>{parts}</span>
+          </div>
+        );
+        continue;
+      }
+
+      // Regular paragraph
+      if (line.trim()) {
+        const cleaned = line.replace(/\*\*(.+?)\*\*/g, "⟨BOLD⟩$1⟨/BOLD⟩");
+        const parts = cleaned.split(/⟨\/?BOLD⟩/).map((part, idx) =>
+          idx % 2 === 1 ? <strong key={idx}>{part}</strong> : part
+        );
+        elements.push(
+          <p key={key++} className="text-sm text-foreground/85 leading-relaxed mb-2">
+            {parts}
+          </p>
+        );
+      }
+    }
+
+    return elements;
+  };
+
+  // Get a preview (first ~3 lines of content after the title)
+  const previewText = useMemo(() => {
+    const lines = synthesis.content.split("\n").filter(l => l.trim() && !l.startsWith("## ") && !l.startsWith("### "));
+    return lines.slice(0, 2).join(" ").replace(/\*\*/g, "").slice(0, 200) + "...";
+  }, [synthesis.content]);
+
+  return (
+    <Card className="rounded-xl transition-all duration-200 hover:shadow-md">
+      <CardHeader
+        className="cursor-pointer pb-3"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{synthesis.theme}</CardTitle>
+              {!expanded && (
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{previewText}</p>
+              )}
+            </div>
+          </div>
+          {expanded ? (
+            <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+          )}
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="pt-0 pb-5">
+          <Separator className="mb-4" />
+          <div className="bg-muted/30 rounded-lg p-5 border">
+            {renderContent(synthesis.content)}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-3 italic">
+            Síntese gerada por IA com base nas decisões do acervo. Consulte os processos originais para aplicação jurídica.
+          </p>
+        </CardContent>
+      )}
+    </Card>
   );
 };
 

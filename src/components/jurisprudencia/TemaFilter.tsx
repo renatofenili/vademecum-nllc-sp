@@ -75,7 +75,11 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSea
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Temas navegáveis
               </p>
-              <p className="text-2xl font-semibold text-foreground">{categories.reduce((sum, category) => sum + category.count, 0)}</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {activeSearchThemes && activeSearchThemes.size > 0
+                  ? activeSearchThemes.size
+                  : categories.reduce((sum, category) => sum + category.count, 0)}
+              </p>
             </div>
             {selectedTemas.length > 0 && (
               <Button variant="outline" size="sm" className="rounded-xl" onClick={onClearAll}>

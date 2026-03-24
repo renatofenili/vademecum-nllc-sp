@@ -62,7 +62,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSea
             </div>
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-foreground md:text-xl">
-                Menu inteligente para descobrir os temas certos, sem ruído.
+                Menu inteligente! Navegue pelos temas, de forma simples.
               </h2>
               <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
                 O menu prioriza trilhas recorrentes, agrupa variações equivalentes e deixa a busca livre para casos mais específicos.

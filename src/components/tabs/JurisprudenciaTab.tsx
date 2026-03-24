@@ -202,10 +202,11 @@ const JurisprudenciaTab = () => {
 
       {/* Thematic Filter */}
       <TemaFilter
-        temas={menuThemeIntelligence.allThemes}
-        featuredTemas={menuThemeIntelligence.featuredThemes}
-        categories={menuThemeIntelligence.categories}
+        temas={fullThemeIntelligence.allThemes}
+        featuredTemas={fullThemeIntelligence.featuredThemes}
+        categories={fullThemeIntelligence.categories}
         selectedTemas={selectedTemas}
+        activeSearchThemes={activeSearchThemes}
         onToggleTema={toggleTema}
         onClearAll={() => setSelectedTemas([])}
       />

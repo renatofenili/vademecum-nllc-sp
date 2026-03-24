@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { Flame, Info } from "lucide-react";
+import { Flame, Info, Scale, BookOpen } from "lucide-react";
 import logoLaboratorio from "@/assets/logo-laboratorio.png";
+import logoTCESP from "@/assets/logo-tcesp.png";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -15,6 +16,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+import { buildThemeIntelligence } from "@/components/jurisprudencia/theme-intelligence";
+
+type HeatmapMode = "normativo" | "jurisprudencial";
 
 interface MacroStage {
   id: string;
@@ -23,8 +28,8 @@ interface MacroStage {
   themes: string[];
 }
 
-// Macroetapas do fluxo de contratação pública
-const macroStages: MacroStage[] = [
+// Macroetapas do fluxo de contratação pública (normativo)
+const macroStagesNormativo: MacroStage[] = [
   {
     id: "planejamento",
     title: "Planejamento",
@@ -90,30 +95,27 @@ const macroStages: MacroStage[] = [
 
 // Função para interpolar cores do azul frio ao vermelho quente
 const getHeatColor = (intensity: number): string => {
-  // intensity: 0 = frio (azul), 1 = quente (vermelho)
-  // Gradiente: Azul → Ciano → Verde → Amarelo → Laranja → Vermelho
-  
   if (intensity <= 0) {
-    return "hsl(220, 70%, 50%)"; // Azul
+    return "hsl(220, 70%, 50%)";
   } else if (intensity <= 0.2) {
     const t = intensity / 0.2;
-    const h = 220 - t * 40; // 220 → 180
+    const h = 220 - t * 40;
     return `hsl(${h}, 70%, ${50 + t * 5}%)`;
   } else if (intensity <= 0.4) {
     const t = (intensity - 0.2) / 0.2;
-    const h = 180 - t * 60; // 180 → 120
+    const h = 180 - t * 60;
     return `hsl(${h}, 70%, ${55 + t * 5}%)`;
   } else if (intensity <= 0.6) {
     const t = (intensity - 0.4) / 0.2;
-    const h = 120 - t * 70; // 120 → 50
+    const h = 120 - t * 70;
     return `hsl(${h}, 80%, ${60 - t * 5}%)`;
   } else if (intensity <= 0.8) {
     const t = (intensity - 0.6) / 0.2;
-    const h = 50 - t * 25; // 50 → 25
+    const h = 50 - t * 25;
     return `hsl(${h}, 85%, ${55 - t * 5}%)`;
   } else {
     const t = (intensity - 0.8) / 0.2;
-    const h = 25 - t * 20; // 25 → 5
+    const h = 25 - t * 20;
     return `hsl(${h}, 80%, ${50 - t * 5}%)`;
   }
 };
@@ -132,18 +134,137 @@ interface NormaInfo {
   tipo: string;
 }
 
+interface HeatmapCellData {
+  tema: string;
+  count: number;
+}
+
+interface StageWithData {
+  id: string;
+  title: string;
+  description: string;
+  themes: HeatmapCellData[];
+  stageTotal: number;
+}
+
+// ─── Shared heatmap grid component ──────────────────────────────────
+interface HeatmapGridProps {
+  stageData: StageWithData[];
+  globalMax: number;
+  totalCount: number;
+  detailsByTema: Record<string, React.ReactNode>;
+  isMobile: boolean;
+  unitLabel: string;
+}
+
+const HeatmapGrid = ({ stageData, globalMax, totalCount, detailsByTema, isMobile, unitLabel }: HeatmapGridProps) => (
+  <TooltipProvider>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {stageData.map((stage) => {
+        if (stage.themes.length === 0) return null;
+
+        return (
+          <div
+            key={stage.id}
+            className="bg-card border border-border rounded-xl overflow-hidden shadow-sm"
+          >
+            <div className="px-4 py-3 bg-muted/50 border-b border-border">
+              <h2 className="font-bold text-foreground">{stage.title}</h2>
+              <p className="text-xs text-muted-foreground">
+                {stage.description} • {stage.stageTotal} {unitLabel}
+              </p>
+            </div>
+
+            <div className="p-3">
+              <div className="flex flex-wrap gap-2">
+                {stage.themes.map((theme) => {
+                  const intensity = theme.count / globalMax;
+                  const heatColor = getHeatColor(intensity);
+                  const textColor = intensity > 0.5 ? "white" : "hsl(220, 20%, 20%)";
+
+                  const cellContent = (
+                    <div
+                      className="relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg hover:z-10"
+                      style={{
+                        backgroundColor: heatColor,
+                        boxShadow: `0 2px 8px ${heatColor}40`,
+                      }}
+                    >
+                      <span
+                        className="text-xs font-medium block max-w-[140px] truncate"
+                        style={{ color: textColor }}
+                      >
+                        {theme.tema}
+                      </span>
+                      <span
+                        className="text-lg font-bold block"
+                        style={{ color: textColor }}
+                      >
+                        {theme.count}
+                      </span>
+                    </div>
+                  );
+
+                  const detailsContent = detailsByTema[theme.tema] ?? (
+                    <div>
+                      <p className="font-semibold">{theme.tema}</p>
+                      <p className="text-sm text-muted-foreground">{theme.count} ocorrências</p>
+                    </div>
+                  );
+
+                  if (isMobile) {
+                    return (
+                      <Popover key={theme.tema}>
+                        <PopoverTrigger asChild>
+                          {cellContent}
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="max-w-sm">
+                          {detailsContent}
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  }
+
+                  return (
+                    <Tooltip key={theme.tema}>
+                      <TooltipTrigger asChild>
+                        {cellContent}
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-sm">
+                        {detailsContent}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </TooltipProvider>
+);
+
+// ─── Main component ─────────────────────────────────────────────────
 const MapaCalorTab = () => {
-  const [themeCounts, setThemeCounts] = useState<Record<string, number>>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [globalMax, setGlobalMax] = useState(1);
-  const [normasByTema, setNormasByTema] = useState<Record<string, NormaInfo[]>>({});
+  const [mode, setMode] = useState<HeatmapMode>("normativo");
   const isMobile = useIsMobile();
 
+  // ── Normativo state ──
+  const [themeCounts, setThemeCounts] = useState<Record<string, number>>({});
+  const [isLoadingNormativo, setIsLoadingNormativo] = useState(true);
+  const [globalMaxNormativo, setGlobalMaxNormativo] = useState(1);
+  const [normasByTema, setNormasByTema] = useState<Record<string, NormaInfo[]>>({});
+
+  // ── Jurisprudencial state ──
+  const [jurisData, setJurisData] = useState<{ id: string; temas: string[]; numero_tc: string }[]>([]);
+  const [isLoadingJuris, setIsLoadingJuris] = useState(true);
+
+  // Load normativo data
   useEffect(() => {
     const loadThemes = async () => {
-      setIsLoading(true);
+      setIsLoadingNormativo(true);
       try {
-        // Carrega contagem de temas
         const { data: temasData, error: temasError } = await supabase
           .from("normas_temas")
           .select("tema");
@@ -155,7 +276,6 @@ const MapaCalorTab = () => {
           counts[row.tema] = (counts[row.tema] || 0) + 1;
         });
 
-        // Carrega normas por tema com join
         const { data: normasTemasData, error: normasError } = await supabase
           .from("normas_temas")
           .select("tema, normas(id, numero, tipo)")
@@ -175,39 +295,171 @@ const MapaCalorTab = () => {
 
         setThemeCounts(counts);
         setNormasByTema(normasByTemaMap);
-        setGlobalMax(Math.max(...Object.values(counts), 1));
+        setGlobalMaxNormativo(Math.max(...Object.values(counts), 1));
       } catch (err) {
         console.error("Erro ao carregar temas:", err);
       } finally {
-        setIsLoading(false);
+        setIsLoadingNormativo(false);
       }
     };
 
     loadThemes();
   }, []);
 
+  // Load jurisprudencial data
+  useEffect(() => {
+    const fetchJuris = async () => {
+      setIsLoadingJuris(true);
+      const { data, error } = await supabase
+        .from("jurisprudencia")
+        .select("id, temas, numero_tc");
+
+      if (!error && data) {
+        setJurisData(data as { id: string; temas: string[]; numero_tc: string }[]);
+      }
+      setIsLoadingJuris(false);
+    };
+    fetchJuris();
+  }, []);
+
+  // ── Normativo computed ──
   const totalNormas = Object.values(themeCounts).reduce((sum, c) => sum + c, 0);
 
-  // Pre-calculate all theme data for the heatmap
-  const stageData = useMemo(() => {
-    return macroStages.map((stage) => {
+  const normativoStageData = useMemo<StageWithData[]>(() => {
+    return macroStagesNormativo.map((stage) => {
       const themes = stage.themes
-        .map((tema) => ({
-          tema,
-          count: themeCounts[tema] || 0,
-        }))
+        .map((tema) => ({ tema, count: themeCounts[tema] || 0 }))
         .filter((t) => t.count > 0)
         .sort((a, b) => b.count - a.count);
-
-      const stageTotal = themes.reduce((sum, t) => sum + t.count, 0);
 
       return {
         ...stage,
         themes,
-        stageTotal,
+        stageTotal: themes.reduce((sum, t) => sum + t.count, 0),
       };
     });
   }, [themeCounts]);
+
+  const normativoDetails = useMemo(() => {
+    const details: Record<string, React.ReactNode> = {};
+    normativoStageData.forEach((stage) => {
+      stage.themes.forEach((theme) => {
+        const percentage = ((theme.count / totalNormas) * 100).toFixed(1);
+        const intensity = theme.count / globalMaxNormativo;
+        details[theme.tema] = (
+          <div className="space-y-2">
+            <p className="font-semibold">{theme.tema}</p>
+            <p className="text-sm text-muted-foreground">
+              {theme.count} normas ({percentage}% do total)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Intensidade: {getHeatLabel(intensity)}
+            </p>
+            {normasByTema[theme.tema] && normasByTema[theme.tema].length > 0 && (
+              <div className="border-t border-border pt-2 mt-2">
+                <p className="text-xs font-medium mb-1">Normas:</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {normasByTema[theme.tema].slice(0, 10).map((norma) => (
+                    <div key={norma.id} className="text-xs text-muted-foreground">
+                      <span className="inline-block w-16 font-medium">{norma.tipo.toUpperCase()}:</span>
+                      <span>{norma.numero}</span>
+                    </div>
+                  ))}
+                  {normasByTema[theme.tema].length > 10 && (
+                    <p className="text-xs text-muted-foreground italic">
+                      +{normasByTema[theme.tema].length - 10} outras
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      });
+    });
+    return details;
+  }, [normativoStageData, totalNormas, globalMaxNormativo, normasByTema]);
+
+  // ── Jurisprudencial computed ──
+  const jurisIntelligence = useMemo(() => buildThemeIntelligence(jurisData), [jurisData]);
+
+  const jurisStageData = useMemo<StageWithData[]>(() => {
+    return jurisIntelligence.categories.map((cat) => {
+      const themes = cat.themes
+        .map((t) => ({ tema: t.label, count: t.count }))
+        .sort((a, b) => b.count - a.count);
+
+      return {
+        id: cat.id,
+        title: cat.label,
+        description: cat.description,
+        themes,
+        stageTotal: themes.reduce((sum, t) => sum + t.count, 0),
+      };
+    });
+  }, [jurisIntelligence]);
+
+  const globalMaxJuris = useMemo(() => {
+    const allCounts = jurisStageData.flatMap((s) => s.themes.map((t) => t.count));
+    return Math.max(...allCounts, 1);
+  }, [jurisStageData]);
+
+  const totalJuris = jurisStageData.reduce((sum, s) => sum + s.stageTotal, 0);
+
+  const jurisDetails = useMemo(() => {
+    const details: Record<string, React.ReactNode> = {};
+    const themeMap = new Map(jurisIntelligence.allThemes.map((t) => [t.label, t]));
+
+    jurisStageData.forEach((stage) => {
+      stage.themes.forEach((theme) => {
+        const percentage = totalJuris > 0 ? ((theme.count / totalJuris) * 100).toFixed(1) : "0";
+        const intensity = theme.count / globalMaxJuris;
+        const smartTheme = themeMap.get(theme.tema);
+
+        details[theme.tema] = (
+          <div className="space-y-2">
+            <p className="font-semibold">{theme.tema}</p>
+            <p className="text-sm text-muted-foreground">
+              {theme.count} decisões ({percentage}% do total)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Intensidade: {getHeatLabel(intensity)}
+            </p>
+            {smartTheme && smartTheme.recordIds.length > 0 && (
+              <div className="border-t border-border pt-2 mt-2">
+                <p className="text-xs font-medium mb-1">Processos:</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {smartTheme.recordIds.slice(0, 8).map((rid) => {
+                    const record = jurisData.find((j) => j.id === rid);
+                    return record ? (
+                      <div key={rid} className="text-xs text-muted-foreground font-mono">
+                        {record.numero_tc}
+                      </div>
+                    ) : null;
+                  })}
+                  {smartTheme.recordIds.length > 8 && (
+                    <p className="text-xs text-muted-foreground italic">
+                      +{smartTheme.recordIds.length - 8} outros
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      });
+    });
+    return details;
+  }, [jurisStageData, globalMaxJuris, totalJuris, jurisIntelligence, jurisData]);
+
+  // Active data
+  const isNormativo = mode === "normativo";
+  const isLoading = isNormativo ? isLoadingNormativo : isLoadingJuris;
+  const activeStageData = isNormativo ? normativoStageData : jurisStageData;
+  const activeGlobalMax = isNormativo ? globalMaxNormativo : globalMaxJuris;
+  const activeTotal = isNormativo ? totalNormas : totalJuris;
+  const activeDetails = isNormativo ? normativoDetails : jurisDetails;
+  const activeUnitLabel = isNormativo ? "classificações" : "ocorrências";
 
   return (
     <div className="space-y-6">
@@ -219,17 +471,53 @@ const MapaCalorTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Mapa de Calor Temático
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+            {isNormativo ? (
+              <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+            ) : (
+              <img src={logoTCESP} alt="Tribunal de Contas do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
+            )}
           </div>
           <p className="text-muted-foreground text-lg">
-            Intensidade de regulamentação por área temática
+            {isNormativo
+              ? "Intensidade de regulamentação por área temática"
+              : "Incidência de decisões do TCE/SP por área temática"}
           </p>
+        </div>
+      </div>
+
+      {/* Mode Switcher */}
+      <div className="flex justify-center">
+        <div className="inline-flex items-center gap-1 rounded-2xl border border-border bg-muted/40 p-1 shadow-sm">
+          <button
+            onClick={() => setMode("normativo")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-200",
+              isNormativo
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            <Scale className="h-4 w-4" />
+            Normativo
+          </button>
+          <button
+            onClick={() => setMode("jurisprudencial")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-200",
+              !isNormativo
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            <BookOpen className="h-4 w-4" />
+            Jurisprudencial TCE/SP
+          </button>
         </div>
       </div>
 
       {/* Heat gradient legend */}
       <div className="flex justify-center">
-        <div className="flex items-center gap-3 text-xs bg-card border border-border rounded-xl px-5 py-3 shadow-sm">
+        <div className="flex items-center gap-3 text-xs bg-card border border-border rounded-xl px-5 py-3 shadow-sm flex-wrap justify-center">
           <span className="text-muted-foreground font-medium">Intensidade:</span>
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground text-[10px]">Baixa</span>
@@ -242,7 +530,9 @@ const MapaCalorTab = () => {
             <span className="text-muted-foreground text-[10px]">Alta</span>
           </div>
           <div className="flex items-center gap-1 ml-3 pl-3 border-l border-border">
-            <span className="text-muted-foreground">Número = qtde de normas que tocam a temática</span>
+            <span className="text-muted-foreground">
+              Número = qtde de {isNormativo ? "normas" : "decisões"} que tocam a temática
+            </span>
           </div>
         </div>
       </div>
@@ -255,150 +545,49 @@ const MapaCalorTab = () => {
           ))}
         </div>
       ) : (
-        <TooltipProvider>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {stageData.map((stage) => {
-              if (stage.themes.length === 0) return null;
-
-              return (
-                <div
-                  key={stage.id}
-                  className="bg-card border border-border rounded-xl overflow-hidden shadow-sm"
-                >
-                  {/* Stage Header */}
-                  <div className="px-4 py-3 bg-muted/50 border-b border-border">
-                    <h2 className="font-bold text-foreground">{stage.title}</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {stage.description} • {stage.stageTotal} classificações
-                    </p>
-                  </div>
-
-                  {/* Heatmap cells */}
-                  <div className="p-3">
-                    <div className="flex flex-wrap gap-2">
-                      {stage.themes.map((theme) => {
-                        const intensity = theme.count / globalMax;
-                        const heatColor = getHeatColor(intensity);
-                        const heatLabel = getHeatLabel(intensity);
-                        const percentage = ((theme.count / totalNormas) * 100).toFixed(1);
-
-                        // Determine text color based on intensity
-                        const textColor = intensity > 0.5 ? "white" : "hsl(220, 20%, 20%)";
-
-                        const cellContent = (
-                          <div
-                            className="relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg hover:z-10"
-                            style={{
-                              backgroundColor: heatColor,
-                              boxShadow: `0 2px 8px ${heatColor}40`,
-                            }}
-                          >
-                            <span
-                              className="text-xs font-medium block max-w-[140px] truncate"
-                              style={{ color: textColor }}
-                            >
-                              {theme.tema}
-                            </span>
-                            <span
-                              className="text-lg font-bold block"
-                              style={{ color: textColor }}
-                            >
-                              {theme.count}
-                            </span>
-                          </div>
-                        );
-
-                        const detailsContent = (
-                          <div className="space-y-2">
-                            <p className="font-semibold">{theme.tema}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {theme.count} normas ({percentage}% do total)
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Intensidade: {heatLabel}
-                            </p>
-                            {normasByTema[theme.tema] && normasByTema[theme.tema].length > 0 && (
-                              <div className="border-t border-border pt-2 mt-2">
-                                <p className="text-xs font-medium mb-1">Normas:</p>
-                                <div className="space-y-1 max-h-48 overflow-y-auto">
-                                  {normasByTema[theme.tema].slice(0, 10).map((norma) => (
-                                    <div key={norma.id} className="text-xs text-muted-foreground">
-                                      <span className="inline-block w-16 font-medium">{norma.tipo.toUpperCase()}:</span>
-                                      <span>{norma.numero}</span>
-                                    </div>
-                                  ))}
-                                  {normasByTema[theme.tema].length > 10 && (
-                                    <p className="text-xs text-muted-foreground italic">
-                                      +{normasByTema[theme.tema].length - 10} outras
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-
-                        // Mobile: use Popover (click-based)
-                        if (isMobile) {
-                          return (
-                            <Popover key={theme.tema}>
-                              <PopoverTrigger asChild>
-                                {cellContent}
-                              </PopoverTrigger>
-                              <PopoverContent side="top" className="max-w-sm">
-                                {detailsContent}
-                              </PopoverContent>
-                            </Popover>
-                          );
-                        }
-
-                        // Desktop: use Tooltip (hover-based)
-                        return (
-                          <Tooltip key={theme.tema}>
-                            <TooltipTrigger asChild>
-                              {cellContent}
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-sm">
-                              {detailsContent}
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </TooltipProvider>
+        <HeatmapGrid
+          stageData={activeStageData}
+          globalMax={activeGlobalMax}
+          totalCount={activeTotal}
+          detailsByTema={activeDetails}
+          isMobile={isMobile}
+          unitLabel={activeUnitLabel}
+        />
       )}
 
       {/* Overall Stats */}
       <div className="flex justify-center">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl w-full">
-          {stageData.map((stage) => {
-            const avgIntensity = stage.themes.length > 0
-              ? stage.themes.reduce((sum, t) => sum + t.count, 0) / stage.themes.length / globalMax
-              : 0;
-            const heatColor = getHeatColor(avgIntensity);
+        <div className={cn(
+          "grid gap-4 max-w-4xl w-full",
+          activeStageData.filter((s) => s.themes.length > 0).length <= 4
+            ? "grid-cols-2 md:grid-cols-4"
+            : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+        )}>
+          {activeStageData
+            .filter((s) => s.themes.length > 0)
+            .map((stage) => {
+              const avgIntensity = stage.themes.length > 0
+                ? stage.themes.reduce((sum, t) => sum + t.count, 0) / stage.themes.length / activeGlobalMax
+                : 0;
+              const heatColor = getHeatColor(avgIntensity);
 
-            return (
-              <div
-                key={stage.id}
-                className="text-center p-4 rounded-xl border border-border bg-card"
-              >
+              return (
                 <div
-                  className="w-10 h-10 rounded-full mx-auto mb-2"
-                  style={{
-                    backgroundColor: heatColor,
-                    boxShadow: `0 0 20px ${heatColor}60`,
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">{stage.title}</p>
-                <p className="text-lg font-bold text-foreground">{stage.stageTotal}</p>
-              </div>
-            );
-          })}
+                  key={stage.id}
+                  className="text-center p-4 rounded-xl border border-border bg-card"
+                >
+                  <div
+                    className="w-10 h-10 rounded-full mx-auto mb-2"
+                    style={{
+                      backgroundColor: heatColor,
+                      boxShadow: `0 0 20px ${heatColor}60`,
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">{stage.title}</p>
+                  <p className="text-lg font-bold text-foreground">{stage.stageTotal}</p>
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -407,7 +596,9 @@ const MapaCalorTab = () => {
         <div className="inline-flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
           <Info className="h-3.5 w-3.5" />
           <span>
-            As cores refletem a densidade de regulamentação: azul (baixa) → vermelho (alta).
+            {isNormativo
+              ? "As cores refletem a densidade de regulamentação: azul (baixa) → vermelho (alta)."
+              : "As cores refletem a frequência de decisões do TCE/SP sobre cada tema: azul (baixa) → vermelho (alta). Atualizado automaticamente."}
           </span>
         </div>
       </div>

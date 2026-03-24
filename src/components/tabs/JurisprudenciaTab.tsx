@@ -65,16 +65,23 @@ const JurisprudenciaTab = () => {
     });
   }, [dados, fullThemeIntelligence.themesByRecordId, searchTerm]);
 
-  // Compute which themes are present in the search-filtered results (for highlighting)
+  // Compute which navigable themes are present in the search-filtered results
+  const navigableLabels = useMemo(
+    () => new Set(fullThemeIntelligence.navigableThemes.map((t) => t.label)),
+    [fullThemeIntelligence.navigableThemes]
+  );
+
   const activeSearchThemes = useMemo(() => {
     if (!searchTerm.trim()) return new Set<string>();
     const labels = new Set<string>();
     searchFiltered.forEach((item) => {
       const canonical = fullThemeIntelligence.themesByRecordId[item.id] ?? [];
-      canonical.forEach((label) => labels.add(label));
+      canonical.forEach((label) => {
+        if (navigableLabels.has(label)) labels.add(label);
+      });
     });
     return labels;
-  }, [searchTerm, searchFiltered, fullThemeIntelligence.themesByRecordId]);
+  }, [searchTerm, searchFiltered, fullThemeIntelligence.themesByRecordId, navigableLabels]);
 
   const filtered = useMemo(() => {
     return searchFiltered.filter((item) => {

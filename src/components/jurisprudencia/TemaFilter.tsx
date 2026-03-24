@@ -127,7 +127,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Digite um tema, sinônimo ou palavra-chave..."
-              className="h-11 rounded-2xl border-border/60 bg-muted/30"
+              className="h-11 rounded-2xl border-primary/15 bg-primary/[0.03] focus:border-primary/30"
             />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
               Se você lembrar só de parte do assunto, a busca localiza também variações equivalentes do tema.

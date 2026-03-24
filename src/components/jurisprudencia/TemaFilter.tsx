@@ -167,8 +167,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                   className={cn(
                     "rounded-3xl border p-4 text-left transition-all duration-200",
                     isActive
-                      ? "border-primary bg-primary/10 shadow-sm"
-                      : "border-border/60 bg-background/70 hover:border-primary/30 hover:bg-muted/30"
+                      ? "border-primary/30 bg-primary/[0.08] shadow-sm shadow-primary/5"
+                      : "border-primary/10 bg-primary/[0.02] hover:border-primary/20 hover:bg-primary/[0.05]"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">

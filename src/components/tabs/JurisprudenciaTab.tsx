@@ -372,10 +372,5 @@ const JurisprudenciaTab = () => {
   );
 };
 
-// Small wrapper to avoid importing TrendingUp twice with different names
-const TrendingUpIcon = ({ className }: { className?: string }) => {
-  const { TrendingUp } = require("lucide-react");
-  return <TrendingUp className={className} />;
-};
 
 export default JurisprudenciaTab;

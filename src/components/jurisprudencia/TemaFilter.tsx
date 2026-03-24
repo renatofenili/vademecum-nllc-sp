@@ -11,13 +11,15 @@ interface TemaFilterProps {
   featuredTemas: SmartTheme[];
   categories: ThemeCategory[];
   selectedTemas: string[];
+  /** Themes present in the current search results — used to highlight matching pills */
+  activeSearchThemes?: Set<string>;
   onToggleTema: (tema: string) => void;
   onClearAll: () => void;
 }
 
 const INITIAL_TEMAS_VISIBLE = 12;
 
-const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleTema, onClearAll }: TemaFilterProps) => {
+const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSearchThemes, onToggleTema, onClearAll }: TemaFilterProps) => {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? "");
   const [expanded, setExpanded] = useState(false);
@@ -92,6 +94,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
             <div className="flex flex-wrap gap-2">
               {featuredTemas.map(({ label, count }) => {
                 const isSelected = selectedTemas.includes(label);
+                const isHighlighted = activeSearchThemes && activeSearchThemes.size > 0 && activeSearchThemes.has(label);
+                const isDimmed = activeSearchThemes && activeSearchThemes.size > 0 && !activeSearchThemes.has(label);
                 return (
                   <button
                     key={label}
@@ -100,7 +104,10 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                       "group inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-medium transition-all duration-200",
                       isSelected
                         ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "border-border/70 bg-muted/40 text-foreground hover:border-primary/40 hover:bg-muted"
+                        : isHighlighted
+                        ? "border-primary/50 bg-primary/10 text-foreground ring-2 ring-primary/20 shadow-sm"
+                        : "border-border/70 bg-muted/40 text-foreground hover:border-primary/40 hover:bg-muted",
+                      isDimmed && !isSelected && "opacity-40"
                     )}
                   >
                     <span>{label}</span>
@@ -230,6 +237,8 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
               <div className="flex flex-wrap gap-2">
                 {visibleThemes.map(({ label, count }) => {
                   const isSelected = selectedTemas.includes(label);
+                  const isHighlighted = activeSearchThemes && activeSearchThemes.size > 0 && activeSearchThemes.has(label);
+                  const isDimmed = activeSearchThemes && activeSearchThemes.size > 0 && !activeSearchThemes.has(label);
                   return (
                     <button
                       key={label}
@@ -239,7 +248,10 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, onToggleT
                         "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all duration-200",
                         isSelected
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:bg-muted/40"
+                          : isHighlighted
+                          ? "border-primary/50 bg-primary/10 text-foreground ring-2 ring-primary/20 shadow-sm"
+                          : "border-border/70 bg-background text-foreground hover:border-primary/40 hover:bg-muted/40",
+                        isDimmed && !isSelected && "opacity-40"
                       )}
                     >
                       <span>{label}</span>

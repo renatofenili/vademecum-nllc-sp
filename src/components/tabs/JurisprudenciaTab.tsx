@@ -285,20 +285,18 @@ const JurisprudenciaTab = () => {
                             <span className="font-mono text-sm font-bold text-primary">
                               {item.numero_tc}
                             </span>
-                            {item.link_relatorio_voto && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  window.open(item.link_relatorio_voto!, "_blank", "noopener,noreferrer");
-                                }}
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0"
+                              {item.link_relatorio_voto && (
+                              <a
+                                href={item.link_relatorio_voto}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer"
                                 title="Ver Relatório/Voto no TCE/SP"
                               >
                                 <ExternalLink className="h-3 w-3" />
                                 Inteiro teor
-                              </button>
+                              </a>
                             )}
                             {item.sessao_data && (
                               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">

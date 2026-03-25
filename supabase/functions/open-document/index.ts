@@ -114,12 +114,12 @@ serve(async (req) => {
   </body>
 </html>`;
 
-  const responseHeaders = new Headers(corsHeaders);
-  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
-  responseHeaders.set("Cache-Control", "no-store");
-
   return new Response(html, {
     status: 200,
-    headers: responseHeaders,
+    headers: {
+      ...corsHeaders,
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
   });
 });

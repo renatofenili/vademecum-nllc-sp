@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { buildDocumentProxyUrl } from "@/lib/documentLinks";
 import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
 import TemaFilter from "@/components/jurisprudencia/TemaFilter";
@@ -287,7 +288,7 @@ const JurisprudenciaTab = () => {
                             </span>
                               {item.link_relatorio_voto && (
                               <a
-                                href={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/redirect-pdf?url=${encodeURIComponent(item.link_relatorio_voto)}`}
+                                href={buildDocumentProxyUrl(item.link_relatorio_voto)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}

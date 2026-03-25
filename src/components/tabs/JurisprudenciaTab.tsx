@@ -287,7 +287,7 @@ const JurisprudenciaTab = () => {
                             </span>
                               {item.link_relatorio_voto && (
                               <a
-                                href={item.link_relatorio_voto}
+                                href={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/redirect-pdf?url=${encodeURIComponent(item.link_relatorio_voto)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}

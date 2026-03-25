@@ -12,12 +12,12 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
       headers: {
         ...corsHeaders,
-        "allow": "GET, HEAD, OPTIONS",
+        "allow": "GET, HEAD, POST, OPTIONS",
       },
     });
   }
@@ -25,22 +25,36 @@ serve(async (req) => {
   const requestUrl = new URL(req.url);
   const encodedTarget = requestUrl.searchParams.get("u");
 
-  if (!encodedTarget) {
+  let target: string | null = null;
+
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      target = typeof body?.url === "string" ? body.url : null;
+    } catch {
+      return new Response("Invalid document payload", {
+        status: 400,
+        headers: corsHeaders,
+      });
+    }
+  }
+
+  if (!target && !encodedTarget) {
     return new Response("Missing document parameter", {
       status: 400,
       headers: corsHeaders,
     });
   }
 
-  let target: string;
-
-  try {
-    target = atob(encodedTarget);
-  } catch {
-    return new Response("Invalid document parameter", {
-      status: 400,
-      headers: corsHeaders,
-    });
+  if (!target) {
+    try {
+      target = atob(encodedTarget as string);
+    } catch {
+      return new Response("Invalid document parameter", {
+        status: 400,
+        headers: corsHeaders,
+      });
+    }
   }
 
   let parsedTarget: URL;
@@ -90,7 +104,8 @@ serve(async (req) => {
       status: upstreamResponse.status,
       contentType: upstreamResponse.headers.get("content-type"),
     });
-  } catch {
+  } catch (error) {
+    console.error("open-document fetch:error", error);
     return new Response("Unable to fetch document", {
       status: 502,
       headers: corsHeaders,

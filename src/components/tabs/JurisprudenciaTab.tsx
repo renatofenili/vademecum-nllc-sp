@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { openDocumentInNewTab } from "@/lib/documentLinks";
+import { buildDocumentProxyUrl } from "@/lib/documentLinks";
 import { supabase } from "@/integrations/supabase/client";
 import logoTCESP from "@/assets/logo-tcesp.png";
 import TemaFilter from "@/components/jurisprudencia/TemaFilter";
@@ -288,13 +288,11 @@ const JurisprudenciaTab = () => {
                             </span>
                               {item.link_relatorio_voto && (
                               <a
-                                href={item.link_relatorio_voto}
+                                href={buildDocumentProxyUrl(item.link_relatorio_voto)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => {
-                                  e.preventDefault();
                                   e.stopPropagation();
-                                  void openDocumentInNewTab(item.link_relatorio_voto);
                                 }}
                                 className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer"
                                 title="Ver Relatório/Voto no TCE/SP"

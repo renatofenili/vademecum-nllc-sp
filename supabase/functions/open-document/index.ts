@@ -81,21 +81,26 @@ serve(async (req) => {
   const forwardedHeaders = new Headers();
   const rangeHeader = req.headers.get("range");
   const acceptHeader = req.headers.get("accept");
+  const isHeadRequest = req.method === "HEAD";
 
   if (rangeHeader) forwardedHeaders.set("range", rangeHeader);
-  if (acceptHeader) forwardedHeaders.set("accept", acceptHeader);
+  if (acceptHeader?.includes("application/pdf")) {
+    forwardedHeaders.set("accept", acceptHeader);
+  } else {
+    forwardedHeaders.set("accept", "application/pdf,*/*;q=0.8");
+  }
   forwardedHeaders.set(
     "user-agent",
     "Mozilla/5.0 (compatible; LovableDocumentProxy/1.0; +https://lovable.dev)"
   );
 
   let upstreamResponse: Response;
-  const fetchTimeout = AbortSignal.timeout(15000);
+  const fetchTimeout = AbortSignal.timeout(45000);
 
   try {
     console.log("open-document fetch:start", { target: parsedTarget.toString() });
     upstreamResponse = await fetch(parsedTarget.toString(), {
-      method: req.method,
+      method: "GET",
       headers: forwardedHeaders,
       redirect: "follow",
       signal: fetchTimeout,
@@ -138,11 +143,7 @@ serve(async (req) => {
   if (lastModified) responseHeaders.set("last-modified", lastModified);
   if (etag) responseHeaders.set("etag", etag);
 
-  const responseBody = req.method === "HEAD" ? null : await upstreamResponse.arrayBuffer();
-
-  if (responseBody) {
-    responseHeaders.set("content-length", String(responseBody.byteLength));
-  }
+  const responseBody = isHeadRequest ? null : upstreamResponse.body;
 
   return new Response(responseBody, {
     status: upstreamResponse.status,

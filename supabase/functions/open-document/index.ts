@@ -10,6 +10,16 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: {
+        ...corsHeaders,
+        "allow": "GET, HEAD, OPTIONS",
+      },
+    });
+  }
+
   const requestUrl = new URL(req.url);
   const encodedTarget = requestUrl.searchParams.get("u");
 
@@ -52,12 +62,56 @@ serve(async (req) => {
     });
   }
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      ...corsHeaders,
-      location: parsedTarget.toString(),
-      "cache-control": "no-store",
-    },
+  const forwardedHeaders = new Headers();
+  const rangeHeader = req.headers.get("range");
+  const acceptHeader = req.headers.get("accept");
+
+  if (rangeHeader) forwardedHeaders.set("range", rangeHeader);
+  if (acceptHeader) forwardedHeaders.set("accept", acceptHeader);
+
+  let upstreamResponse: Response;
+
+  try {
+    upstreamResponse = await fetch(parsedTarget.toString(), {
+      method: req.method,
+      headers: forwardedHeaders,
+      redirect: "follow",
+    });
+  } catch {
+    return new Response("Unable to fetch document", {
+      status: 502,
+      headers: corsHeaders,
+    });
+  }
+
+  if (!upstreamResponse.ok && upstreamResponse.status !== 206) {
+    return new Response("Document unavailable", {
+      status: upstreamResponse.status,
+      headers: corsHeaders,
+    });
+  }
+
+  const responseHeaders = new Headers(corsHeaders);
+  const contentType = upstreamResponse.headers.get("content-type") ?? "application/pdf";
+  const contentLength = upstreamResponse.headers.get("content-length");
+  const contentRange = upstreamResponse.headers.get("content-range");
+  const acceptRanges = upstreamResponse.headers.get("accept-ranges");
+  const lastModified = upstreamResponse.headers.get("last-modified");
+  const etag = upstreamResponse.headers.get("etag");
+
+  responseHeaders.set("content-type", contentType);
+  responseHeaders.set("content-disposition", "inline");
+  responseHeaders.set("cache-control", "no-store");
+  responseHeaders.set("x-content-type-options", "nosniff");
+
+  if (contentLength) responseHeaders.set("content-length", contentLength);
+  if (contentRange) responseHeaders.set("content-range", contentRange);
+  if (acceptRanges) responseHeaders.set("accept-ranges", acceptRanges);
+  if (lastModified) responseHeaders.set("last-modified", lastModified);
+  if (etag) responseHeaders.set("etag", etag);
+
+  return new Response(req.method === "HEAD" ? null : upstreamResponse.body, {
+    status: upstreamResponse.status,
+    headers: responseHeaders,
   });
 });

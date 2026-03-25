@@ -6,6 +6,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("open-document request", { method: req.method, url: req.url });
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -68,14 +70,25 @@ serve(async (req) => {
 
   if (rangeHeader) forwardedHeaders.set("range", rangeHeader);
   if (acceptHeader) forwardedHeaders.set("accept", acceptHeader);
+  forwardedHeaders.set(
+    "user-agent",
+    "Mozilla/5.0 (compatible; LovableDocumentProxy/1.0; +https://lovable.dev)"
+  );
 
   let upstreamResponse: Response;
+  const fetchTimeout = AbortSignal.timeout(15000);
 
   try {
+    console.log("open-document fetch:start", { target: parsedTarget.toString() });
     upstreamResponse = await fetch(parsedTarget.toString(), {
       method: req.method,
       headers: forwardedHeaders,
       redirect: "follow",
+      signal: fetchTimeout,
+    });
+    console.log("open-document fetch:done", {
+      status: upstreamResponse.status,
+      contentType: upstreamResponse.headers.get("content-type"),
     });
   } catch {
     return new Response("Unable to fetch document", {
@@ -110,7 +123,13 @@ serve(async (req) => {
   if (lastModified) responseHeaders.set("last-modified", lastModified);
   if (etag) responseHeaders.set("etag", etag);
 
-  return new Response(req.method === "HEAD" ? null : upstreamResponse.body, {
+  const responseBody = req.method === "HEAD" ? null : await upstreamResponse.arrayBuffer();
+
+  if (responseBody) {
+    responseHeaders.set("content-length", String(responseBody.byteLength));
+  }
+
+  return new Response(responseBody, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });

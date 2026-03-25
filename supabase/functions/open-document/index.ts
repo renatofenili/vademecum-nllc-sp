@@ -52,37 +52,73 @@ serve(async (req) => {
     });
   }
 
-  const upstreamResponse = await fetch(parsedTarget.toString(), {
-    headers: {
-      "user-agent": "Mozilla/5.0 (compatible; LovableDocumentProxy/1.0)",
-      accept: "application/pdf,*/*",
-    },
-  });
-
-  if (!upstreamResponse.ok || !upstreamResponse.body) {
-    return new Response("Document unavailable", {
-      status: 502,
-      headers: corsHeaders,
-    });
-  }
+  const html = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Abrindo documento…</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(32rem, calc(100vw - 2rem));
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+        padding: 1.5rem;
+      }
+      h1 { margin: 0 0 0.75rem; font-size: 1.125rem; }
+      p { margin: 0 0 1rem; line-height: 1.6; }
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 0.75rem 1rem;
+        background: #0f172a;
+        color: #ffffff;
+        font: inherit;
+        cursor: pointer;
+      }
+      code {
+        display: block;
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #f1f5f9;
+        border-radius: 0.75rem;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Abrindo o inteiro teor…</h1>
+      <p>Se o PDF não abrir automaticamente em alguns instantes, use o botão abaixo.</p>
+      <button type="button" id="open-document">Abrir documento oficial</button>
+      <code>${parsedTarget.toString()}</code>
+    </main>
+    <script>
+      const target = ${JSON.stringify(parsedTarget.toString())};
+      const openDocument = () => window.location.replace(target);
+      document.getElementById("open-document")?.addEventListener("click", openDocument);
+      setTimeout(openDocument, 60);
+    </script>
+  </body>
+</html>`;
 
   const responseHeaders = new Headers(corsHeaders);
-  responseHeaders.set(
-    "Content-Type",
-    upstreamResponse.headers.get("content-type") ?? "application/pdf"
-  );
-  responseHeaders.set(
-    "Content-Disposition",
-    `inline; filename="${parsedTarget.pathname.split("/").pop() ?? "documento.pdf"}"`
-  );
-  responseHeaders.set("Cache-Control", "public, max-age=3600");
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+  responseHeaders.set("Cache-Control", "no-store");
 
-  const contentLength = upstreamResponse.headers.get("content-length");
-  if (contentLength) {
-    responseHeaders.set("Content-Length", contentLength);
-  }
-
-  return new Response(upstreamResponse.body, {
+  return new Response(html, {
     status: 200,
     headers: responseHeaders,
   });

@@ -92,24 +92,9 @@ export const openDocumentInNewTab = async (targetUrl: string) => {
   renderLoadingState(docWindow);
 
   try {
-    const response = await fetch(OPEN_DOCUMENT_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/pdf",
-      },
-      body: JSON.stringify({ url: targetUrl }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`open-document:${response.status}`);
-    }
-
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-
-    docWindow.location.replace(blobUrl);
-    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    window.setTimeout(() => {
+      docWindow.location.replace(targetUrl);
+    }, 50);
   } catch {
     renderFallbackState(docWindow, targetUrl);
   }

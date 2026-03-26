@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Expose-Headers": "content-type, content-length, content-range, accept-ranges, content-disposition, last-modified, etag",
 };
 
 serve(async (req) => {
@@ -138,13 +139,7 @@ serve(async (req) => {
   if (lastModified) responseHeaders.set("last-modified", lastModified);
   if (etag) responseHeaders.set("etag", etag);
 
-  const responseBody = req.method === "HEAD" ? null : await upstreamResponse.arrayBuffer();
-
-  if (responseBody) {
-    responseHeaders.set("content-length", String(responseBody.byteLength));
-  }
-
-  return new Response(responseBody, {
+  return new Response(req.method === "HEAD" ? null : upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });

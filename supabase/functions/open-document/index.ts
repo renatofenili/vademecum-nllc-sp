@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Expose-Headers": "content-type, content-length, content-range, accept-ranges, content-disposition, last-modified, etag",
 };
 
 serve(async (req) => {
@@ -90,12 +91,13 @@ serve(async (req) => {
   );
 
   let upstreamResponse: Response;
-  const fetchTimeout = AbortSignal.timeout(15000);
+  const fetchTimeout = AbortSignal.timeout(45000);
+  const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
 
   try {
     console.log("open-document fetch:start", { target: parsedTarget.toString() });
     upstreamResponse = await fetch(parsedTarget.toString(), {
-      method: req.method,
+      method: upstreamMethod,
       headers: forwardedHeaders,
       redirect: "follow",
       signal: fetchTimeout,
@@ -138,13 +140,7 @@ serve(async (req) => {
   if (lastModified) responseHeaders.set("last-modified", lastModified);
   if (etag) responseHeaders.set("etag", etag);
 
-  const responseBody = req.method === "HEAD" ? null : await upstreamResponse.arrayBuffer();
-
-  if (responseBody) {
-    responseHeaders.set("content-length", String(responseBody.byteLength));
-  }
-
-  return new Response(responseBody, {
+  return new Response(req.method === "HEAD" ? null : upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });

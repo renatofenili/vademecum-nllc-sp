@@ -6,6 +6,23 @@ export const buildDocumentProxyUrl = (targetUrl: string) => {
   return `${OPEN_DOCUMENT_ENDPOINT}?u=${encodeURIComponent(encodedTarget)}`;
 };
 
+const fetchDocumentBlob = async (targetUrl: string) => {
+  const response = await fetch(OPEN_DOCUMENT_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+    },
+    body: JSON.stringify({ url: targetUrl }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Document fetch failed with status ${response.status}`);
+  }
+
+  return response.blob();
+};
+
 const renderLoadingState = (docWindow: Window) => {
   docWindow.document.write(`
     <!doctype html>
@@ -37,7 +54,7 @@ const renderLoadingState = (docWindow: Window) => {
   docWindow.document.close();
 };
 
-const renderFallbackState = (docWindow: Window, targetUrl: string) => {
+const renderFallbackState = (docWindow: Window, fallbackUrl: string) => {
   docWindow.document.write(`
     <!doctype html>
     <html lang="pt-BR">
@@ -72,8 +89,8 @@ const renderFallbackState = (docWindow: Window, targetUrl: string) => {
       <body>
         <main>
           <h1>Não foi possível abrir automaticamente</h1>
-          <p>Se o navegador bloquear a abertura automática, use o link direto abaixo:</p>
-          <p><a href="${targetUrl}" target="_self" rel="noreferrer">${targetUrl}</a></p>
+          <p>Se o navegador bloquear a visualização, use o link seguro abaixo:</p>
+          <p><a href="${fallbackUrl}" target="_self" rel="noreferrer">Abrir documento</a></p>
         </main>
       </body>
     </html>
@@ -82,20 +99,30 @@ const renderFallbackState = (docWindow: Window, targetUrl: string) => {
 };
 
 export const openDocumentInNewTab = async (targetUrl: string) => {
+  const proxyUrl = buildDocumentProxyUrl(targetUrl);
   const docWindow = window.open("", "_blank");
 
   if (!docWindow) {
-    window.location.assign(targetUrl);
+    window.location.assign(proxyUrl);
     return;
   }
 
   renderLoadingState(docWindow);
 
   try {
+    const documentBlob = await fetchDocumentBlob(targetUrl);
+    const objectUrl = URL.createObjectURL(documentBlob);
+
+    docWindow.location.replace(objectUrl);
+
     window.setTimeout(() => {
-      docWindow.location.replace(targetUrl);
-    }, 50);
+      URL.revokeObjectURL(objectUrl);
+    }, 120000);
   } catch {
-    renderFallbackState(docWindow, targetUrl);
+    try {
+      docWindow.location.replace(proxyUrl);
+    } catch {
+      renderFallbackState(docWindow, proxyUrl);
+    }
   }
 };

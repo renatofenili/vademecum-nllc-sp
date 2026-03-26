@@ -91,12 +91,13 @@ serve(async (req) => {
   );
 
   let upstreamResponse: Response;
-  const fetchTimeout = AbortSignal.timeout(15000);
+  const fetchTimeout = AbortSignal.timeout(45000);
+  const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
 
   try {
     console.log("open-document fetch:start", { target: parsedTarget.toString() });
     upstreamResponse = await fetch(parsedTarget.toString(), {
-      method: req.method,
+      method: upstreamMethod,
       headers: forwardedHeaders,
       redirect: "follow",
       signal: fetchTimeout,

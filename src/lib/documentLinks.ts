@@ -1,4 +1,26 @@
 const OPEN_DOCUMENT_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/open-document`;
+const JURISPRUDENCIA_STATIC_PREFIX = "/jurisprudencia-pdfs";
+
+export const buildLocalJurisprudenciaPdfUrl = (recordId: string, targetUrl: string) => {
+  try {
+    const parsedUrl = new URL(targetUrl, window.location.origin);
+    const rawFileName = decodeURIComponent(parsedUrl.pathname.split("/").pop() ?? "");
+
+    if (!rawFileName) return targetUrl;
+
+    const normalizedFileName = rawFileName.toLowerCase().endsWith(".pdf")
+      ? rawFileName
+      : `${rawFileName}.pdf`;
+
+    const mirroredFileName = normalizedFileName.startsWith(`${recordId}-`)
+      ? normalizedFileName
+      : `${recordId}-${normalizedFileName}`;
+
+    return `${JURISPRUDENCIA_STATIC_PREFIX}/${encodeURIComponent(mirroredFileName)}`;
+  } catch {
+    return targetUrl;
+  }
+};
 
 export const buildDocumentProxyUrl = (targetUrl: string) => {
   const encodedTarget = btoa(targetUrl);

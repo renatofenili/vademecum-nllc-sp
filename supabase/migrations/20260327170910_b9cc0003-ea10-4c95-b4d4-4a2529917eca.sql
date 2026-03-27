@@ -1,0 +1,1 @@
+UPDATE public.normas SET video_storage_path = 'decreto-68021-2023.mp4' WHERE id = '15417ccf-7420-4e10-9198-d4dad12d8f01';

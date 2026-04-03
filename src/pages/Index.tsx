@@ -10,6 +10,7 @@ import ConsultasTab from "@/components/tabs/ConsultasTab";
 import JurisprudenciaTab from "@/components/tabs/JurisprudenciaTab";
 import MapasTab from "@/components/tabs/MapasTab";
 import MapaCalorTab from "@/components/tabs/MapaCalorTab";
+import FerramentasTab from "@/components/tabs/FerramentasTab";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");
@@ -82,6 +83,12 @@ const Index = () => {
         return (
           <div className="container py-6 md:py-8">
             <MapaCalorTab />
+          </div>
+        );
+      case "ferramentas":
+        return (
+          <div className="container py-6 md:py-8">
+            <FerramentasTab />
           </div>
         );
       default:

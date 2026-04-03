@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { FileText, FileBarChart, Search, Network, Flame, Scale } from "lucide-react";
+import { FileText, FileBarChart, Search, Network, Flame, Scale, Wrench } from "lucide-react";
 import logoSGGD from "@/assets/logo-sggd.jpg";
 import logoTCESP from "@/assets/logo-tcesp.png";
 
-export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor";
+export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor" | "ferramentas";
 
 interface HeaderProps {
   activeTab?: TabType;
@@ -17,6 +17,7 @@ const navItems: { label: string; tab: TabType; icon: typeof FileText; isNew?: bo
   { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "Linguagem Simples!", tab: "relatorios", icon: FileBarChart },
+  { label: "Ferramentas", tab: "ferramentas", icon: Wrench },
 ];
 
 const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {

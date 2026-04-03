@@ -274,9 +274,17 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
               </Button>
             </div>
 
-            <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
-              {node.fullValue}
-            </p>
+            {node.id === "habilitacao" && node.fullValue ? (
+              <ul className="list-disc list-inside space-y-1.5 text-sm leading-relaxed text-foreground">
+                {node.fullValue.split(/[;.\n]/).map((item: string) => item.trim()).filter(Boolean).map((item: string, i: number) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+                {node.fullValue}
+              </p>
+            )}
 
             {hasPlanilha && (
               <>

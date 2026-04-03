@@ -3,7 +3,7 @@ import { FileText, FileBarChart, Search, Network, Flame, Scale, Wrench } from "l
 import logoSGGD from "@/assets/logo-sggd.jpg";
 import logoTCESP from "@/assets/logo-tcesp.png";
 
-export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor";
+export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor" | "ferramentas";
 
 interface HeaderProps {
   activeTab?: TabType;

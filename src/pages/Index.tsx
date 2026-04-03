@@ -10,6 +10,7 @@ import ConsultasTab from "@/components/tabs/ConsultasTab";
 import JurisprudenciaTab from "@/components/tabs/JurisprudenciaTab";
 import MapasTab from "@/components/tabs/MapasTab";
 import MapaCalorTab from "@/components/tabs/MapaCalorTab";
+import FerramentasTab from "@/components/tabs/FerramentasTab";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("home");

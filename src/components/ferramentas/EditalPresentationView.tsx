@@ -143,7 +143,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden bg-muted/40">
+      <div className="flex-1 relative overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(var(--muted) / 0.5), hsl(var(--background)), hsl(var(--muted) / 0.3))" }}>
         {/* Subtle grid */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.03]">
           <pattern id="cleanGrid" width="48" height="48" patternUnits="userSpaceOnUse">
@@ -209,7 +209,7 @@ const FlowNodeEl = ({
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
+      <Card className={`transition-shadow duration-200 shadow-md border-border/60 bg-card ring-1 ring-black/[0.04] ${node.expandable ? "hover:shadow-xl hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
         <CardContent className="px-3 py-2 flex flex-col items-center justify-center gap-0.5">
           <div className="flex items-center gap-1.5">
             <Icon className="h-3.5 w-3.5 text-primary" />

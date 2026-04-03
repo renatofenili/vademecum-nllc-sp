@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Play,
+  TableProperties,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -119,6 +120,7 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
         {metadataItems.map((item, index) => {
           const value = analysis[item.key];
           const isVisible = index < visibleCards;
+          const hasPlanilha = item.key === "valor_estimado" && analysis.planilha_estimada && analysis.planilha_estimada !== "Não disponível no edital";
 
           return (
             <Card
@@ -143,6 +145,9 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
                     <p className="text-sm text-foreground leading-relaxed">
                       {value || "Não identificado"}
                     </p>
+                    {hasPlanilha && (
+                      <PlanilhaExpandable planilha={analysis.planilha_estimada} />
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -201,6 +206,30 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+};
+
+const PlanilhaExpandable = ({ planilha }: { planilha: string }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3">
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 text-xs"
+        onClick={() => setOpen(!open)}
+      >
+        <TableProperties className="h-3.5 w-3.5" />
+        Planilha Estimativa
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </Button>
+      {open && (
+        <div className="mt-3 text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
+          {planilha}
+        </div>
+      )}
     </div>
   );
 };

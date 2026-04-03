@@ -143,7 +143,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden bg-muted/40">
+      <div className="flex-1 relative overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(var(--muted) / 0.5), hsl(var(--background)), hsl(var(--muted) / 0.3))" }}>
         {/* Subtle grid */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.03]">
           <pattern id="cleanGrid" width="48" height="48" patternUnits="userSpaceOnUse">

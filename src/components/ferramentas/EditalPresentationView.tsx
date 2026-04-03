@@ -17,10 +17,9 @@ interface FlowNode {
   value: string;
   fullValue: string;
   icon: React.ElementType;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  row: number;
+  col: number;
+  colSpan: number;
   expandable: boolean;
   extraContent?: unknown;
 }
@@ -36,16 +35,16 @@ const truncate = (s: string | undefined, max: number) => {
 };
 
 const buildNodes = (a: EditalAnalysis): FlowNode[] => [
-  { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 4, w: 16, h: 0, expandable: false },
-  { id: "modalidade", label: "Modalidade", value: truncate(a.modalidade, 25), fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 25, y: 18, w: 18, h: 0, expandable: false },
-  { id: "orgao", label: "Órgão", value: truncate(a.orgao, 30), fullValue: a.orgao || "Não identificado", icon: Building2, x: 75, y: 18, w: 22, h: 0, expandable: true },
-  { id: "objeto", label: "Objeto", value: truncate(a.objeto, 55), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 32, w: 44, h: 0, expandable: true },
-  { id: "criterio", label: "Critério", value: truncate(a.criterio_julgamento, 22), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 17, y: 47, w: 18, h: 0, expandable: true },
-  { id: "sessao", label: "Sessão Pública", value: truncate(a.data_sessao, 25), fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 47, w: 18, h: 0, expandable: false },
-  { id: "valor", label: "Valor Estimado", value: truncate(a.valor_estimado, 20), fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 83, y: 47, w: 18, h: 0, expandable: true, extraContent: a.planilha_estimada },
-  { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 30), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 22, y: 62, w: 24, h: 0, expandable: true },
-  { id: "sistema", label: "Onde Licitar", value: truncate(a.sistema_licitacao, 30), fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 75, y: 62, w: 22, h: 0, expandable: false },
-  { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 70), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 80, w: 54, h: 0, expandable: true },
+  { id: "edital",      label: "Edital",             value: a.numero_edital || "Edital",                       fullValue: a.numero_edital || "Edital",                       icon: Hash,           row: 0, col: 1, colSpan: 1, expandable: false },
+  { id: "modalidade",  label: "Modalidade",         value: truncate(a.modalidade, 30),                        fullValue: a.modalidade || "Não identificado",                icon: Clipboard,      row: 1, col: 0, colSpan: 1, expandable: false },
+  { id: "orgao",       label: "Órgão",              value: truncate(a.orgao, 40),                             fullValue: a.orgao || "Não identificado",                     icon: Building2,      row: 1, col: 2, colSpan: 1, expandable: true },
+  { id: "objeto",      label: "Objeto",             value: truncate(a.objeto, 80),                            fullValue: a.objeto || "Não identificado",                    icon: FileText,       row: 2, col: 0, colSpan: 3, expandable: true },
+  { id: "criterio",    label: "Critério",           value: truncate(a.criterio_julgamento, 30),               fullValue: a.criterio_julgamento || "Não identificado",       icon: Scale,          row: 3, col: 0, colSpan: 1, expandable: true },
+  { id: "sessao",      label: "Sessão Pública",     value: truncate(a.data_sessao, 30),                       fullValue: a.data_sessao || "Não identificado",               icon: Calendar,       row: 3, col: 1, colSpan: 1, expandable: false },
+  { id: "valor",       label: "Valor Estimado",     value: truncate(a.valor_estimado, 25),                    fullValue: a.valor_estimado || "Não informado",               icon: DollarSign,     row: 3, col: 2, colSpan: 1, expandable: true, extraContent: a.planilha_estimada },
+  { id: "habilitacao", label: "Habilitação",        value: truncate(a.condicoes_habilitacao, 40),             fullValue: a.condicoes_habilitacao || "Não identificado",     icon: Shield,         row: 4, col: 0, colSpan: 1, expandable: true },
+  { id: "sistema",     label: "Onde Licitar",       value: truncate(a.sistema_licitacao, 35),                 fullValue: a.sistema_licitacao || "Não identificado",         icon: Globe,          row: 4, col: 2, colSpan: 1, expandable: false },
+  { id: "resumo",      label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 90),                  fullValue: a.resumo_simples || "Não identificado",           icon: MessageSquare,  row: 5, col: 0, colSpan: 3, expandable: true },
 ];
 
 const arrowDefs: FlowArrow[] = [
@@ -68,6 +67,13 @@ const STAGGER_MS = 350;
 // Convert **bold** markdown to <strong> tags
 const formatBold = (text: string): string =>
   text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+
+// ── Grid layout helper ──
+// 3-column grid, 6 rows. Returns CSS grid placement.
+const getGridStyle = (node: FlowNode): React.CSSProperties => ({
+  gridRow: node.row + 1,
+  gridColumn: node.colSpan === 3 ? "1 / -1" : `${node.col + 1} / span ${node.colSpan}`,
+});
 
 // ── Complexity Score ──
 const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
@@ -313,7 +319,6 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose, expandedNode]);
 
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const visibleNodeIds = new Set(nodes.slice(0, visibleCount).map((n) => n.id));
   const visibleArrows = arrowDefs.filter(
     (a) => visibleNodeIds.has(a.from) && visibleNodeIds.has(a.to)
@@ -324,7 +329,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-primary-foreground bg-primary">
             V
@@ -353,34 +358,40 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(var(--muted) / 0.5), hsl(var(--background)), hsl(var(--muted) / 0.3))" }}>
-        {/* Subtle grid */}
-        <svg className="absolute inset-0 w-full h-full opacity-[0.03]">
+      {/* Canvas - CSS Grid layout */}
+      <div className="flex-1 relative overflow-auto" style={{ background: "linear-gradient(135deg, hsl(var(--muted) / 0.5), hsl(var(--background)), hsl(var(--muted) / 0.3))" }}>
+        {/* Subtle grid background */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.03] pointer-events-none">
           <pattern id="cleanGrid" width="48" height="48" patternUnits="userSpaceOnUse">
             <path d="M 48 0 L 0 0 0 48" fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.5" />
           </pattern>
           <rect width="100%" height="100%" fill="url(#cleanGrid)" />
         </svg>
 
-        {/* SVG arrows */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
-          {visibleArrows.map((arrow) => {
-            const from = nodeMap.get(arrow.from)!;
-            const to = nodeMap.get(arrow.to)!;
-            return <FlowArrowSVG key={`${arrow.from}-${arrow.to}`} from={from} to={to} />;
-          })}
-        </svg>
+        {/* Grid container */}
+        <div
+          className="relative mx-auto px-6 py-8"
+          style={{
+            maxWidth: 900,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gridTemplateRows: "repeat(6, auto)",
+            gap: "16px 16px",
+          }}
+        >
+          {/* SVG connector lines between grid nodes */}
+          <GridConnectors nodes={nodes} arrows={visibleArrows} />
 
-        {/* Nodes */}
-        {nodes.map((node, i) => (
-          <FlowNodeEl
-            key={node.id}
-            node={node}
-            visible={i < visibleCount}
-            onExpand={() => node.expandable && setExpandedNode(node.id)}
-          />
-        ))}
+          {/* Nodes */}
+          {nodes.map((node, i) => (
+            <FlowNodeEl
+              key={node.id}
+              node={node}
+              visible={i < visibleCount}
+              onExpand={() => node.expandable && setExpandedNode(node.id)}
+            />
+          ))}
+        </div>
 
         {/* Expanded overlay */}
         {expandedNode && (
@@ -393,7 +404,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
 
       {/* Bottom timeline */}
       {allVisible && analysis.timeline && (
-        <div className="px-6 py-3 border-t border-border bg-card flex items-center justify-center">
+        <div className="px-6 py-3 border-t border-border bg-card flex items-center justify-center shrink-0">
           <div className="flex items-center gap-2 mr-4">
             <Clock className="h-3.5 w-3.5 text-primary" />
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cronograma</span>
@@ -405,7 +416,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
   );
 };
 
-// ── FlowNodeEl ──
+// ── FlowNodeEl (grid-based) ──
 const FlowNodeEl = ({
   node,
   visible,
@@ -416,55 +427,65 @@ const FlowNodeEl = ({
   onExpand: () => void;
 }) => {
   const Icon = node.icon;
+  const isWide = node.colSpan === 3;
 
   return (
     <div
       style={{
-        position: "absolute",
-        left: `${node.x - node.w / 2}%`,
-        top: `${node.y}%`,
-        width: `${node.w}%`,
+        ...getGridStyle(node),
         transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
-        transform: visible ? "scale(1) translateY(-50%)" : "scale(0.5) translateY(-50%)",
+        transform: visible ? "scale(1)" : "scale(0.85)",
         opacity: visible ? 1 : 0,
         zIndex: 10,
         cursor: node.expandable ? "pointer" : "default",
+        justifySelf: !isWide && node.col === 1 ? "center" : "stretch",
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`transition-shadow duration-200 ${
+      <Card className={`h-full transition-shadow duration-200 ${
         node.id === "resumo"
           ? "shadow-lg border-primary/30 bg-primary/[0.03] ring-1 ring-primary/10"
-          : "shadow-md border-border/60 bg-card ring-1 ring-black/[0.04]"
-      } ${node.expandable ? "hover:shadow-xl hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
-        <CardContent className={`px-3 py-2 flex flex-col items-center justify-center gap-0.5 ${node.id === "resumo" ? "py-3" : ""}`}>
-          <div className="flex items-center gap-1.5">
-            <Icon className="h-3.5 w-3.5 text-primary" />
-            <span className={`font-semibold uppercase tracking-wider ${node.id === "resumo" ? "text-[11px] text-primary" : "text-[10px] text-muted-foreground"}`}>
+          : "shadow-sm border-border/60 bg-card ring-1 ring-black/[0.04]"
+      } ${node.expandable ? "hover:shadow-lg hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
+        <CardContent className={`px-4 py-3 flex flex-col gap-1 ${isWide ? "items-start" : "items-center text-center"}`}>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Icon className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <span className={`font-semibold uppercase tracking-wider ${node.id === "resumo" ? "text-xs text-primary" : "text-[11px] text-muted-foreground"}`}>
               {node.label}
             </span>
+            {node.expandable && (
+              <ChevronDown className="h-3 w-3 text-muted-foreground/40 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
           </div>
           <p
-            className="text-center text-foreground overflow-hidden text-ellipsis"
+            className="text-foreground leading-snug"
             style={{
-              fontSize: node.id === "resumo" ? "12px" : "11px",
+              fontSize: node.id === "edital" ? 15 : 13,
               fontWeight: node.id === "edital" ? 700 : 500,
-              maxWidth: "95%",
               display: "-webkit-box",
-              WebkitLineClamp: node.id === "resumo" ? 3 : 1,
+              WebkitLineClamp: isWide ? 3 : 2,
               WebkitBoxOrient: "vertical",
-              lineHeight: "1.4",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             {node.value}
           </p>
-          {node.expandable && (
-            <ChevronDown className="h-3 w-3 text-muted-foreground/50 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          )}
         </CardContent>
       </Card>
     </div>
   );
+};
+
+// ── Grid Connectors (simple vertical lines between rows) ──
+const GridConnectors = ({ nodes, arrows }: { nodes: FlowNode[]; arrows: FlowArrow[] }) => {
+  // In a CSS Grid layout, we can't easily draw SVG arrows between grid items
+  // since positions are dynamic. Instead we render subtle vertical connector dots
+  // between rows that have visible connections.
+  // This is intentionally minimal to keep the layout clean.
+  return null; // Clean layout without connector lines - the grid structure implies hierarchy
 };
 
 // ── ExpandedCard ──
@@ -474,19 +495,19 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
 
   return (
     <>
-      <div className="absolute inset-0 bg-black/40 z-40 animate-fade-in" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 z-40 animate-fade-in" onClick={onClose} />
       <div
-        className="absolute z-50 animate-scale-in"
+        className="fixed z-50 animate-scale-in"
         style={{
           left: "50%",
           top: "50%",
           transform: "translate(-50%, -50%)",
           width: "min(95%, 900px)",
-          maxHeight: "75vh",
+          maxHeight: "80vh",
         }}
       >
         <Card className="border-primary/20 shadow-xl">
-          <CardContent className="p-6 overflow-y-auto" style={{ maxHeight: "75vh" }}>
+          <CardContent className="p-6 overflow-y-auto" style={{ maxHeight: "80vh" }}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -540,7 +561,6 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                       )}
                       <div className="text-sm leading-[1.85] text-foreground space-y-3">
                         {(isHeader ? body : section).split('\n\n').map((para: string, pi: number) => {
-                          // Blockquotes (> "...")
                           if (para.trim().startsWith('>')) {
                             return (
                               <blockquote key={pi} className="border-l-3 border-primary/30 pl-4 py-2 bg-primary/[0.03] rounded-r-lg italic text-foreground/90">
@@ -548,7 +568,6 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                               </blockquote>
                             );
                           }
-                          // Numbered lists
                           if (/^\d+\.\s/.test(para.trim())) {
                             return (
                               <ol key={pi} className="space-y-3 pl-1">
@@ -563,7 +582,6 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                               </ol>
                             );
                           }
-                          // Bullet lists
                           if (/^[•⚡🤝🔗🔄🌱📋📌📰⚠️❓🏁⏱️🚫🔒📍⏰💳📈📐🧪💻🏗️📜🏦🔧📊💡📝]/.test(para.trim())) {
                             return (
                               <ul key={pi} className="space-y-3 pl-1">
@@ -576,7 +594,6 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                               </ul>
                             );
                           }
-                          // Regular paragraph with bold support
                           return <p key={pi} className="whitespace-pre-line" dangerouslySetInnerHTML={{ __html: formatBold(para) }} />;
                         })}
                       </div>
@@ -637,40 +654,5 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
     </>
   );
 };
-
-// ── FlowArrowSVG ──
-const FlowArrowSVG = ({ from, to }: { from: FlowNode; to: FlowNode }) => {
-  const x1 = from.x;
-  const y1 = from.y + from.h / 2;
-  const x2 = to.x;
-  const y2 = to.y - to.h / 2;
-  const midY = (y1 + y2) / 2;
-
-  const pathD = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-
-  return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-      <path
-        d={pathD}
-        fill="none"
-        stroke="hsl(var(--primary) / 0.2)"
-        strokeWidth="0.2"
-        style={{
-          strokeDasharray: 200,
-          animation: "drawLine 0.8s ease-out forwards",
-        }}
-      />
-      <circle cx={x2} cy={y2} r="0.4" fill="hsl(var(--primary))" opacity={0.3} />
-    </svg>
-  );
-};
-
-// Inject keyframe
-if (typeof document !== "undefined" && !document.querySelector("[data-flow-anim]")) {
-  const s = document.createElement("style");
-  s.setAttribute("data-flow-anim", "true");
-  s.textContent = `@keyframes drawLine { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }`;
-  document.head.appendChild(s);
-}
 
 export default EditalPresentationView;

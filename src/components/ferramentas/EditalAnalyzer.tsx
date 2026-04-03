@@ -57,9 +57,8 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/analyze-edital`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-edital`,
         {
           method: "POST",
           headers: {

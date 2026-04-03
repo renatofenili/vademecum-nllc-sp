@@ -1,0 +1,41 @@
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { analyzeEditalText, extractCriterio, extractOrgao } from "./index.ts";
+
+const fixtureText = `
+PREFEITURA MUNICIPAL DE ALFA
+SECRETARIA DE ADMINISTRAÇÃO, publicada no D.O.U. de 04 de março de 2021, realizará licitação, na modalidade PREGÃO, na forma ELETRÔNICA.
+EDITAL 06/2021
+
+1. OBJETO
+1.1. Descrição. A presente licitação tem por objeto a Aquisição de Armários, Mesas, Gaveteiros, Bancada e Entre Outros, conforme especificações constantes do Termo de Referência que integra este Edital como Anexo I.
+
+1.2. Os pagamentos decorrentes de despesas cujos valores estejam corretos serão realizados em até 30 dias.
+
+Critério de julgamento: menor preço global.
+Sessão pública: 15/03/2025 às 10h.
+Plataforma: Licitações-e (Banco do Brasil).
+Documentos de habilitação: ato constitutivo, CNPJ, certidão federal, FGTS, CNDT, atestado de capacidade técnica e balanço patrimonial.
+`;
+
+Deno.test("extractOrgao removes publication and bidding tail", () => {
+  const value = extractOrgao(fixtureText);
+  assertEquals(value, "Secretaria de Administração");
+});
+
+Deno.test("extractCriterio identifies labeled criterion with qualifier", () => {
+  const value = extractCriterio(`Para julgamento e classificação das propostas será adotado o critério de menor preço por item.`);
+  assertEquals(value, "Menor preço por item");
+});
+
+Deno.test("analyzeEditalText produces grounded summary from fixture text", () => {
+  const result = analyzeEditalText(fixtureText);
+
+  assertEquals(result.orgao, "Secretaria de Administração");
+  assertEquals(result.criterio_julgamento, "Menor preço global");
+  assertStringIncludes(result.objeto, "Aquisição de Armários");
+  assertStringIncludes(result.resumo_simples, "Órgão: Secretaria de Administração");
+  assertStringIncludes(result.resumo_simples, "Critério de julgamento: Menor preço global");
+  assertStringIncludes(result.resumo_simples, "Sessão pública: 15/03/2025 às 10h");
+  assert(!result.resumo_simples.includes("Imagine que"));
+  assert(result.resumo_simples.length < 2200);
+});

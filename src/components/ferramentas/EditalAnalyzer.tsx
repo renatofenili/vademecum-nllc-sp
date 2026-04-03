@@ -9,7 +9,7 @@ import EditalAnalysisResult from "./EditalAnalysisResult";
 export interface EditalAnalysis {
   objeto: string;
   valor_estimado: string;
-  planilha_estimada: string;
+  planilha_estimada: unknown;
   criterio_julgamento: string;
   data_sessao: string;
   condicoes_habilitacao: string;

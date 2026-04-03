@@ -60,12 +60,118 @@ function extractModalidade(text: string): string {
 }
 
 function extractOrgao(text: string): string {
-  // Look in the first ~1500 chars (header area)
-  const header = text.slice(0, 1500);
-  return firstMatch(header, [
-    /((?:PREFEITURA|MUNICÍPIO|SECRETARIA|GOVERNO|ESTADO|CÂMARA|TRIBUNAL|FUNDAÇÃO|AUTARQUIA|UNIVERSIDADE|INSTITUTO|COMPANHIA|EMPRESA|DEPARTAMENTO|SERVIÇO\s+AUTÔNOMO)[^\n]{5,120})/i,
-    /(?:ÓRGÃO|ENTIDADE|CONTRATANTE)\s*[:.]?\s*([^\n]{10,120})/i,
-  ]) || "Não identificado";
+  const header = text.replace(/\r\n/g, "\n").slice(0, 4000);
+  const candidates: Array<{ value: string; score: number }> = [];
+
+  const addCandidate = (raw: string | null | undefined, boost = 0) => {
+    if (!raw) return;
+    const cleaned = cleanOrgaoName(raw);
+    if (!cleaned) return;
+
+    const score = scoreOrgaoCandidate(cleaned) + boost;
+    if (score >= 8) candidates.push({ value: cleaned, score });
+  };
+
+  const labeledPatterns = [
+    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,180})/gim,
+    /(?:^|\n)\s*(?:prefeitura|município|governo|tribunal|câmara|secretaria|autarquia|fundação|universidade|instituto)[^\n]{0,140}/gim,
+  ];
+
+  for (const pattern of labeledPatterns) {
+    for (const match of header.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 20);
+    }
+  }
+
+  const lines = header
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 40);
+
+  for (const line of lines) {
+    addCandidate(line, line === line.toUpperCase() ? 4 : 0);
+  }
+
+  const best = candidates.sort((a, b) => b.score - a.score || a.value.length - b.value.length)[0];
+  return best?.value || "Não identificado";
+}
+
+function cleanOrgaoName(raw: string): string {
+  let value = raw
+    .replace(/^\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]?\s*/i, "")
+    .replace(/^\s*(?:uasg|ug)\s*[:.]?\s*\d+\s*[-–—:]?\s*/i, "")
+    .replace(/^\s*(?:cnpj|processo|pregão|concorrência|edital)\b[^\n]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  value = value
+    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaur[aá]|torna\s+p[úu]blico|por\s+meio\s+de|situad[ao]|inscrit[ao])\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:no|na)\s+(?:d\.o\.u\.|d\.o\.e\.|imprensa\s+oficial|forma\s+eletr[ôo]nica)\b[\s\S]*$/i, "")
+    .replace(/\s*[-–—:]\s*(?:cnpj|uasg|ug|processo|pregão|concorrência|edital)\b[\s\S]*$/i, "")
+    .replace(/[;:,\-–—]+$/, "")
+    .trim();
+
+  if (!value) return "";
+  if (value.length < 4 || value.length > 140) return "";
+  if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|concorr[êe]ncia|edital|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o)\b/i.test(value)) return "";
+  if (!/\b(prefeitura|município|secretaria|governo|estado|câmara|tribunal|fundação|autarquia|universidade|instituto|companhia|empresa|departamento|serviço\s+autônomo|consórcio|agência|ministério|superintendência|assembleia|senado|câmara\s+municipal)\b/i.test(value)) {
+    return "";
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function scoreOrgaoCandidate(value: string): number {
+  let score = 0;
+
+  const positiveSignals: Array<[RegExp, number]> = [
+    [/\bprefeitura\b/i, 8],
+    [/\bmunicípio\b/i, 8],
+    [/\bsecretaria\b/i, 8],
+    [/\bgoverno\b/i, 7],
+    [/\bestado\b/i, 5],
+    [/\bcâmara\b/i, 7],
+    [/\btribunal\b/i, 7],
+    [/\bfundação\b/i, 7],
+    [/\bautarquia\b/i, 7],
+    [/\buniversidade\b/i, 7],
+    [/\binstituto\b/i, 7],
+    [/\bcompanhia\b/i, 6],
+    [/\bempresa\b/i, 5],
+    [/\bdepartamento\b/i, 6],
+    [/\bserviço\s+autônomo\b/i, 7],
+    [/\bministério\b/i, 7],
+    [/\bsuperintendência\b/i, 6],
+  ];
+
+  const negativeSignals: Array<[RegExp, number]> = [
+    [/\blicitaç[ãa]o\b/i, 12],
+    [/\bpreg[ãa]o\b/i, 12],
+    [/\bconcorr[êe]ncia\b/i, 12],
+    [/\bedital\b/i, 10],
+    [/\bpublicad[ao]\b/i, 10],
+    [/\brealizar[áa]\b/i, 12],
+    [/\bsess[ãa]o\b/i, 8],
+    [/\bproposta\b/i, 8],
+    [/\bd\.o\.u\.|d\.o\.e\./i, 8],
+    [/\bobjeto\b/i, 10],
+    [/\bfornecimento\b/i, 8],
+  ];
+
+  for (const [pattern, points] of positiveSignals) {
+    if (pattern.test(value)) score += points;
+  }
+
+  for (const [pattern, points] of negativeSignals) {
+    if (pattern.test(value)) score -= points;
+  }
+
+  if (value.length > 70) score -= 4;
+  if (value.length > 100) score -= 6;
+  if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s\-\/]+$/.test(value)) score += 2;
+
+  return score;
 }
 
 function extractObjeto(text: string): string {

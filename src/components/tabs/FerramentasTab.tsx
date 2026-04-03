@@ -2,22 +2,29 @@ import { useState } from "react";
 import { Building2, Store, FileSearch, ArrowLeft, Wrench } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import EditalAnalyzer from "@/components/ferramentas/EditalAnalyzer";
 
 type Profile = null | "orgao" | "licitante";
+type ActiveTool = null | "edital";
 
 const orgaoTools = [
-  { id: "etp", label: "Analisador ETP", description: "Análise do Estudo Técnico Preliminar" },
-  { id: "tr", label: "Analisador TR", description: "Análise do Termo de Referência" },
-  { id: "pesquisa", label: "Analisador Pesquisa de Preços", description: "Análise da pesquisa de preços" },
-  { id: "preparatoria", label: "Analisador Fase Preparatória", description: "Análise da fase preparatória do processo" },
+  { id: "etp", label: "Analisador ETP", description: "Análise do Estudo Técnico Preliminar", ready: false },
+  { id: "tr", label: "Analisador TR", description: "Análise do Termo de Referência", ready: false },
+  { id: "pesquisa", label: "Analisador Pesquisa de Preços", description: "Análise da pesquisa de preços", ready: false },
+  { id: "preparatoria", label: "Analisador Fase Preparatória", description: "Análise da fase preparatória do processo", ready: false },
 ];
 
 const licitanteTools = [
-  { id: "edital", label: "Analisador Edital", description: "Análise do edital de licitação" },
+  { id: "edital", label: "Analisador Edital", description: "Análise do edital de licitação em linguagem simples", ready: true },
 ];
 
 const FerramentasTab = () => {
   const [profile, setProfile] = useState<Profile>(null);
+  const [activeTool, setActiveTool] = useState<ActiveTool>(null);
+
+  if (activeTool === "edital") {
+    return <EditalAnalyzer onBack={() => setActiveTool(null)} />;
+  }
 
   if (profile === null) {
     return (
@@ -88,7 +95,12 @@ const FerramentasTab = () => {
         {tools.map((tool) => (
           <Card
             key={tool.id}
-            className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
+            className={`transition-all hover:shadow-md hover:border-primary/50 ${
+              tool.ready ? "cursor-pointer" : "opacity-75"
+            }`}
+            onClick={() => {
+              if (tool.id === "edital") setActiveTool("edital");
+            }}
           >
             <CardHeader className="pb-2">
               <div className="flex items-center gap-3">
@@ -100,7 +112,9 @@ const FerramentasTab = () => {
             </CardHeader>
             <CardContent>
               <CardDescription>{tool.description}</CardDescription>
-              <p className="text-xs text-muted-foreground mt-2 italic">Em breve</p>
+              {!tool.ready && (
+                <p className="text-xs text-muted-foreground mt-2 italic">Em breve</p>
+              )}
             </CardContent>
           </Card>
         ))}

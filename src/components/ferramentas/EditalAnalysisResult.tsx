@@ -262,10 +262,9 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
     <div className="mt-3 rounded-lg border border-border">
       <table className="w-full text-xs table-fixed">
         <colgroup>
-          {headers.map((h) => {
-            const w = colClass(h);
-            return <col key={h} style={w ? { width: w.replace("w-[", "").replace("]", "") } : undefined} />;
-          })}
+          {headers.map((h) => (
+            <col key={h} style={colStyle(h)} />
+          ))}
         </colgroup>
         <thead>
           <tr className="bg-muted">

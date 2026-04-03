@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import EditalPresentationView from "./EditalPresentationView";
 import {
   ArrowLeft,
   FileText,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +41,7 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   const [visibleCards, setVisibleCards] = useState(0);
   const [showResumo, setShowResumo] = useState(false);
   const [resumoExpanded, setResumoExpanded] = useState(false);
+  const [showPresentation, setShowPresentation] = useState(true);
 
   // Staggered animation
   useEffect(() => {
@@ -55,6 +58,15 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
     return () => clearInterval(interval);
   }, []);
 
+  if (showPresentation) {
+    return (
+      <EditalPresentationView
+        analysis={analysis}
+        onClose={() => setShowPresentation(false)}
+      />
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -68,10 +80,16 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
             <p className="text-sm text-muted-foreground">{fileName}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Nova análise
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowPresentation(true)} className="gap-2">
+            <Play className="h-4 w-4" />
+            Apresentação
+          </Button>
+          <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Nova análise
+          </Button>
+        </div>
       </div>
 
       {/* Quick info badges */}

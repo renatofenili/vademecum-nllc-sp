@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import EditalPresentationView from "./EditalPresentationView";
 import {
   ArrowLeft,
   FileText,

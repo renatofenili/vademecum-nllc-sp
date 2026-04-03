@@ -17,9 +17,46 @@ Plataforma: Licitações-e (Banco do Brasil).
 Documentos de habilitação: ato constitutivo, CNPJ, certidão federal, FGTS, CNDT, atestado de capacidade técnica e balanço patrimonial.
 `;
 
+const ministerioFixture = `
+14198006 08084.000594/2021-11
+Ministério da Justiça e Segurança Pública
+Esplanada dos Ministérios, Bloco T, Anexo II, 6º Andar, Sala 621 - Bairro Zona Cívico Administrativa,
+Brasília/DF, CEP 70064-900
+Telefone: (61) 2025-9301 - https://www.justica.gov.br
+
+EDITAL DE LICITAÇÃO
+PREGÃO ELETRÔNICO Nº 06/2021
+PROCESSO Nº 08084.000594/2021-11
+
+Torna-se público, para conhecimento dos interessados, que a União, por intermédio do Ministério da Justiça e Segurança Pública, por meio do Pregoeiro designado pela Portaria nº 26 de 01 de março de 2021.
+`;
+
+const ministerioAsciiFixture = `
+14198006 08084.000594/2021-11
+Ministerio da Justica e Seguranca Publica
+Esplanada dos Ministerios, Bloco T, Anexo II, 6o Andar, Sala 621
+Brasilia/DF, CEP 70064-900
+
+EDITAL DE LICITACAO
+PREGAO ELETRONICO No 06/2021
+PROCESSO No 08084.000594/2021-11
+
+Torna-se publico, para conhecimento dos interessados, que a Uniao, por intermedio do Ministerio da Justica e Seguranca Publica.
+`;
+
 Deno.test("extractOrgao removes publication and bidding tail", () => {
   const value = extractOrgao(fixtureText);
   assertEquals(value, "Secretaria de Administração");
+});
+
+Deno.test("extractOrgao identifies ministry from institutional header and preamble", () => {
+  const value = extractOrgao(ministerioFixture);
+  assertEquals(value, "Ministério da Justiça e Segurança Pública");
+});
+
+Deno.test("extractOrgao identifies ministry from ascii extraction too", () => {
+  const value = extractOrgao(ministerioAsciiFixture);
+  assertEquals(value, "Ministerio da Justica e Seguranca Publica");
 });
 
 Deno.test("extractCriterio identifies labeled criterion with qualifier", () => {

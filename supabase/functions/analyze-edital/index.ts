@@ -20,7 +20,17 @@ const SYSTEM_PROMPT = `Você é um especialista em licitações públicas brasil
   "modalidade": "pregão eletrônico, concorrência, etc.",
   "numero_edital": "número do edital/processo",
   "orgao": "órgão ou entidade licitante",
-  "resumo_simples": "explicação detalhada do edital em linguagem simples e acessível, com 5-8 parágrafos substanciais. Deve cobrir: (1) O que está sendo comprado/contratado e por quê; (2) Quem pode participar e quais os requisitos principais; (3) Como participar passo a passo; (4) Prazos e datas importantes; (5) Critério de escolha do vencedor; (6) Pontos de atenção e riscos para o licitante; (7) Garantias ou obrigações pós-contratação. Use tom didático, claro e profissional. Não simplifique demais — o gestor precisa de substância."
+  "resumo_simples": "explicação detalhada do edital em linguagem simples e acessível, com 5-8 parágrafos substanciais. Deve cobrir: (1) O que está sendo comprado/contratado e por quê; (2) Quem pode participar e quais os requisitos principais; (3) Como participar passo a passo; (4) Prazos e datas importantes; (5) Critério de escolha do vencedor; (6) Pontos de atenção e riscos para o licitante; (7) Garantias ou obrigações pós-contratação. Use tom didático, claro e profissional. Não simplifique demais — o gestor precisa de substância.",
+  "timeline": {
+    "data_publicacao": "data de publicação do edital (formato DD/MM/AAAA). Se não identificada, retorne null",
+    "prazo_impugnacao": "prazo limite para impugnação do edital (formato DD/MM/AAAA ou descrição). Se não identificado, retorne null",
+    "prazo_esclarecimento": "prazo limite para pedidos de esclarecimento (formato DD/MM/AAAA ou descrição). Se não identificado, retorne null",
+    "data_abertura": "data e horário da abertura/sessão pública (formato DD/MM/AAAA às HHh). Se não identificada, retorne null"
+  },
+  "score_complexidade": {
+    "valor": "número de 1 a 10 representando a complexidade do edital",
+    "justificativa": "explicação breve (2-3 frases) do porquê desse score, considerando: número de exigências de habilitação, complexidade do objeto, volume de documentação exigida, especificidades técnicas, prazos de execução, presença de garantias e seguros, subcontratação, consórcios, sustentabilidade, etc."
+  }
 }
 
 IMPORTANTE:
@@ -28,7 +38,8 @@ IMPORTANTE:
 - Se alguma informação não estiver disponível no texto, indique "Não identificado no edital".
 - Seja preciso e fiel ao conteúdo do edital.
 - Para a planilha_estimada, extraia o máximo de detalhes possível sobre itens, quantidades e valores.
-- O resumo_simples deve ser detalhado e útil para tomada de decisão, não apenas um resumo superficial.`;
+- O resumo_simples deve ser detalhado e útil para tomada de decisão, não apenas um resumo superficial.
+- Para o score_complexidade, avalie objetivamente a complexidade geral do edital numa escala de 1 (muito simples) a 10 (extremamente complexo).`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

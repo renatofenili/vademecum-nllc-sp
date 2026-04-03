@@ -6,6 +6,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import EditalAnalysisResult from "./EditalAnalysisResult";
 
+export interface EditalTimeline {
+  data_publicacao: string | null;
+  prazo_impugnacao: string | null;
+  prazo_esclarecimento: string | null;
+  data_abertura: string | null;
+}
+
+export interface EditalScoreComplexidade {
+  valor: number;
+  justificativa: string;
+}
+
 export interface EditalAnalysis {
   objeto: string;
   valor_estimado: string;
@@ -18,6 +30,8 @@ export interface EditalAnalysis {
   numero_edital: string;
   orgao: string;
   resumo_simples: string;
+  timeline?: EditalTimeline;
+  score_complexidade?: EditalScoreComplexidade;
 }
 
 interface EditalAnalyzerProps {

@@ -120,6 +120,7 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
         {metadataItems.map((item, index) => {
           const value = analysis[item.key];
           const isVisible = index < visibleCards;
+          const hasPlanilha = item.key === "valor_estimado" && analysis.planilha_estimada && analysis.planilha_estimada !== "Não disponível no edital";
 
           return (
             <Card
@@ -144,6 +145,9 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
                     <p className="text-sm text-foreground leading-relaxed">
                       {value || "Não identificado"}
                     </p>
+                    {hasPlanilha && (
+                      <PlanilhaExpandable planilha={analysis.planilha_estimada} />
+                    )}
                   </div>
                 </div>
               </CardContent>

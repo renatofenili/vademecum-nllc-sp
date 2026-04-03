@@ -503,11 +503,24 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
             </div>
 
             {node.id === "habilitacao" && node.fullValue ? (
-              <ul className="list-disc list-inside space-y-1.5 text-sm leading-relaxed text-foreground">
-                {node.fullValue.split(/[;.\n]/).map((item: string) => item.trim()).filter(Boolean).map((item: string, i: number) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
+              <div className="space-y-3">
+                {node.fullValue.split('\n').map((item: string) => item.trim()).filter(Boolean).map((item: string, i: number) => {
+                  const emoji = item.match(/^[📜🏦🔧📊📝]/u)?.[0] || '•';
+                  const rest = item.replace(/^[📜🏦🔧📊📝]\s*/, '');
+                  const [title, ...desc] = rest.split(':');
+                  return (
+                    <div key={i} className="flex gap-3 p-3 rounded-lg bg-muted/40 border border-border/50">
+                      <span className="text-lg shrink-0">{emoji}</span>
+                      <div>
+                        <span className="font-semibold text-sm text-foreground">{title?.trim()}</span>
+                        {desc.length > 0 && (
+                          <p className="text-sm text-muted-foreground mt-0.5">{desc.join(':').trim()}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : node.id === "resumo" && node.fullValue ? (
               <div className="space-y-8">
                 {node.fullValue.split(/\n\n---\n\n/).map((section: string, si: number) => {

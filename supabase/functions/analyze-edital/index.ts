@@ -69,6 +69,7 @@ function extractOrgao(text: string): string {
 }
 
 function extractObjeto(text: string): string {
+  // Strategy 1: Dedicated OBJETO section
   const section = extractSection(
     text,
     [
@@ -78,11 +79,36 @@ function extractObjeto(text: string): string {
     [/\n\s*(?:\d+[\.\)]|CAPÍTULO|SEÇÃO|DA\s+PARTICIPAÇÃO|JUSTIFICATIVA|DAS?\s+CONDIÇÕES)/i]
   );
   if (section) {
-    // Clean up and take first meaningful paragraph
     const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
-    const meaningful = lines.filter(l => l.length > 20);
-    return meaningful.slice(0, 5).join(' ').slice(0, 600) || section.slice(0, 600);
+    // Skip sub-item numbers like "1.1", "1.1.1" and grab the core description
+    const meaningful = lines.filter(l => l.length > 20 && !/^\d+[\.\)]\s*$/.test(l));
+    if (meaningful.length > 0) {
+      // Take the first substantive paragraph (often the real object description)
+      const first = meaningful[0]
+        .replace(/^\d+[\.\)]+\s*/, '') // strip leading numbering
+        .replace(/^O\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação)\s+(?:é|consiste\s+n|tem\s+por\s+(?:finalidade|objetivo)|visa|destina-se\s+a)\s*/i, '') // strip boilerplate
+        .replace(/^(?:a\s+)?(?:contratação|aquisição|prestação|fornecimento|registro\s+de\s+preços\s+para(?:\s+(?:eventual|futura))?\s+(?:contratação|aquisição))\s+de\s+/i, (m) => m); // keep this part, it's meaningful
+      
+      // If there are continuation lines, append them
+      const result = [first, ...meaningful.slice(1, 3).map(l => l.replace(/^\d+[\.\)]+\s*/, ''))].join(' ');
+      return result.slice(0, 800);
+    }
+    return section.slice(0, 800);
   }
+
+  // Strategy 2: Look in the header/preamble for "objeto:" or similar inline mentions
+  const headerObj = firstMatch(text.slice(0, 5000), [
+    /objeto\s*[:]\s*([^\n]{20,300})/i,
+    /(?:contratação|aquisição|registro\s+de\s+preços)\s+(?:de|para)\s+([^\n]{20,300})/i,
+  ]);
+  if (headerObj) return headerObj.slice(0, 800);
+
+  // Strategy 3: Extract from ementa (common in government docs)
+  const ementa = firstMatch(text.slice(0, 3000), [
+    /(?:ementa|súmula)\s*[:.]?\s*([^\n]{30,400})/i,
+  ]);
+  if (ementa) return ementa.slice(0, 800);
+
   return "Não identificado no edital";
 }
 
@@ -147,42 +173,85 @@ function extractHabilitacao(text: string): string {
     [
       /\n\s*(?:\d+[\.\)]|CAPÍTULO|SEÇÃO)\s+(?:D[AO]S?\s+)?(?:PROPOSTA|JULGAMENTO|RECURSO|IMPUGNAÇÃO|CONTRATO|SANÇÕES)/i,
     ],
-    4000
+    6000
   );
 
-  if (section) {
-    // Extract key requirements
-    const items: string[] = [];
-    const lines = section.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+  const src = section || text;
+  const summary: string[] = [];
 
-    for (const line of lines) {
-      // Look for requirement-like lines
-      if (/(?:habilitação\s+)?jurídica|ato\s+constitutivo|contrato\s+social|cnpj|registro\s+comercial/i.test(line)) {
-        items.push(line.slice(0, 200));
-      } else if (/(?:qualificação|habilitação)\s+(?:técnica|econômico|econômica)|atestado|acervo|capacidade\s+técnica/i.test(line)) {
-        items.push(line.slice(0, 200));
-      } else if (/(?:regularidade|certidão)\s+(?:fiscal|trabalhista|previdenciária|federal|estadual|municipal|fgts|inss)/i.test(line)) {
-        items.push(line.slice(0, 200));
-      } else if (/balanço\s+patrimonial|demonstrações?\s+contábe|capital\s+social|patrimônio\s+líquido|índice/i.test(line)) {
-        items.push(line.slice(0, 200));
-      } else if (/certidão\s+negativa|cnd|crf|cndt/i.test(line)) {
-        items.push(line.slice(0, 200));
-      }
+  // ── Habilitação Jurídica ──
+  if (/(?:habilitação\s+)?jurídica|ato\s+constitutivo|contrato\s+social|registro\s+comercial/i.test(src)) {
+    const docs: string[] = [];
+    if (/ato\s+constitutivo|contrato\s+social|estatuto/i.test(src)) docs.push("contrato social/estatuto");
+    if (/cnpj/i.test(src)) docs.push("CNPJ");
+    if (/registro\s+comercial/i.test(src)) docs.push("registro comercial");
+    if (/decreto\s+de\s+autorização/i.test(src)) docs.push("decreto de autorização");
+    summary.push(`📜 Habilitação Jurídica: ${docs.length > 0 ? docs.join(', ') : 'documentos constitutivos da empresa'}`);
+  }
+
+  // ── Regularidade Fiscal e Trabalhista ──
+  if (/regularidade\s+fiscal|certidão|fgts|inss|cndt|fazenda|tribut/i.test(src)) {
+    const docs: string[] = [];
+    if (/(?:certidão|cnd).*(?:federal|união|receita\s+federal|pgfn)/i.test(src) || /débitos?\s+(?:relativos\s+a\s+)?(?:créditos?\s+)?tributários?\s+federai/i.test(src)) docs.push("CND Federal/PGFN");
+    if (/(?:certidão|cnd).*estadual|fazenda\s+estadual|icms/i.test(src)) docs.push("CND Estadual");
+    if (/(?:certidão|cnd).*municipal|iss|fazenda\s+municipal|tributos?\s+municipai/i.test(src)) docs.push("CND Municipal");
+    if (/fgts|crf/i.test(src)) docs.push("CRF/FGTS");
+    if (/inss|previdenciári/i.test(src)) docs.push("CND Previdenciária");
+    if (/cndt|trabalhista/i.test(src)) docs.push("CNDT Trabalhista");
+    if (/sicaf/i.test(src)) docs.push("SICAF");
+    summary.push(`🏦 Regularidade Fiscal/Trabalhista: ${docs.length > 0 ? docs.join(', ') : 'certidões fiscais e trabalhistas'}`);
+  }
+
+  // ── Qualificação Técnica ──
+  if (/qualificação\s+técnica|atestado|acervo|capacidade\s+técnica|crea|cau|registro\s+profissional/i.test(src)) {
+    const docs: string[] = [];
+    if (/atestado/i.test(src)) docs.push("atestado(s) de capacidade técnica");
+    if (/acervo/i.test(src)) docs.push("certidão de acervo técnico");
+    if (/crea|cau|registro\s+(?:no\s+)?conselho/i.test(src)) docs.push("registro em conselho profissional");
+    if (/equipe\s+técnica|profissional|responsável\s+técnico/i.test(src)) docs.push("equipe técnica qualificada");
+
+    // Try to extract minimum quantities from atestados
+    const qtdMatch = src.match(/atestado[^.]{0,200}(?:comprovan|demonstran)[^.]{0,200}(?:no\s+mínimo|pelo\s+menos|mínimo\s+de)\s*(\d+[%]?)/i);
+    const qtdInfo = qtdMatch ? ` (mínimo: ${qtdMatch[1]})` : '';
+    summary.push(`🔧 Qualificação Técnica: ${docs.length > 0 ? docs.join(', ') : 'comprovação de experiência'}${qtdInfo}`);
+  }
+
+  // ── Qualificação Econômico-Financeira ──
+  if (/qualificação\s+econômico|balanço|capital\s+social|patrimônio\s+líquido|índice|certidão.*falência/i.test(src)) {
+    const docs: string[] = [];
+    if (/balanço\s+patrimonial/i.test(src)) docs.push("balanço patrimonial");
+    if (/capital\s+social/i.test(src)) {
+      const capMatch = src.match(/capital\s+social\s+(?:mínimo\s+(?:de\s+)?)?(?:de\s+)?(R\$\s*[\d.,]+)/i);
+      docs.push(capMatch ? `capital social mínimo de ${capMatch[1]}` : "capital social mínimo");
     }
-
-    if (items.length > 0) {
-      // Deduplicate similar items
-      const unique = [...new Set(items.map(i => i.replace(/^\d+[\.\)]\s*/, '').replace(/^[a-z]\)\s*/i, '')))];
-      return unique.slice(0, 15).join('; ');
+    if (/patrimônio\s+líquido/i.test(src)) {
+      const plMatch = src.match(/patrimônio\s+líquido\s+(?:mínimo\s+(?:de\s+)?)?(?:de\s+)?(R\$\s*[\d.,]+|\d+[%])/i);
+      docs.push(plMatch ? `patrimônio líquido mínimo de ${plMatch[1]}` : "patrimônio líquido");
     }
+    if (/(?:índice|indicador).*(?:liquidez|solvência|endividamento)/i.test(src)) {
+      const indices: string[] = [];
+      if (/liquidez\s+(?:geral|lg)/i.test(src)) indices.push("LG");
+      if (/liquidez\s+(?:corrente|lc)/i.test(src)) indices.push("LC");
+      if (/solvência|sg/i.test(src)) indices.push("SG");
+      if (indices.length > 0) docs.push(`índices contábeis (${indices.join(', ')} ≥ 1)`);
+    }
+    if (/certidão.*falência|recuperação\s+judicial/i.test(src)) docs.push("certidão negativa de falência");
+    if (/seguro[\-\s]?garantia|garantia.*proposta/i.test(src)) docs.push("garantia da proposta");
+    summary.push(`📊 Qualificação Econômico-Financeira: ${docs.length > 0 ? docs.join(', ') : 'comprovação de saúde financeira'}`);
+  }
 
-    // Fallback: summarize categories found
-    const categories: string[] = [];
-    if (/jurídica|ato\s+constitutivo|contrato\s+social/i.test(section)) categories.push("Habilitação jurídica");
-    if (/regularidade\s+fiscal|certidão.*(?:federal|estadual|municipal)|fgts|inss/i.test(section)) categories.push("Regularidade fiscal e trabalhista");
-    if (/qualificação\s+técnica|atestado|acervo/i.test(section)) categories.push("Qualificação técnica");
-    if (/qualificação\s+econômico|balanço|capital\s+social/i.test(section)) categories.push("Qualificação econômico-financeira");
-    if (categories.length > 0) return categories.join('; ');
+  // ── Declarações ──
+  const decls: string[] = [];
+  if (/menor\s+(?:de\s+)?(?:18|dezoito)|trabalho\s+(?:infantil|de\s+menor)/i.test(src)) decls.push("inexistência de trabalho de menor");
+  if (/declaração.*(?:impedimento|inidoneidade|suspens)/i.test(src)) decls.push("inexistência de impedimentos");
+  if (/declaração.*(?:fato\s+superveniente|impeditivo)/i.test(src)) decls.push("fato superveniente");
+  if (/me[\s\/]epp|microempresa|empresa\s+de\s+pequeno/i.test(src)) decls.push("enquadramento ME/EPP (se aplicável)");
+  if (decls.length > 0) {
+    summary.push(`📝 Declarações: ${decls.join(', ')}`);
+  }
+
+  if (summary.length > 0) {
+    return summary.join('\n');
   }
 
   return "Consultar seção de habilitação no edital";

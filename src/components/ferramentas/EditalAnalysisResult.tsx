@@ -210,31 +210,52 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   );
 };
 
-const formatPlanilha = (planilha: unknown): string => {
-  if (typeof planilha === "string") return planilha;
-  if (Array.isArray(planilha)) {
-    return planilha
-      .map((item, i) => {
-        if (typeof item === "string") return item;
-        if (typeof item === "object" && item !== null) {
-          const entries = Object.entries(item as Record<string, unknown>)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(" | ");
-          return `${i + 1}. ${entries}`;
-        }
-        return String(item);
-      })
-      .join("\n");
-  }
-  if (typeof planilha === "object" && planilha !== null) {
-    return JSON.stringify(planilha, null, 2);
-  }
-  return String(planilha);
+const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
+  if (data.length === 0) return null;
+  const headers = Object.keys(data[0]);
+  const labelMap: Record<string, string> = {
+    item: "Item",
+    descricao: "Descrição",
+    unidade: "Unid.",
+    quantidade: "Qtd.",
+    valor_unitario: "Valor Unit.",
+    valor_unitario_maximo_aceitavel: "Valor Unit. Máx.",
+    valor_total: "Valor Total",
+    valor_total_maximo_aceitavel: "Valor Total Máx.",
+  };
+
+  return (
+    <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-muted">
+            {headers.map((h) => (
+              <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                {labelMap[h] || h.replace(/_/g, " ")}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} className={i % 2 === 0 ? "bg-card" : "bg-muted/30"}>
+              {headers.map((h) => (
+                <td key={h} className="px-3 py-2 text-foreground whitespace-nowrap">
+                  {String(row[h] ?? "")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 };
 
 const PlanilhaExpandable = ({ planilha }: { planilha: unknown }) => {
   const [open, setOpen] = useState(false);
-  const formatted = formatPlanilha(planilha);
+
+  const isArray = Array.isArray(planilha) && planilha.length > 0 && typeof planilha[0] === "object";
 
   return (
     <div className="mt-3">
@@ -249,9 +270,13 @@ const PlanilhaExpandable = ({ planilha }: { planilha: unknown }) => {
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </Button>
       {open && (
-        <div className="mt-3 text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
-          {formatted}
-        </div>
+        isArray ? (
+          <PlanilhaTable data={planilha as Array<Record<string, unknown>>} />
+        ) : (
+          <div className="mt-3 text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
+            {typeof planilha === "string" ? planilha : JSON.stringify(planilha, null, 2)}
+          </div>
+        )
       )}
     </div>
   );

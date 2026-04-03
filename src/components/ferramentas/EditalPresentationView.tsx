@@ -284,15 +284,34 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                     Planilha Estimativa
                   </h4>
                 </div>
-                <div className="text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
-                  {typeof node.extraContent === "string"
-                    ? node.extraContent
-                    : Array.isArray(node.extraContent)
-                      ? (node.extraContent as Array<Record<string, unknown>>).map((item, i) =>
-                          typeof item === "string" ? item : `${i + 1}. ${Object.entries(item).map(([k, v]) => `${k}: ${v}`).join(" | ")}`
-                        ).join("\n")
-                      : JSON.stringify(node.extraContent, null, 2)}
-                </div>
+                {Array.isArray(node.extraContent) && typeof node.extraContent[0] === "object" ? (
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted">
+                          {Object.keys(node.extraContent[0] as Record<string, unknown>).map((h) => (
+                            <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                              {h.replace(/_/g, " ")}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(node.extraContent as Array<Record<string, unknown>>).map((row, i) => (
+                          <tr key={i} className={i % 2 === 0 ? "bg-card" : "bg-muted/30"}>
+                            {Object.values(row).map((v, j) => (
+                              <td key={j} className="px-3 py-2 text-foreground whitespace-nowrap">{String(v ?? "")}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
+                    {typeof node.extraContent === "string" ? node.extraContent : JSON.stringify(node.extraContent, null, 2)}
+                  </div>
+                )}
               </>
             )}
           </CardContent>

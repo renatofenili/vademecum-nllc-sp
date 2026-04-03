@@ -85,6 +85,12 @@ const Index = () => {
             <MapaCalorTab />
           </div>
         );
+      case "ferramentas":
+        return (
+          <div className="container py-6 md:py-8">
+            <FerramentasTab />
+          </div>
+        );
       default:
         return null;
     }

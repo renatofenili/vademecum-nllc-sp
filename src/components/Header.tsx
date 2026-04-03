@@ -17,6 +17,7 @@ const navItems: { label: string; tab: TabType; icon: typeof FileText; isNew?: bo
   { label: "Mapa Relacional", tab: "mapas", icon: Network },
   { label: "Mapa de Calor", tab: "mapacalor", icon: Flame },
   { label: "Linguagem Simples!", tab: "relatorios", icon: FileBarChart },
+  { label: "Ferramentas", tab: "ferramentas", icon: Wrench },
 ];
 
 const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {

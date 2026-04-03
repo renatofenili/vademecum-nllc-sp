@@ -69,47 +69,99 @@ function extractOrgao(text: string): string {
 }
 
 function extractObjeto(text: string): string {
-  // Strategy 1: Dedicated OBJETO section
-  const section = extractSection(
-    text,
-    [
-      /(?:^|\n)\s*(?:\d+[\.\)]\s*)?(?:DO\s+)?OBJETO\s*[:.\n]/im,
-      /OBJETO\s*(?:DA\s+LICITAÇÃO|DO\s+PREGÃO|DA\s+CONTRATAÇÃO)?\s*[:.\n]/i,
-    ],
-    [/\n\s*(?:\d+[\.\)]|CAPÍTULO|SEÇÃO|DA\s+PARTICIPAÇÃO|JUSTIFICATIVA|DAS?\s+CONDIÇÕES)/i]
-  );
+  // Normalize whitespace for better matching
+  const norm = text.replace(/\r\n/g, '\n');
+
+  // ── Strategy 1: Dedicated OBJETO section (most reliable) ──
+  const sectionStartPatterns = [
+    /(?:^|\n)\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DO\s+)?OBJETO\s*\n/im,
+    /(?:^|\n)\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DO\s+)?OBJETO\s*[:]/im,
+    /(?:^|\n)\s*(?:CLÁUSULA|CL[ÁA]USULA)\s+\w+\s*[-–—:.\s]+(?:DO\s+)?OBJETO/im,
+    /(?:^|\n)\s*(?:CAPÍTULO|CAP[ÍI]TULO)\s+\w+\s*[-–—:.\s]+(?:DO\s+)?OBJETO/im,
+    /OBJETO\s+(?:DA\s+LICITAÇÃO|DO\s+PREGÃO|DA\s+CONTRATAÇÃO|DO\s+EDITAL|DO\s+CERTAME|DO\s+CONTRATO)\s*[:.\n]/i,
+  ];
+  const sectionEndPatterns = [
+    /\n\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DA\s+PARTICIPAÇÃO|DOS?\s+PARTICIPANTES|DA\s+JUSTIFICATIVA|JUSTIFICATIVA|DAS?\s+CONDIÇÕES|DO\s+VALOR|DOS?\s+RECURSOS|DA\s+VIGÊNCIA|DO\s+PRAZO|DA\s+DOTAÇÃO|CAPÍTULO|SEÇÃO|TÍTULO)/i,
+    /\n\s*\d+[\.\)]\s*[-–—]\s+[A-ZÁÀÃÉÊÍÓÔÚÇ]{3,}/,
+  ];
+
+  const section = extractSection(norm, sectionStartPatterns, sectionEndPatterns, 3000);
   if (section) {
-    const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
-    // Skip sub-item numbers like "1.1", "1.1.1" and grab the core description
-    const meaningful = lines.filter(l => l.length > 20 && !/^\d+[\.\)]\s*$/.test(l));
-    if (meaningful.length > 0) {
-      // Take the first substantive paragraph (often the real object description)
-      const first = meaningful[0]
-        .replace(/^\d+[\.\)]+\s*/, '') // strip leading numbering
-        .replace(/^O\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação)\s+(?:é|consiste\s+n|tem\s+por\s+(?:finalidade|objetivo)|visa|destina-se\s+a)\s*/i, '') // strip boilerplate
-        .replace(/^(?:a\s+)?(?:contratação|aquisição|prestação|fornecimento|registro\s+de\s+preços\s+para(?:\s+(?:eventual|futura))?\s+(?:contratação|aquisição))\s+de\s+/i, (m) => m); // keep this part, it's meaningful
-      
-      // If there are continuation lines, append them
-      const result = [first, ...meaningful.slice(1, 3).map(l => l.replace(/^\d+[\.\)]+\s*/, ''))].join(' ');
-      return result.slice(0, 800);
-    }
-    return section.slice(0, 800);
+    const obj = cleanObjetoText(section);
+    if (obj && obj.length > 15) return obj;
   }
 
-  // Strategy 2: Look in the header/preamble for "objeto:" or similar inline mentions
-  const headerObj = firstMatch(text.slice(0, 5000), [
-    /objeto\s*[:]\s*([^\n]{20,300})/i,
-    /(?:contratação|aquisição|registro\s+de\s+preços)\s+(?:de|para)\s+([^\n]{20,300})/i,
-  ]);
-  if (headerObj) return headerObj.slice(0, 800);
+  // ── Strategy 2: Inline "objeto:" in preamble/header (first 8000 chars) ──
+  const preamble = norm.slice(0, 8000);
+  const inlinePatterns = [
+    /(?:tem\s+(?:por|como)\s+objeto|cujo\s+objeto\s+(?:é|consiste)|objeto\s*(?:deste|do\s+presente)\s*(?:edital|pregão|certame)?\s*(?:é|:))\s*[:.]?\s*([^\n]{15,500})/i,
+    /objeto\s*[:]\s*([^\n]{15,500})/i,
+  ];
+  for (const p of inlinePatterns) {
+    const m = preamble.match(p);
+    if (m?.[1]) {
+      const cleaned = cleanObjetoText(m[1]);
+      if (cleaned && cleaned.length > 15) return cleaned;
+    }
+  }
 
-  // Strategy 3: Extract from ementa (common in government docs)
-  const ementa = firstMatch(text.slice(0, 3000), [
-    /(?:ementa|súmula)\s*[:.]?\s*([^\n]{30,400})/i,
+  // ── Strategy 3: Contratação/Aquisição phrase ──
+  const contrPatterns = [
+    /(?:contratação|aquisição|registro\s+de\s+preços)\s+(?:de\s+(?:empresa\s+(?:especializada\s+)?(?:para|em|visando)\s+)?)?([^\n]{15,400})/i,
+  ];
+  for (const p of contrPatterns) {
+    const m = preamble.match(p);
+    if (m) {
+      const full = m[0].trim();
+      if (full.length > 15) return full.slice(0, 600);
+    }
+  }
+
+  // ── Strategy 4: Ementa ──
+  const ementa = firstMatch(norm.slice(0, 4000), [
+    /(?:ementa|súmula)\s*[:.]?\s*([^\n]{20,500})/i,
   ]);
-  if (ementa) return ementa.slice(0, 800);
+  if (ementa) return ementa.slice(0, 600);
 
   return "Não identificado no edital";
+}
+
+function cleanObjetoText(raw: string): string {
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  
+  // Collect substantive lines (>15 chars, not just numbering)
+  const meaningful: string[] = [];
+  for (const line of lines) {
+    // Skip pure numbering lines like "1.1" or "1.1."
+    if (/^\d+[\.\)]+\s*$/.test(line)) continue;
+    // Skip very short lines that are likely headers
+    if (line.length < 10 && /^[\dIVXLCDM]+[\.\):\-]/.test(line)) continue;
+    
+    const cleaned = line.replace(/^\d+[\.\)]+\s*/, '');
+    if (cleaned.length > 10) {
+      meaningful.push(cleaned);
+    }
+    // Stop after 4 substantive lines to avoid over-capturing
+    if (meaningful.length >= 4) break;
+  }
+
+  if (meaningful.length === 0) return '';
+
+  let result = meaningful.join(' ');
+
+  // Strip boilerplate intro phrases
+  result = result
+    .replace(/^O\s+(?:presente\s+)?(?:edital|pregão|certame|licitação|instrumento\s+convocatório)\s+tem\s+(?:por|como)\s+(?:finalidade|objetivo|objeto)\s*/i, '')
+    .replace(/^O\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência)\s+(?:é|consiste\s+n|tem\s+por\s+(?:finalidade|objetivo)|visa|destina[\-\s]se\s+a)\s*/i, '')
+    .replace(/^Constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo)\s*/i, '')
+    .replace(/^[:.\s]+/, '');
+
+  // Capitalize first letter
+  if (result.length > 0) {
+    result = result.charAt(0).toUpperCase() + result.slice(1);
+  }
+
+  return result.slice(0, 800);
 }
 
 function extractValorEstimado(text: string): string {

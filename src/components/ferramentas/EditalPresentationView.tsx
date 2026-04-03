@@ -504,6 +504,56 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                   <li key={i}>{item}</li>
                 ))}
               </ul>
+            ) : node.id === "resumo" && node.fullValue ? (
+              <div className="space-y-6">
+                {node.fullValue.split(/\n\n---\n\n/).map((section: string, si: number) => {
+                  const lines = section.split('\n');
+                  const title = lines[0]?.trim();
+                  const body = lines.slice(1).join('\n').trim();
+                  // Detect if title has emoji header pattern
+                  const isHeader = /^[📋💰🖥️📑📅📝🚨✅🏢⚡🤝🔄🌱]/.test(title);
+
+                  return (
+                    <div key={si}>
+                      {si > 0 && <Separator className="mb-4" />}
+                      {isHeader && (
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3">
+                          {title}
+                        </h4>
+                      )}
+                      <div className="text-sm leading-relaxed text-foreground space-y-2">
+                        {(isHeader ? body : section).split('\n\n').map((para: string, pi: number) => {
+                          // Numbered lists
+                          if (/^\d+\.\s/.test(para.trim())) {
+                            return (
+                              <ol key={pi} className="list-decimal list-inside space-y-1.5 pl-1">
+                                {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
+                                  <li key={ii} className="text-sm">{item.replace(/^\d+\.\s*/, '')}</li>
+                                ))}
+                              </ol>
+                            );
+                          }
+                          // Bullet lists (• items)
+                          if (/^[•⚡🤝🔄🌱📋📌]/.test(para.trim())) {
+                            return (
+                              <ul key={pi} className="space-y-2 pl-1">
+                                {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
+                                  <li key={ii} className="text-sm flex gap-2">
+                                    <span className="shrink-0 mt-0.5">{item.match(/^[•⚡🤝🔄🌱📋📌]/)?.[0] || '•'}</span>
+                                    <span>{item.replace(/^[•⚡🤝🔄🌱📋📌]\s*/, '')}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            );
+                          }
+                          // Regular paragraph
+                          return <p key={pi} className="whitespace-pre-line">{para}</p>;
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
                 {node.fullValue}

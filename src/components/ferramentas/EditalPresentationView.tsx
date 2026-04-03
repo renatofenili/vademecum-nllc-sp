@@ -23,7 +23,7 @@ interface FlowNode {
   h: number;
   expandable: boolean;
   /** Extra content for special expandable nodes */
-  extraContent?: string;
+  extraContent?: unknown;
 }
 
 interface FlowArrow {

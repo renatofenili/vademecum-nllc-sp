@@ -218,15 +218,15 @@ const FlowNodeEl = ({
             </span>
           </div>
           <p
-            className="text-center leading-snug text-foreground"
+            className="text-center text-foreground overflow-hidden text-ellipsis"
             style={{
-              fontSize: node.value.length > 60 ? "10px" : node.value.length > 30 ? "11px" : "12px",
+              fontSize: "11px",
               fontWeight: node.id === "edital" ? 700 : 500,
               maxWidth: "95%",
-              overflow: "hidden",
               display: "-webkit-box",
-              WebkitLineClamp: node.id === "resumo" ? 5 : 2,
+              WebkitLineClamp: node.id === "resumo" ? 3 : 1,
               WebkitBoxOrient: "vertical",
+              lineHeight: "1.4",
             }}
           >
             {node.value}

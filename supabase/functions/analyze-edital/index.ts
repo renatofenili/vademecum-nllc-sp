@@ -69,6 +69,7 @@ function extractOrgao(text: string): string {
 }
 
 function extractObjeto(text: string): string {
+  // Strategy 1: Dedicated OBJETO section
   const section = extractSection(
     text,
     [
@@ -78,11 +79,36 @@ function extractObjeto(text: string): string {
     [/\n\s*(?:\d+[\.\)]|CAPÍTULO|SEÇÃO|DA\s+PARTICIPAÇÃO|JUSTIFICATIVA|DAS?\s+CONDIÇÕES)/i]
   );
   if (section) {
-    // Clean up and take first meaningful paragraph
     const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
-    const meaningful = lines.filter(l => l.length > 20);
-    return meaningful.slice(0, 5).join(' ').slice(0, 600) || section.slice(0, 600);
+    // Skip sub-item numbers like "1.1", "1.1.1" and grab the core description
+    const meaningful = lines.filter(l => l.length > 20 && !/^\d+[\.\)]\s*$/.test(l));
+    if (meaningful.length > 0) {
+      // Take the first substantive paragraph (often the real object description)
+      const first = meaningful[0]
+        .replace(/^\d+[\.\)]+\s*/, '') // strip leading numbering
+        .replace(/^O\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação)\s+(?:é|consiste\s+n|tem\s+por\s+(?:finalidade|objetivo)|visa|destina-se\s+a)\s*/i, '') // strip boilerplate
+        .replace(/^(?:a\s+)?(?:contratação|aquisição|prestação|fornecimento|registro\s+de\s+preços\s+para(?:\s+(?:eventual|futura))?\s+(?:contratação|aquisição))\s+de\s+/i, (m) => m); // keep this part, it's meaningful
+      
+      // If there are continuation lines, append them
+      const result = [first, ...meaningful.slice(1, 3).map(l => l.replace(/^\d+[\.\)]+\s*/, ''))].join(' ');
+      return result.slice(0, 800);
+    }
+    return section.slice(0, 800);
   }
+
+  // Strategy 2: Look in the header/preamble for "objeto:" or similar inline mentions
+  const headerObj = firstMatch(text.slice(0, 5000), [
+    /objeto\s*[:]\s*([^\n]{20,300})/i,
+    /(?:contratação|aquisição|registro\s+de\s+preços)\s+(?:de|para)\s+([^\n]{20,300})/i,
+  ]);
+  if (headerObj) return headerObj.slice(0, 800);
+
+  // Strategy 3: Extract from ementa (common in government docs)
+  const ementa = firstMatch(text.slice(0, 3000), [
+    /(?:ementa|súmula)\s*[:.]?\s*([^\n]{30,400})/i,
+  ]);
+  if (ementa) return ementa.slice(0, 800);
+
   return "Não identificado no edital";
 }
 

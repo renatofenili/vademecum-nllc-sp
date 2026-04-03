@@ -69,94 +69,213 @@ function extractOrgao(text: string): string {
 }
 
 function extractObjeto(text: string): string {
-  // Normalize whitespace for better matching
-  const norm = text.replace(/\r\n/g, '\n');
+  const norm = text.replace(/\r\n/g, "\n");
+  const candidates: Array<{ value: string; score: number }> = [];
 
-  // ── Strategy 1: Dedicated OBJETO section (most reliable) ──
-  const sectionStartPatterns = [
-    /(?:^|\n)\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DO\s+)?OBJETO\s*\n/im,
-    /(?:^|\n)\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DO\s+)?OBJETO\s*[:]/im,
-    /(?:^|\n)\s*(?:CLÁUSULA|CL[ÁA]USULA)\s+\w+\s*[-–—:.\s]+(?:DO\s+)?OBJETO/im,
-    /(?:^|\n)\s*(?:CAPÍTULO|CAP[ÍI]TULO)\s+\w+\s*[-–—:.\s]+(?:DO\s+)?OBJETO/im,
-    /OBJETO\s+(?:DA\s+LICITAÇÃO|DO\s+PREGÃO|DA\s+CONTRATAÇÃO|DO\s+EDITAL|DO\s+CERTAME|DO\s+CONTRATO)\s*[:.\n]/i,
-  ];
-  const sectionEndPatterns = [
-    /\n\s*(?:\d+[\.\)]\s*[-–—]?\s*)?(?:DA\s+PARTICIPAÇÃO|DOS?\s+PARTICIPANTES|DA\s+JUSTIFICATIVA|JUSTIFICATIVA|DAS?\s+CONDIÇÕES|DO\s+VALOR|DOS?\s+RECURSOS|DA\s+VIGÊNCIA|DO\s+PRAZO|DA\s+DOTAÇÃO|CAPÍTULO|SEÇÃO|TÍTULO)/i,
-    /\n\s*\d+[\.\)]\s*[-–—]\s+[A-ZÁÀÃÉÊÍÓÔÚÇ]{3,}/,
-  ];
+  const addCandidate = (raw: string, boost = 0, context = "") => {
+    const cleaned = cleanObjetoText(raw);
+    if (!cleaned || cleaned.length < 20) return;
 
-  const section = extractSection(norm, sectionStartPatterns, sectionEndPatterns, 3000);
-  if (section) {
-    const obj = cleanObjetoText(section);
-    if (obj && obj.length > 15) return obj;
-  }
+    const score = scoreObjetoCandidate(cleaned) + boost - scoreObjetoContextPenalty(context);
+    if (score >= 2) {
+      candidates.push({ value: cleaned, score });
+    }
+  };
 
-  // ── Strategy 2: Inline "objeto:" in preamble/header (first 8000 chars) ──
-  const preamble = norm.slice(0, 8000);
+  const header = norm.slice(0, 12000);
   const inlinePatterns = [
-    /(?:tem\s+(?:por|como)\s+objeto|cujo\s+objeto\s+(?:é|consiste)|objeto\s*(?:deste|do\s+presente)\s*(?:edital|pregão|certame)?\s*(?:é|:))\s*[:.]?\s*([^\n]{15,500})/i,
-    /objeto\s*[:]\s*([^\n]{15,500})/i,
+    /(?:visa|destina(?:[\-\s]?se)?|tem\s+por\s+objeto|tem\s+como\s+objeto|cujo\s+objeto\s+[ée])\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento)[^\n.;]{20,500})/gi,
+    /objeto\s*[:]\s*((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento)[^\n]{20,500})/gi,
+    /((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento)\s+(?:de|para)\s+[^\n]{20,500})/gi,
   ];
-  for (const p of inlinePatterns) {
-    const m = preamble.match(p);
-    if (m?.[1]) {
-      const cleaned = cleanObjetoText(m[1]);
-      if (cleaned && cleaned.length > 15) return cleaned;
+
+  for (const pattern of inlinePatterns) {
+    for (const match of header.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 8);
     }
   }
 
-  // ── Strategy 3: Contratação/Aquisição phrase ──
-  const contrPatterns = [
-    /(?:contratação|aquisição|registro\s+de\s+preços)\s+(?:de\s+(?:empresa\s+(?:especializada\s+)?(?:para|em|visando)\s+)?)?([^\n]{15,400})/i,
+  for (const section of extractObjetoSectionCandidates(norm)) {
+    const context = norm.slice(Math.max(0, section.index - 400), section.index);
+    const directSentence = firstMatch(section.content, [
+      /(?:o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)|constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)\s+)((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento)[^.\n]{20,500})/i,
+      /((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento)[^.\n]{20,500})/i,
+    ]);
+
+    if (directSentence) addCandidate(directSentence, 14, context);
+    addCandidate(section.content, 10, context);
+  }
+
+  const ementa = firstMatch(header, [/(?:ementa|súmula)\s*[:.]?\s*([^\n]{20,500})/i]);
+  if (ementa) addCandidate(ementa, 4);
+
+  if (candidates.length === 0) return "Não identificado no edital";
+
+  const unique = Array.from(
+    new Map(
+      candidates
+        .sort((a, b) => b.score - a.score || a.value.length - b.value.length)
+        .map((item) => [item.value.toLowerCase(), item])
+    ).values()
+  );
+
+  return unique[0].value;
+}
+
+function extractObjetoSectionCandidates(text: string): Array<{ content: string; index: number }> {
+  const headingPatterns = [
+    /(?:^|\n)\s*(?:\d+(?:\.\d+){0,4}[\.\)]?\s*[-–—:]?\s*)?(?:do\s+)?objeto(?:\s+(?:da|do)\s+(?:licitação|contratação|pregão|edital|certame|contrato))?\s*(?::|\n)/gim,
+    /(?:^|\n)\s*(?:cláusula|cap[íi]tulo|seção)\s+[^\n]{0,60}\bobjeto\b[^\n]*?(?::|\n)/gim,
   ];
-  for (const p of contrPatterns) {
-    const m = preamble.match(p);
-    if (m) {
-      const full = m[0].trim();
-      if (full.length > 15) return full.slice(0, 600);
+
+  const starts: Array<{ index: number; end: number }> = [];
+  for (const pattern of headingPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      starts.push({ index: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
     }
   }
 
-  // ── Strategy 4: Ementa ──
-  const ementa = firstMatch(norm.slice(0, 4000), [
-    /(?:ementa|súmula)\s*[:.]?\s*([^\n]{20,500})/i,
-  ]);
-  if (ementa) return ementa.slice(0, 600);
+  const deduped = starts
+    .sort((a, b) => a.index - b.index)
+    .filter((item, index, arr) => index === 0 || item.index - arr[index - 1].index > 8);
 
-  return "Não identificado no edital";
+  return deduped
+    .map((item) => {
+      const slice = text.slice(item.end, item.end + 4000);
+      const boundary = slice.match(
+        /(?:^|\n)\s*(?:(?:\d+(?:\.\d+){0,4}|[IVXLCDM]+)[\.\)]?\s*[-–—:]?\s*)?(?:(?:DA|DO|DAS|DOS)\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^\n]{3,120}|(?:CAP[ÍI]TULO|SEÇÃO|TÍTULO|CLÁUSULA|ANEXO)\b[^\n]{0,120})/im
+      );
+
+      return {
+        content: (boundary ? slice.slice(0, boundary.index) : slice).trim(),
+        index: item.index,
+      };
+    })
+    .filter((item) => item.content.length > 0);
+}
+
+function stripObjetoNumbering(line: string): string {
+  return line
+    .replace(/^(?:item\s*)?(?:\d+(?:\.\d+){0,5}|[ivxlcdm]+|[a-z])(?:[\.\)\-–—:]+)?\s+/i, "")
+    .replace(/^\(?\d+\)\s*/i, "")
+    .trim();
+}
+
+function isLikelyNonObjetoClause(text: string): boolean {
+  const value = text.toLowerCase();
+  const negativePattern = /\b(pagamento|pagamentos|vig[êe]ncia|reajuste|repactua(?:ção|ções)|sanç(?:ão|ões)|penalidades?|multa|dotaç(?:ão|ões)|nota\s+fiscal|faturamento|recebimento|fiscaliza(?:ção|ções)|habilita(?:ção|ções)|impugna(?:ção|ções)|esclarecimentos?|recurso(?:s)?|proposta(?:s)?|sessão\s+pública|garantia)\b/i;
+  const positivePattern = /\b(contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|serviços?|obra(?:s)?|materiais?|equipamentos?|solução|sistema)\b/i;
+
+  return negativePattern.test(value) && !positivePattern.test(value);
+}
+
+function scoreObjetoContextPenalty(context: string): number {
+  const value = context.toLowerCase();
+  let penalty = 0;
+
+  if (/\banexo\b/.test(value)) penalty += 4;
+  if (/\bminuta\b/.test(value)) penalty += 5;
+  if (/\btermo\s+de\s+contrato\b/.test(value)) penalty += 6;
+  if (/\bcontrato\b/.test(value) && /\bcláusula\b/.test(value)) penalty += 4;
+
+  return penalty;
+}
+
+function scoreObjetoCandidate(text: string): number {
+  const value = text.toLowerCase();
+  let score = 0;
+
+  const positiveSignals: Array<[RegExp, number]> = [
+    [/\bcontratação\b/i, 7],
+    [/\baquisição\b/i, 7],
+    [/\bfornecimento\b/i, 6],
+    [/\bprestação\s+de\s+serviços?\b/i, 6],
+    [/\bexecução\s+de\s+obras?\b/i, 6],
+    [/\bregistro\s+de\s+preços\b/i, 7],
+    [/\blocação\b/i, 5],
+    [/\bcredenciamento\b/i, 5],
+    [/\bempresa\s+especializada\b/i, 4],
+    [/\bserviços?\b/i, 3],
+    [/\bobra(?:s)?\b/i, 3],
+    [/\bequipamentos?\b/i, 2],
+    [/\bmateriais?\b/i, 2],
+    [/\bsolução\b/i, 2],
+    [/\bsistema\b/i, 2],
+  ];
+  const negativeSignals: Array<[RegExp, number]> = [
+    [/\bpagamentos?\b/i, 12],
+    [/\bvig[êe]ncia\b/i, 8],
+    [/\breajuste\b/i, 8],
+    [/\bsanç(?:ão|ões)\b/i, 9],
+    [/\bpenalidades?\b/i, 9],
+    [/\bmulta\b/i, 7],
+    [/\bdotaç(?:ão|ões)\b/i, 7],
+    [/\bnota\s+fiscal\b/i, 7],
+    [/\bfaturamento\b/i, 7],
+    [/\brecebimento\b/i, 6],
+    [/\bfiscaliza(?:ção|ções)\b/i, 6],
+    [/\bhabilita(?:ção|ções)\b/i, 7],
+    [/\bimpugna(?:ção|ções)\b/i, 7],
+    [/\besclarecimentos?\b/i, 7],
+    [/\brecursos?\b/i, 5],
+    [/\bpropostas?\b/i, 5],
+    [/\bsessão\s+pública\b/i, 5],
+  ];
+
+  for (const [pattern, points] of positiveSignals) {
+    if (pattern.test(value)) score += points;
+  }
+  for (const [pattern, points] of negativeSignals) {
+    if (pattern.test(value)) score -= points;
+  }
+
+  if (/r\$\s*[\d.,]+/i.test(value)) score -= 4;
+  if (/\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4}/.test(value)) score -= 4;
+  if (value.length < 25) score -= 6;
+  if (value.length > 500) score -= 4;
+  if (/^(contratação|aquisição|fornecimento|prestação|execução|registro\s+de\s+preços|locação|credenciamento)\b/i.test(text)) score += 4;
+
+  return score;
 }
 
 function cleanObjetoText(raw: string): string {
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  
-  // Collect substantive lines (>15 chars, not just numbering)
-  const meaningful: string[] = [];
-  for (const line of lines) {
-    // Skip pure numbering lines like "1.1" or "1.1."
-    if (/^\d+[\.\)]+\s*$/.test(line)) continue;
-    // Skip very short lines that are likely headers
-    if (line.length < 10 && /^[\dIVXLCDM]+[\.\):\-]/.test(line)) continue;
-    
-    const cleaned = line.replace(/^\d+[\.\)]+\s*/, '');
-    if (cleaned.length > 10) {
-      meaningful.push(cleaned);
-    }
-    // Stop after 4 substantive lines to avoid over-capturing
-    if (meaningful.length >= 4) break;
+  const lines = raw
+    .split("\n")
+    .map((line) => stripObjetoNumbering(line).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const candidates = lines.filter((line) => {
+    if (line.length < 20) return false;
+    if (/^(objeto|cláusula|cap[íi]tulo|seção|anexo)\b/i.test(line) && line.length < 40) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) return "";
+
+  const scored = candidates
+    .map((line) => ({ line, score: scoreObjetoCandidate(line) }))
+    .sort((a, b) => b.score - a.score || a.line.length - b.line.length);
+
+  const best = scored[0];
+  const safeLines = candidates.filter((line) => !isLikelyNonObjetoClause(line));
+
+  if ((!best || best.score < 0) && safeLines.length === 0) {
+    return "";
   }
 
-  if (meaningful.length === 0) return '';
+  let result = best && best.score >= 4 ? best.line : safeLines.slice(0, 2).join(" ") || candidates[0];
 
-  let result = meaningful.join(' ');
-
-  // Strip boilerplate intro phrases
   result = result
-    .replace(/^O\s+(?:presente\s+)?(?:edital|pregão|certame|licitação|instrumento\s+convocatório)\s+tem\s+(?:por|como)\s+(?:finalidade|objetivo|objeto)\s*/i, '')
-    .replace(/^O\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência)\s+(?:é|consiste\s+n|tem\s+por\s+(?:finalidade|objetivo)|visa|destina[\-\s]se\s+a)\s*/i, '')
-    .replace(/^Constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo)\s*/i, '')
-    .replace(/^[:.\s]+/, '');
+    .replace(/^o\s+(?:presente\s+)?(?:edital|pregão|certame|licitação|instrumento\s+convocatório)\s+tem\s+(?:por|como)\s+(?:finalidade|objetivo|objeto)\s*/i, "")
+    .replace(/^o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)\s*/i, "")
+    .replace(/^constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)\s*/i, "")
+    .replace(/^[:.\-\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  // Capitalize first letter
+  result = result.replace(/[;:,.\-–—]+$/, "").trim();
+  if (!result || isLikelyNonObjetoClause(result)) return "";
+
   if (result.length > 0) {
     result = result.charAt(0).toUpperCase() + result.slice(1);
   }

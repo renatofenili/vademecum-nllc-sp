@@ -41,6 +41,7 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   const [visibleCards, setVisibleCards] = useState(0);
   const [showResumo, setShowResumo] = useState(false);
   const [resumoExpanded, setResumoExpanded] = useState(false);
+  const [showPresentation, setShowPresentation] = useState(true);
 
   // Staggered animation
   useEffect(() => {
@@ -56,6 +57,15 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
     }, 150);
     return () => clearInterval(interval);
   }, []);
+
+  if (showPresentation) {
+    return (
+      <EditalPresentationView
+        analysis={analysis}
+        onClose={() => setShowPresentation(false)}
+      />
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

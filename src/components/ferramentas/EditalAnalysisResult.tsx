@@ -210,6 +210,27 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   );
 };
 
+const parseNumeric = (v: unknown): number => {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[R$\s.]/g, "").replace(",", ".");
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+};
+
+const formatCurrency = (v: number): string =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const getValueKey = (headers: string[]): string | null => {
+  const candidates = ["valor_total_maximo_aceitavel", "valor_total", "valor_total_estimado"];
+  return candidates.find((c) => headers.includes(c)) || null;
+};
+
+const isDescriptionKey = (h: string) =>
+  ["descricao", "descrição", "description", "objeto"].includes(h.toLowerCase());
+
 const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
   if (data.length === 0) return null;
   const headers = Object.keys(data[0]);
@@ -222,11 +243,30 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
     valor_unitario_maximo_aceitavel: "Valor Unit. Máx.",
     valor_total: "Valor Total",
     valor_total_maximo_aceitavel: "Valor Total Máx.",
+    valor_total_estimado: "Valor Total Est.",
+  };
+
+  const valueKey = getValueKey(headers);
+  const grandTotal = valueKey ? data.reduce((sum, row) => sum + parseNumeric(row[valueKey]), 0) : null;
+
+  // Column width classes
+  const colClass = (h: string) => {
+    if (isDescriptionKey(h)) return "w-[40%]";
+    if (h === "item") return "w-[6%]";
+    if (h === "unidade") return "w-[7%]";
+    if (h === "quantidade") return "w-[7%]";
+    return undefined; // auto for remaining
   };
 
   return (
     <div className="mt-3 rounded-lg border border-border">
       <table className="w-full text-xs table-fixed">
+        <colgroup>
+          {headers.map((h) => {
+            const w = colClass(h);
+            return <col key={h} style={w ? { width: w.replace("w-[", "").replace("]", "") } : undefined} />;
+          })}
+        </colgroup>
         <thead>
           <tr className="bg-muted">
             {headers.map((h) => (
@@ -247,6 +287,29 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
             </tr>
           ))}
         </tbody>
+        {grandTotal !== null && (
+          <tfoot>
+            <tr className="bg-primary/5 border-t-2 border-primary/20">
+              {headers.map((h, idx) => {
+                if (h === valueKey) {
+                  return (
+                    <td key={h} className="px-2 py-2 font-bold text-foreground text-[11px]">
+                      {formatCurrency(grandTotal)}
+                    </td>
+                  );
+                }
+                if (idx === 0) {
+                  return (
+                    <td key={h} colSpan={1} className="px-2 py-2 font-bold text-foreground text-[11px] uppercase">
+                      Total
+                    </td>
+                  );
+                }
+                return <td key={h} className="px-2 py-2" />;
+              })}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );

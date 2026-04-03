@@ -65,6 +65,10 @@ const arrowDefs: FlowArrow[] = [
 
 const STAGGER_MS = 350;
 
+// Convert **bold** markdown to <strong> tags
+const formatBold = (text: string): string =>
+  text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+
 // ── Complexity Score ──
 const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
   const [showMethodology, setShowMethodology] = useState(false);
@@ -134,9 +138,9 @@ const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
             <Separator className="mb-3" />
             <div className="bg-muted/50 rounded-lg p-3">
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                ⚠️ Este score é gerado por inteligência artificial com base na análise do texto do edital.
-                Fatores considerados: exigências de habilitação, complexidade do objeto, volume documental,
-                prazos, garantias e especificidades técnicas.
+                ⚠️ Este score é calculado automaticamente por análise textual do edital (sem IA).
+                Fatores considerados: extensão do documento, valor estimado, exigências de habilitação,
+                complexidade do objeto, garantias, subcontratação e especificidades técnicas.
                 <strong className="block mt-1.5 text-foreground/80">Não substitui análise jurídica profissional.</strong>
               </p>
             </div>
@@ -505,49 +509,62 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                 ))}
               </ul>
             ) : node.id === "resumo" && node.fullValue ? (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {node.fullValue.split(/\n\n---\n\n/).map((section: string, si: number) => {
                   const lines = section.split('\n');
                   const title = lines[0]?.trim();
                   const body = lines.slice(1).join('\n').trim();
-                  // Detect if title has emoji header pattern
-                  const isHeader = /^[📋💰🖥️📑📅📝🚨✅🏢⚡🤝🔄🌱]/.test(title);
+                  const isHeader = /^[📋💰🖥️📑📅📝🚨✅🏢⚡🤝🔄🌱🔎🏆🚫📌]/.test(title);
 
                   return (
                     <div key={si}>
-                      {si > 0 && <Separator className="mb-4" />}
+                      {si > 0 && <Separator className="mb-6" />}
                       {isHeader && (
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3">
-                          {title}
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                          <span className="text-lg">{title.match(/^./u)?.[0]}</span>
+                          <span>{title.replace(/^.\s*/, '')}</span>
                         </h4>
                       )}
-                      <div className="text-sm leading-relaxed text-foreground space-y-2">
+                      <div className="text-sm leading-[1.85] text-foreground space-y-3">
                         {(isHeader ? body : section).split('\n\n').map((para: string, pi: number) => {
+                          // Blockquotes (> "...")
+                          if (para.trim().startsWith('>')) {
+                            return (
+                              <blockquote key={pi} className="border-l-3 border-primary/30 pl-4 py-2 bg-primary/[0.03] rounded-r-lg italic text-foreground/90">
+                                {para.replace(/^>\s*/, '').replace(/^"/, '').replace(/"$/, '')}
+                              </blockquote>
+                            );
+                          }
                           // Numbered lists
                           if (/^\d+\.\s/.test(para.trim())) {
                             return (
-                              <ol key={pi} className="list-decimal list-inside space-y-1.5 pl-1">
+                              <ol key={pi} className="space-y-3 pl-1">
                                 {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
-                                  <li key={ii} className="text-sm">{item.replace(/^\d+\.\s*/, '')}</li>
+                                  <li key={ii} className="flex gap-3 text-sm">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold mt-0.5">
+                                      {item.match(/^(\d+)\./)?.[1]}
+                                    </span>
+                                    <span className="flex-1" dangerouslySetInnerHTML={{ __html: formatBold(item.replace(/^\d+\.\s*/, '')) }} />
+                                  </li>
                                 ))}
                               </ol>
                             );
                           }
-                          // Bullet lists (• items)
-                          if (/^[•⚡🤝🔄🌱📋📌]/.test(para.trim())) {
+                          // Bullet lists
+                          if (/^[•⚡🤝🔗🔄🌱📋📌📰⚠️❓🏁⏱️🚫🔒📍⏰💳📈📐🧪💻🏗️📜🏦🔧📊💡📝]/.test(para.trim())) {
                             return (
-                              <ul key={pi} className="space-y-2 pl-1">
+                              <ul key={pi} className="space-y-3 pl-1">
                                 {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
-                                  <li key={ii} className="text-sm flex gap-2">
-                                    <span className="shrink-0 mt-0.5">{item.match(/^[•⚡🤝🔄🌱📋📌]/)?.[0] || '•'}</span>
-                                    <span>{item.replace(/^[•⚡🤝🔄🌱📋📌]\s*/, '')}</span>
+                                  <li key={ii} className="flex gap-3 text-sm">
+                                    <span className="shrink-0 text-base mt-0.5">{item.match(/^[^\s]*/u)?.[0]?.replace(/\*\*/g, '') || '•'}</span>
+                                    <span className="flex-1" dangerouslySetInnerHTML={{ __html: formatBold(item.replace(/^[^\s]*\s*/, '')) }} />
                                   </li>
                                 ))}
                               </ul>
                             );
                           }
-                          // Regular paragraph
-                          return <p key={pi} className="whitespace-pre-line">{para}</p>;
+                          // Regular paragraph with bold support
+                          return <p key={pi} className="whitespace-pre-line" dangerouslySetInnerHTML={{ __html: formatBold(para) }} />;
                         })}
                       </div>
                     </div>

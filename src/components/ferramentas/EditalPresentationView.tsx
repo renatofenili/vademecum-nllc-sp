@@ -37,16 +37,22 @@ const truncate = (s: string | undefined, max: number) => {
 };
 
 const buildNodes = (a: EditalAnalysis): FlowNode[] => [
-  { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 3, w: 16, h: 5, expandable: false },
-  { id: "modalidade", label: "Modalidade", value: a.modalidade || "Não identificado", fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 25, y: 15, w: 18, h: 5, expandable: false },
-  { id: "orgao", label: "Órgão", value: truncate(a.orgao, 35), fullValue: a.orgao || "Não identificado", icon: Building2, x: 75, y: 15, w: 22, h: 5, expandable: true },
-  { id: "objeto", label: "Objeto", value: truncate(a.objeto, 65), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 28, w: 44, h: 6, expandable: true },
-  { id: "criterio", label: "Critério", value: truncate(a.criterio_julgamento, 30), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 17, y: 42, w: 18, h: 5, expandable: true },
-  { id: "sessao", label: "Sessão Pública", value: a.data_sessao || "Não identificado", fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 42, w: 18, h: 5, expandable: false },
-  { id: "valor", label: "Valor Estimado", value: a.valor_estimado || "Não informado", fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 83, y: 42, w: 18, h: 5, expandable: true, extraContent: a.planilha_estimada },
-  { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 40), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 22, y: 57, w: 24, h: 5, expandable: true },
-  { id: "sistema", label: "Onde Licitar", value: truncate(a.sistema_licitacao, 35), fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 75, y: 57, w: 22, h: 5, expandable: false },
-  { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 80), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 74, w: 54, h: 14, expandable: true },
+  // Row 1 (y=4): edital
+  { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 4, w: 16, h: 0, expandable: false },
+  // Row 2 (y=18): modalidade, orgao
+  { id: "modalidade", label: "Modalidade", value: truncate(a.modalidade, 25), fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 25, y: 18, w: 18, h: 0, expandable: false },
+  { id: "orgao", label: "Órgão", value: truncate(a.orgao, 30), fullValue: a.orgao || "Não identificado", icon: Building2, x: 75, y: 18, w: 22, h: 0, expandable: true },
+  // Row 3 (y=32): objeto
+  { id: "objeto", label: "Objeto", value: truncate(a.objeto, 55), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 32, w: 44, h: 0, expandable: true },
+  // Row 4 (y=47): criterio, sessao, valor
+  { id: "criterio", label: "Critério", value: truncate(a.criterio_julgamento, 22), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 17, y: 47, w: 18, h: 0, expandable: true },
+  { id: "sessao", label: "Sessão Pública", value: truncate(a.data_sessao, 25), fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 47, w: 18, h: 0, expandable: false },
+  { id: "valor", label: "Valor Estimado", value: truncate(a.valor_estimado, 20), fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 83, y: 47, w: 18, h: 0, expandable: true, extraContent: a.planilha_estimada },
+  // Row 5 (y=62): habilitacao, sistema
+  { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 30), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 22, y: 62, w: 24, h: 0, expandable: true },
+  { id: "sistema", label: "Onde Licitar", value: truncate(a.sistema_licitacao, 30), fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 75, y: 62, w: 22, h: 0, expandable: false },
+  // Row 6 (y=80): resumo
+  { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 70), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 80, w: 54, h: 0, expandable: true },
 ];
 
 const arrowDefs: FlowArrow[] = [
@@ -193,19 +199,18 @@ const FlowNodeEl = ({
       style={{
         position: "absolute",
         left: `${node.x - node.w / 2}%`,
-        top: `${node.y - node.h / 2}%`,
+        top: `${node.y}%`,
         width: `${node.w}%`,
-        minHeight: `${node.h}%`,
         transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
-        transform: visible ? "scale(1)" : "scale(0.5)",
+        transform: visible ? "scale(1) translateY(-50%)" : "scale(0.5) translateY(-50%)",
         opacity: visible ? 1 : 0,
         zIndex: 10,
         cursor: node.expandable ? "pointer" : "default",
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`h-full transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
-        <CardContent className="p-3 flex flex-col items-center justify-center h-full gap-1">
+      <Card className={`transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
+        <CardContent className="px-3 py-2 flex flex-col items-center justify-center gap-0.5">
           <div className="flex items-center gap-1.5">
             <Icon className="h-3.5 w-3.5 text-primary" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -213,15 +218,15 @@ const FlowNodeEl = ({
             </span>
           </div>
           <p
-            className="text-center leading-snug text-foreground"
+            className="text-center text-foreground overflow-hidden text-ellipsis"
             style={{
-              fontSize: node.value.length > 60 ? "10px" : node.value.length > 30 ? "11px" : "12px",
+              fontSize: "11px",
               fontWeight: node.id === "edital" ? 700 : 500,
               maxWidth: "95%",
-              overflow: "hidden",
               display: "-webkit-box",
-              WebkitLineClamp: node.id === "resumo" ? 5 : 2,
+              WebkitLineClamp: node.id === "resumo" ? 3 : 1,
               WebkitBoxOrient: "vertical",
+              lineHeight: "1.4",
             }}
           >
             {node.value}

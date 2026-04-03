@@ -31,6 +31,19 @@ PROCESSO Nº 08084.000594/2021-11
 Torna-se público, para conhecimento dos interessados, que a União, por intermédio do Ministério da Justiça e Segurança Pública, por meio do Pregoeiro designado pela Portaria nº 26 de 01 de março de 2021.
 `;
 
+const ministerioAsciiFixture = `
+14198006 08084.000594/2021-11
+Ministerio da Justica e Seguranca Publica
+Esplanada dos Ministerios, Bloco T, Anexo II, 6o Andar, Sala 621
+Brasilia/DF, CEP 70064-900
+
+EDITAL DE LICITACAO
+PREGAO ELETRONICO No 06/2021
+PROCESSO No 08084.000594/2021-11
+
+Torna-se publico, para conhecimento dos interessados, que a Uniao, por intermedio do Ministerio da Justica e Seguranca Publica.
+`;
+
 Deno.test("extractOrgao removes publication and bidding tail", () => {
   const value = extractOrgao(fixtureText);
   assertEquals(value, "Secretaria de Administração");
@@ -39,6 +52,11 @@ Deno.test("extractOrgao removes publication and bidding tail", () => {
 Deno.test("extractOrgao identifies ministry from institutional header and preamble", () => {
   const value = extractOrgao(ministerioFixture);
   assertEquals(value, "Ministério da Justiça e Segurança Pública");
+});
+
+Deno.test("extractOrgao identifies ministry from ascii extraction too", () => {
+  const value = extractOrgao(ministerioAsciiFixture);
+  assertEquals(value, "Ministerio da Justica e Seguranca Publica");
 });
 
 Deno.test("extractCriterio identifies labeled criterion with qualifier", () => {

@@ -37,16 +37,16 @@ const truncate = (s: string | undefined, max: number) => {
 };
 
 const buildNodes = (a: EditalAnalysis): FlowNode[] => [
-  { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 4, w: 18, h: 6, expandable: false },
-  { id: "orgao", label: "Órgão", value: truncate(a.orgao, 40), fullValue: a.orgao || "Não identificado", icon: Building2, x: 76, y: 14, w: 24, h: 6, expandable: true },
-  { id: "modalidade", label: "Modalidade", value: a.modalidade || "Não identificado", fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 24, y: 14, w: 20, h: 6, expandable: false },
-  { id: "objeto", label: "Objeto", value: truncate(a.objeto, 70), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 27, w: 50, h: 7, expandable: true },
-  { id: "valor", label: "Valor Estimado", value: a.valor_estimado || "Não informado", fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 82, y: 40, w: 20, h: 6, expandable: true, extraContent: a.planilha_estimada },
-  { id: "criterio", label: "Critério de Julgamento", value: truncate(a.criterio_julgamento, 40), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 18, y: 40, w: 22, h: 6, expandable: true },
-  { id: "sessao", label: "Sessão Pública", value: a.data_sessao || "Não identificado", fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 40, w: 20, h: 6, expandable: false },
-  { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 50), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 20, y: 55, w: 28, h: 6, expandable: true },
-  { id: "sistema", label: "Onde Licitar", value: a.sistema_licitacao || "Não identificado", fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 74, y: 55, w: 22, h: 6, expandable: false },
-  { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 90), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 72, w: 60, h: 16, expandable: true },
+  { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 3, w: 16, h: 5, expandable: false },
+  { id: "modalidade", label: "Modalidade", value: a.modalidade || "Não identificado", fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 25, y: 15, w: 18, h: 5, expandable: false },
+  { id: "orgao", label: "Órgão", value: truncate(a.orgao, 35), fullValue: a.orgao || "Não identificado", icon: Building2, x: 75, y: 15, w: 22, h: 5, expandable: true },
+  { id: "objeto", label: "Objeto", value: truncate(a.objeto, 65), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 28, w: 44, h: 6, expandable: true },
+  { id: "criterio", label: "Critério", value: truncate(a.criterio_julgamento, 30), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 17, y: 42, w: 18, h: 5, expandable: true },
+  { id: "sessao", label: "Sessão Pública", value: a.data_sessao || "Não identificado", fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 42, w: 18, h: 5, expandable: false },
+  { id: "valor", label: "Valor Estimado", value: a.valor_estimado || "Não informado", fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 83, y: 42, w: 18, h: 5, expandable: true, extraContent: a.planilha_estimada },
+  { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 40), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 22, y: 57, w: 24, h: 5, expandable: true },
+  { id: "sistema", label: "Onde Licitar", value: truncate(a.sistema_licitacao, 35), fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 75, y: 57, w: 22, h: 5, expandable: false },
+  { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 80), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 74, w: 54, h: 14, expandable: true },
 ];
 
 const arrowDefs: FlowArrow[] = [

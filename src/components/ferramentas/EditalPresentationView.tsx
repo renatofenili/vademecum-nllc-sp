@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, RotateCcw, ChevronDown, ChevronUp, FileText, DollarSign, Scale, Calendar, Shield, Globe, Building2, Hash, Clipboard, MessageSquare, TableProperties } from "lucide-react";
+import { X, RotateCcw, ChevronDown, ChevronUp, FileText, DollarSign, Scale, Calendar, Shield, Globe, Building2, Hash, Clipboard, MessageSquare, TableProperties, Download, Info, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ interface FlowNode {
   w: number;
   h: number;
   expandable: boolean;
-  /** Extra content for special expandable nodes */
   extraContent?: unknown;
 }
 
@@ -37,21 +36,15 @@ const truncate = (s: string | undefined, max: number) => {
 };
 
 const buildNodes = (a: EditalAnalysis): FlowNode[] => [
-  // Row 1 (y=4): edital
   { id: "edital", label: "Edital", value: a.numero_edital || "Edital", fullValue: a.numero_edital || "Edital", icon: Hash, x: 50, y: 4, w: 16, h: 0, expandable: false },
-  // Row 2 (y=18): modalidade, orgao
   { id: "modalidade", label: "Modalidade", value: truncate(a.modalidade, 25), fullValue: a.modalidade || "Não identificado", icon: Clipboard, x: 25, y: 18, w: 18, h: 0, expandable: false },
   { id: "orgao", label: "Órgão", value: truncate(a.orgao, 30), fullValue: a.orgao || "Não identificado", icon: Building2, x: 75, y: 18, w: 22, h: 0, expandable: true },
-  // Row 3 (y=32): objeto
   { id: "objeto", label: "Objeto", value: truncate(a.objeto, 55), fullValue: a.objeto || "Não identificado", icon: FileText, x: 50, y: 32, w: 44, h: 0, expandable: true },
-  // Row 4 (y=47): criterio, sessao, valor
   { id: "criterio", label: "Critério", value: truncate(a.criterio_julgamento, 22), fullValue: a.criterio_julgamento || "Não identificado", icon: Scale, x: 17, y: 47, w: 18, h: 0, expandable: true },
   { id: "sessao", label: "Sessão Pública", value: truncate(a.data_sessao, 25), fullValue: a.data_sessao || "Não identificado", icon: Calendar, x: 50, y: 47, w: 18, h: 0, expandable: false },
   { id: "valor", label: "Valor Estimado", value: truncate(a.valor_estimado, 20), fullValue: a.valor_estimado || "Não informado", icon: DollarSign, x: 83, y: 47, w: 18, h: 0, expandable: true, extraContent: a.planilha_estimada },
-  // Row 5 (y=62): habilitacao, sistema
   { id: "habilitacao", label: "Habilitação", value: truncate(a.condicoes_habilitacao, 30), fullValue: a.condicoes_habilitacao || "Não identificado", icon: Shield, x: 22, y: 62, w: 24, h: 0, expandable: true },
   { id: "sistema", label: "Onde Licitar", value: truncate(a.sistema_licitacao, 30), fullValue: a.sistema_licitacao || "Não identificado", icon: Globe, x: 75, y: 62, w: 22, h: 0, expandable: false },
-  // Row 6 (y=80): resumo
   { id: "resumo", label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 70), fullValue: a.resumo_simples || "Não identificado", icon: MessageSquare, x: 50, y: 80, w: 54, h: 0, expandable: true },
 ];
 
@@ -72,6 +65,195 @@ const arrowDefs: FlowArrow[] = [
 
 const STAGGER_MS = 350;
 
+// ── Complexity Score ──
+const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
+  const [showMethodology, setShowMethodology] = useState(false);
+  const score = analysis.score_complexidade?.valor ?? 5;
+  const justificativa = analysis.score_complexidade?.justificativa ?? "Score calculado com base na análise geral do edital.";
+
+  const getColor = (v: number) => {
+    if (v <= 3) return { ring: "text-emerald-500", bg: "bg-emerald-500", label: "Baixa" };
+    if (v <= 6) return { ring: "text-amber-500", bg: "bg-amber-500", label: "Média" };
+    return { ring: "text-red-500", bg: "bg-red-500", label: "Alta" };
+  };
+  const c = getColor(score);
+
+  const circumference = 2 * Math.PI * 18;
+  const offset = circumference - (score / 10) * circumference;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowMethodology(!showMethodology)}
+        className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-card border border-border shadow-sm hover:shadow-md transition-all cursor-pointer"
+        title="Clique para ver a metodologia"
+      >
+        <div className="relative w-10 h-10">
+          <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="18" stroke="hsl(var(--muted))" strokeWidth="3" fill="none" />
+            <circle
+              cx="20" cy="20" r="18"
+              stroke="currentColor"
+              className={c.ring}
+              strokeWidth="3"
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset 1s ease-out" }}
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground">
+            {score}
+          </span>
+        </div>
+        <div className="text-left">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Complexidade</div>
+          <div className={`text-xs font-bold ${c.ring}`}>{c.label}</div>
+        </div>
+        <Info className="h-3 w-3 text-muted-foreground/50" />
+      </button>
+
+      {showMethodology && (
+        <div className="absolute top-full mt-2 right-0 w-72 bg-card border border-border rounded-lg shadow-xl p-4 z-50 animate-fade-in">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Info className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Metodologia</span>
+          </div>
+          <p className="text-xs leading-relaxed text-foreground mb-3">{justificativa}</p>
+          <Separator className="mb-2" />
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            ⚠️ Este score é gerado por IA com base na análise do texto do edital. Considere fatores como: exigências de habilitação, complexidade do objeto, volume documental, prazos, garantias e especificidades técnicas. Não substitui análise jurídica profissional.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Timeline ──
+const TimelineBar = ({ analysis }: { analysis: EditalAnalysis }) => {
+  const t = analysis.timeline;
+  if (!t) return null;
+
+  const steps = [
+    { label: "Publicação", value: t.data_publicacao, icon: FileText },
+    { label: "Impugnação", value: t.prazo_impugnacao, icon: Shield, sublabel: "Prazo limite" },
+    { label: "Esclarecimento", value: t.prazo_esclarecimento, icon: MessageSquare, sublabel: "Prazo limite" },
+    { label: "Abertura", value: t.data_abertura, icon: Calendar },
+  ].filter(s => s.value);
+
+  if (steps.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-0 justify-center w-full px-6">
+      {steps.map((step, i) => {
+        const Icon = step.icon;
+        return (
+          <div key={step.label} className="flex items-center">
+            <div className="flex flex-col items-center px-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+                <Icon className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">
+                {step.label}
+              </span>
+              <span className="text-[11px] font-medium text-foreground">
+                {step.value}
+              </span>
+              {step.sublabel && (
+                <span className="text-[9px] text-muted-foreground">{step.sublabel}</span>
+              )}
+            </div>
+            {i < steps.length - 1 && (
+              <div className="w-12 h-px bg-primary/20 relative -mt-6">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0 h-0 border-t-[3px] border-b-[3px] border-l-[5px] border-transparent border-l-primary/30" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── PDF Export ──
+const exportPdf = (analysis: EditalAnalysis) => {
+  const sections = [
+    { title: "EDITAL", value: analysis.numero_edital },
+    { title: "MODALIDADE", value: analysis.modalidade },
+    { title: "ÓRGÃO", value: analysis.orgao },
+    { title: "OBJETO", value: analysis.objeto },
+    { title: "VALOR ESTIMADO", value: analysis.valor_estimado },
+    { title: "CRITÉRIO DE JULGAMENTO", value: analysis.criterio_julgamento },
+    { title: "DATA DA SESSÃO", value: analysis.data_sessao },
+    { title: "CONDIÇÕES DE HABILITAÇÃO", value: analysis.condicoes_habilitacao },
+    { title: "ONDE LICITAR", value: analysis.sistema_licitacao },
+  ];
+
+  const score = analysis.score_complexidade;
+  const timeline = analysis.timeline;
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Análise - ${analysis.numero_edital || "Edital"}</title>
+<style>
+  @media print { @page { margin: 20mm; } }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 20px; color: #b91c1c; border-bottom: 2px solid #b91c1c; padding-bottom: 8px; }
+  h2 { font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 24px; margin-bottom: 4px; }
+  p { font-size: 14px; line-height: 1.7; margin: 4px 0 16px; }
+  .score { display: inline-block; background: #f3f4f6; padding: 8px 16px; border-radius: 8px; margin: 8px 0; font-weight: 600; }
+  .timeline { display: flex; gap: 20px; margin: 12px 0 24px; flex-wrap: wrap; }
+  .timeline-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
+  .timeline-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; font-weight: 600; }
+  .timeline-value { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-top: 2px; }
+  .resumo { background: #fef2f2; border-left: 3px solid #b91c1c; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 8px; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
+</style></head><body>`;
+
+  html += `<h1>📋 Análise de Edital</h1>`;
+
+  if (score) {
+    const label = score.valor <= 3 ? "Baixa" : score.valor <= 6 ? "Média" : "Alta";
+    html += `<div class="score">Complexidade: ${score.valor}/10 — ${label}</div>`;
+    html += `<p style="font-size:12px;color:#6b7280;">${score.justificativa}</p>`;
+  }
+
+  if (timeline) {
+    const items = [
+      { label: "Publicação", value: timeline.data_publicacao },
+      { label: "Impugnação", value: timeline.prazo_impugnacao },
+      { label: "Esclarecimento", value: timeline.prazo_esclarecimento },
+      { label: "Abertura", value: timeline.data_abertura },
+    ].filter(i => i.value);
+    if (items.length > 0) {
+      html += `<h2>📅 Cronograma</h2><div class="timeline">`;
+      items.forEach(i => {
+        html += `<div class="timeline-item"><div class="timeline-label">${i.label}</div><div class="timeline-value">${i.value}</div></div>`;
+      });
+      html += `</div>`;
+    }
+  }
+
+  sections.forEach(s => {
+    html += `<h2>${s.title}</h2><p>${s.value || "Não identificado"}</p>`;
+  });
+
+  html += `<h2>📝 EM LINGUAGEM SIMPLES</h2><div class="resumo"><p>${(analysis.resumo_simples || "").replace(/\n/g, "</p><p>")}</p></div>`;
+
+  html += `<div class="footer">Gerado por Vade Mecum em Licitações — ${new Date().toLocaleDateString("pt-BR")}</div>`;
+  html += `</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (w) {
+    w.onload = () => {
+      setTimeout(() => { w.print(); }, 500);
+    };
+  }
+};
+
+// ── Main ──
 const EditalPresentationView = ({ analysis, onClose }: Props) => {
   const [visibleCount, setVisibleCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -117,6 +299,8 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
     (a) => visibleNodeIds.has(a.from) && visibleNodeIds.has(a.to)
   );
 
+  const allVisible = visibleCount >= nodes.length && !isPlaying;
+
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background">
       {/* Top bar */}
@@ -130,6 +314,13 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {allVisible && <ComplexityScore analysis={analysis} />}
+          {allVisible && (
+            <Button variant="outline" size="sm" onClick={() => exportPdf(analysis)} className="gap-1.5 text-muted-foreground">
+              <Download className="h-3.5 w-3.5" />
+              PDF
+            </Button>
+          )}
           {!isPlaying && visibleCount >= nodes.length && (
             <Button variant="ghost" size="sm" onClick={start} className="gap-1.5 text-muted-foreground">
               <RotateCcw className="h-3.5 w-3.5" />
@@ -179,10 +370,22 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
           />
         )}
       </div>
+
+      {/* Bottom timeline */}
+      {allVisible && analysis.timeline && (
+        <div className="px-6 py-3 border-t border-border bg-card flex items-center justify-center">
+          <div className="flex items-center gap-2 mr-4">
+            <Clock className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cronograma</span>
+          </div>
+          <TimelineBar analysis={analysis} />
+        </div>
+      )}
     </div>
   );
 };
 
+// ── FlowNodeEl ──
 const FlowNodeEl = ({
   node,
   visible,
@@ -216,7 +419,7 @@ const FlowNodeEl = ({
       } ${node.expandable ? "hover:shadow-xl hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
         <CardContent className={`px-3 py-2 flex flex-col items-center justify-center gap-0.5 ${node.id === "resumo" ? "py-3" : ""}`}>
           <div className="flex items-center gap-1.5">
-            <Icon className={`h-3.5 w-3.5 ${node.id === "resumo" ? "text-primary" : "text-primary"}`} />
+            <Icon className="h-3.5 w-3.5 text-primary" />
             <span className={`font-semibold uppercase tracking-wider ${node.id === "resumo" ? "text-[11px] text-primary" : "text-[10px] text-muted-foreground"}`}>
               {node.label}
             </span>
@@ -244,6 +447,7 @@ const FlowNodeEl = ({
   );
 };
 
+// ── ExpandedCard ──
 const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }) => {
   const Icon = node.icon;
   const hasPlanilha = node.id === "valor" && node.extraContent && node.extraContent !== "Não disponível no edital";
@@ -338,6 +542,7 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
   );
 };
 
+// ── FlowArrowSVG ──
 const FlowArrowSVG = ({ from, to }: { from: FlowNode; to: FlowNode }) => {
   const x1 = from.x;
   const y1 = from.y + from.h / 2;

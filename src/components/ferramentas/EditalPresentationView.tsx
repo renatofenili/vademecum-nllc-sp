@@ -134,9 +134,9 @@ const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
             <Separator className="mb-3" />
             <div className="bg-muted/50 rounded-lg p-3">
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                ⚠️ Este score é gerado por inteligência artificial com base na análise do texto do edital.
-                Fatores considerados: exigências de habilitação, complexidade do objeto, volume documental,
-                prazos, garantias e especificidades técnicas.
+                ⚠️ Este score é calculado automaticamente por análise textual do edital (sem IA).
+                Fatores considerados: extensão do documento, valor estimado, exigências de habilitação,
+                complexidade do objeto, garantias, subcontratação e especificidades técnicas.
                 <strong className="block mt-1.5 text-foreground/80">Não substitui análise jurídica profissional.</strong>
               </p>
             </div>

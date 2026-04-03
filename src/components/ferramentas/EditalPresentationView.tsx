@@ -209,18 +209,22 @@ const FlowNodeEl = ({
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`transition-shadow duration-200 shadow-md border-border/60 bg-card ring-1 ring-black/[0.04] ${node.expandable ? "hover:shadow-xl hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
-        <CardContent className="px-3 py-2 flex flex-col items-center justify-center gap-0.5">
+      <Card className={`transition-shadow duration-200 ${
+        node.id === "resumo"
+          ? "shadow-lg border-primary/30 bg-primary/[0.03] ring-1 ring-primary/10"
+          : "shadow-md border-border/60 bg-card ring-1 ring-black/[0.04]"
+      } ${node.expandable ? "hover:shadow-xl hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
+        <CardContent className={`px-3 py-2 flex flex-col items-center justify-center gap-0.5 ${node.id === "resumo" ? "py-3" : ""}`}>
           <div className="flex items-center gap-1.5">
-            <Icon className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Icon className={`h-3.5 w-3.5 ${node.id === "resumo" ? "text-primary" : "text-primary"}`} />
+            <span className={`font-semibold uppercase tracking-wider ${node.id === "resumo" ? "text-[11px] text-primary" : "text-[10px] text-muted-foreground"}`}>
               {node.label}
             </span>
           </div>
           <p
             className="text-center text-foreground overflow-hidden text-ellipsis"
             style={{
-              fontSize: "11px",
+              fontSize: node.id === "resumo" ? "12px" : "11px",
               fontWeight: node.id === "edital" ? 700 : 500,
               maxWidth: "95%",
               display: "-webkit-box",

@@ -59,104 +59,89 @@ function extractModalidade(text: string): string {
   ]) || "Não identificado";
 }
 
-function extractOrgao(text: string): string {
-  const header = text.replace(/\r\n/g, "\n").slice(0, 4000);
-  const candidates: Array<{ value: string; score: number }> = [];
+const INSTITUTION_KEYWORD_REGEX = /\b(prefeitura|município|secretaria|ministério|governo|estado|câmara|tribunal|fundação|autarquia|universidade|instituto|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio|agência|superintendência)\b/i;
 
-  const addCandidate = (raw: string | null | undefined, boost = 0) => {
-    if (!raw) return;
-    const cleaned = cleanOrgaoName(raw);
-    if (!cleaned) return;
+function normalizeInstitutionCase(value: string): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
 
-    const score = scoreOrgaoCandidate(cleaned) + boost;
-    if (score >= 8) candidates.push({ value: cleaned, score });
-  };
-
-  const labeledPatterns = [
-    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,180})/gim,
-    /(?:^|\n)\s*(?:prefeitura|município|governo|tribunal|câmara|secretaria|autarquia|fundação|universidade|instituto)[^\n]{0,140}/gim,
-  ];
-
-  for (const pattern of labeledPatterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1] || match[0], 20);
-    }
+  if (compact === compact.toUpperCase() && /[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ]/.test(compact)) {
+    const smallWords = new Set(["de", "da", "do", "das", "dos", "e"]);
+    return compact
+      .toLowerCase()
+      .split(" ")
+      .map((word, index) => {
+        if (index > 0 && smallWords.has(word)) return word;
+        if (/^[ivxlcdm]+$/i.test(word)) return word.toUpperCase();
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
   }
 
-  const lines = header
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .slice(0, 40);
-
-  for (const line of lines) {
-    addCandidate(line, line === line.toUpperCase() ? 4 : 0);
-  }
-
-  const best = candidates.sort((a, b) => b.score - a.score || a.value.length - b.value.length)[0];
-  return best?.value || "Não identificado";
+  return compact.charAt(0).toUpperCase() + compact.slice(1);
 }
 
 function cleanOrgaoName(raw: string): string {
-  let value = raw
+  const compact = raw.replace(/\s+/g, " ").trim();
+  const extracted = compact.match(/((?:prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;]{0,40})?|fundação|autarquia|universidade|instituto|ministério|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^,.;\n]{2,160})/i);
+
+  let value = (extracted?.[1] ?? compact)
     .replace(/^\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]?\s*/i, "")
-    .replace(/^\s*(?:uasg|ug)\s*[:.]?\s*\d+\s*[-–—:]?\s*/i, "")
-    .replace(/^\s*(?:cnpj|processo|pregão|concorrência|edital)\b[^\n]*$/i, "")
-    .replace(/\s+/g, " ")
+    .replace(/^\s*(?:a|o)\s+/i, "")
     .trim();
 
   value = value
-    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaur[aá]|torna\s+p[úu]blico|por\s+meio\s+de|situad[ao]|inscrit[ao])\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:no|na)\s+(?:d\.o\.u\.|d\.o\.e\.|imprensa\s+oficial|forma\s+eletr[ôo]nica)\b[\s\S]*$/i, "")
-    .replace(/\s*[-–—:]\s*(?:cnpj|uasg|ug|processo|pregão|concorrência|edital)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaurar[áa]?|torna\s+p[úu]blico|por\s+meio\s+da\s+comiss[aã]o|por\s+interm[eé]dio\s+da\s+comiss[aã]o|situad[ao]|inscrit[ao]|cadastrad[ao]|representad[ao]|neste\s+ato)\b[\s\S]*$/i, "")
+    .replace(/\s+(?:publicad[ao]|realizar[áa]|promover[áa]|torna\s+p[úu]blico)\b[\s\S]*$/i, "")
+    .replace(/\s*[-–—:]\s*(?:cnpj|uasg|ug|processo|preg[ãa]o|concorr[êe]ncia|edital)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:no|na)\s+(?:d\.o\.[ue]\.?|imprensa\s+oficial|forma\s+eletr[ôo]nica)\b[\s\S]*$/i, "")
     .replace(/[;:,\-–—]+$/, "")
     .trim();
 
   if (!value) return "";
   if (value.length < 4 || value.length > 140) return "";
-  if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|concorr[êe]ncia|edital|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o)\b/i.test(value)) return "";
-  if (!/\b(prefeitura|município|secretaria|governo|estado|câmara|tribunal|fundação|autarquia|universidade|instituto|companhia|empresa|departamento|serviço\s+autônomo|consórcio|agência|ministério|superintendência|assembleia|senado|câmara\s+municipal)\b/i.test(value)) {
-    return "";
-  }
+  if (!INSTITUTION_KEYWORD_REGEX.test(value)) return "";
+  if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|concorr[êe]ncia|edital|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o|crit[ée]rio)\b/i.test(value)) return "";
 
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return normalizeInstitutionCase(value);
 }
 
 function scoreOrgaoCandidate(value: string): number {
   let score = 0;
 
   const positiveSignals: Array<[RegExp, number]> = [
-    [/\bprefeitura\b/i, 8],
-    [/\bmunicípio\b/i, 8],
-    [/\bsecretaria\b/i, 8],
-    [/\bgoverno\b/i, 7],
-    [/\bestado\b/i, 5],
-    [/\bcâmara\b/i, 7],
-    [/\btribunal\b/i, 7],
-    [/\bfundação\b/i, 7],
-    [/\bautarquia\b/i, 7],
-    [/\buniversidade\b/i, 7],
-    [/\binstituto\b/i, 7],
-    [/\bcompanhia\b/i, 6],
-    [/\bempresa\b/i, 5],
-    [/\bdepartamento\b/i, 6],
+    [/\bsecretaria\b/i, 12],
+    [/\bministério\b/i, 12],
+    [/\btribunal\b/i, 11],
+    [/\buniversidade\b/i, 11],
+    [/\binstituto\b/i, 10],
+    [/\bprefeitura\b/i, 10],
+    [/\bmunicípio\b/i, 10],
+    [/\bcâmara\b/i, 10],
+    [/\bgoverno\b/i, 9],
+    [/\bfundação\b/i, 9],
+    [/\bautarquia\b/i, 9],
+    [/\bsuperintendência\b/i, 8],
+    [/\bagência\b/i, 8],
+    [/\bcompanhia\b/i, 7],
+    [/\bempresa\s+(?:pública|municipal)\b/i, 7],
+    [/\bdepartamento\b/i, 7],
     [/\bserviço\s+autônomo\b/i, 7],
-    [/\bministério\b/i, 7],
-    [/\bsuperintendência\b/i, 6],
   ];
 
   const negativeSignals: Array<[RegExp, number]> = [
-    [/\blicitaç[ãa]o\b/i, 12],
-    [/\bpreg[ãa]o\b/i, 12],
-    [/\bconcorr[êe]ncia\b/i, 12],
-    [/\bedital\b/i, 10],
-    [/\bpublicad[ao]\b/i, 10],
-    [/\brealizar[áa]\b/i, 12],
-    [/\bsess[ãa]o\b/i, 8],
-    [/\bproposta\b/i, 8],
-    [/\bd\.o\.u\.|d\.o\.e\./i, 8],
-    [/\bobjeto\b/i, 10],
-    [/\bfornecimento\b/i, 8],
+    [/\blicitaç[ãa]o\b/i, 16],
+    [/\bpreg[ãa]o\b/i, 16],
+    [/\bconcorr[êe]ncia\b/i, 16],
+    [/\bedital\b/i, 14],
+    [/\bpublicad[ao]\b/i, 16],
+    [/\brealizar[áa]\b/i, 16],
+    [/\bsess[ãa]o\b/i, 10],
+    [/\bproposta\b/i, 10],
+    [/\bd\.o\.[ue]\.?/i, 12],
+    [/\bobjeto\b/i, 12],
+    [/\bfornecimento\b/i, 10],
+    [/\bcrit[ée]rio\b/i, 8],
   ];
 
   for (const [pattern, points] of positiveSignals) {
@@ -167,11 +152,68 @@ function scoreOrgaoCandidate(value: string): number {
     if (pattern.test(value)) score -= points;
   }
 
-  if (value.length > 70) score -= 4;
-  if (value.length > 100) score -= 6;
-  if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s\-\/]+$/.test(value)) score += 2;
+  if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s\-\/]+$/.test(value)) score += 3;
+  if (value.length > 60) score -= 2;
+  if (value.length > 90) score -= 6;
 
   return score;
+}
+
+function extractOrgao(text: string): string {
+  const header = text.replace(/\r\n/g, "\n").slice(0, 6000);
+  const candidates: Array<{ value: string; score: number; index: number }> = [];
+
+  const addCandidate = (raw: string | null | undefined, boost = 0, index = 0) => {
+    if (!raw) return;
+    const cleaned = cleanOrgaoName(raw);
+    if (!cleaned) return;
+
+    const score = scoreOrgaoCandidate(cleaned) + boost - (index > header.length * 0.5 ? 2 : 0);
+    if (score >= 10) candidates.push({ value: cleaned, score, index });
+  };
+
+  const labeledPatterns = [
+    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,180})/gim,
+    /(?:por\s+intermédio\s+da|por\s+meio\s+da|através\s+da)\s+((?:secretaria|departamento|coordenadoria|autarquia|fundação|instituto|superintendência)[^,.;\n]{4,140})/gim,
+  ];
+
+  for (const pattern of labeledPatterns) {
+    for (const match of header.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 30, match.index ?? 0);
+    }
+  }
+
+  const contextualPatterns = [
+    /(?:^|\n)\s*((?:prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,40})?|fundação|autarquia|universidade|instituto|ministério|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^\n]{0,180})/gim,
+  ];
+
+  for (const pattern of contextualPatterns) {
+    for (const match of header.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 18, match.index ?? 0);
+    }
+  }
+
+  const lines = header
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 30);
+
+  for (const line of lines) {
+    if (INSTITUTION_KEYWORD_REGEX.test(line)) {
+      addCandidate(line, line === line.toUpperCase() ? 8 : 4, header.indexOf(line));
+    }
+  }
+
+  const unique = Array.from(
+    new Map(
+      candidates
+        .sort((a, b) => b.score - a.score || a.index - b.index || a.value.length - b.value.length)
+        .map((item) => [item.value.toLowerCase(), item])
+    ).values()
+  ).sort((a, b) => b.score - a.score || a.index - b.index || a.value.length - b.value.length);
+
+  return unique[0]?.value || "Não identificado";
 }
 
 function extractObjeto(text: string): string {
@@ -530,14 +572,105 @@ function extractValorEstimado(text: string): string {
   return valueContext || "Não informado no edital";
 }
 
+const CRITERIO_BASE_REGEX = /\b(menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico)\b/i;
+
+function normalizeCriterio(raw: string): string {
+  let value = raw.replace(/\s+/g, " ").trim();
+
+  value = value
+    .replace(/^(?:crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento))\s*[:.\-–—]?\s*/i, "")
+    .replace(/^(?:o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de|as\s+propostas?\s+ser[aã]o\s+julgadas?\s+pelo?\s+crit[ée]rio\s+de)\s*/i, "")
+    .replace(/\s*,?\s*(?:conforme|observadas?|nos\s+termos|para\s+fins|na\s+forma|previsto)\b[\s\S]*$/i, "")
+    .replace(/\s+(?:modo\s+de\s+disputa|disputa\s+(?:aberto|fechado))\b[\s\S]*$/i, "")
+    .replace(/[;:,\.\-–—]+$/, "")
+    .trim();
+
+  const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const byItem = /por\s+itens?|item(?:ns)?/.test(plain);
+  const byLote = /por\s+lotes?|lote(?:s)?/.test(plain);
+  const byGrupo = /por\s+grupos?|grupo(?:s)?/.test(plain);
+  const global = /\bglobal\b/.test(plain);
+
+  if (/menor\s+preco/.test(plain)) {
+    if (global) return "Menor preço global";
+    if (byItem) return "Menor preço por item";
+    if (byLote) return "Menor preço por lote";
+    if (byGrupo) return "Menor preço por grupo";
+    return "Menor preço";
+  }
+
+  if (/maior\s+desconto/.test(plain)) return "Maior desconto";
+  if (/tecnica\s+e\s+preco/.test(plain)) return "Técnica e preço";
+  if (/melhor\s+tecnica/.test(plain)) return "Melhor técnica";
+  if (/maior\s+oferta/.test(plain)) return "Maior oferta";
+  if (/maior\s+lance/.test(plain)) return "Maior lance";
+  if (/maior\s+retorno\s+economico/.test(plain)) return "Maior retorno econômico";
+
+  return "";
+}
+
+function scoreCriterioCandidate(raw: string, cleaned: string): number {
+  let score = 0;
+  const value = raw.toLowerCase();
+
+  if (/crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento)/i.test(value)) score += 18;
+  if (/o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de/i.test(value)) score += 14;
+  if (CRITERIO_BASE_REGEX.test(value)) score += 16;
+  if (/\bglobal\b|por\s+item|por\s+lote|por\s+grupo/i.test(value)) score += 4;
+  if (/modo\s+de\s+disputa|disputa\s+(?:aberto|fechado)/i.test(value)) score -= 12;
+  if (/sess[ãa]o|habilita|objeto/i.test(value) && !/crit[ée]rio|julgamento/i.test(value)) score -= 6;
+  if (!cleaned) score -= 20;
+  if (value.length > 120) score -= 4;
+
+  return score;
+}
+
 function extractCriterio(text: string): string {
-  return firstMatch(text, [
-    /(?:critério\s+de\s+julgamento|tipo\s+de\s+licitação)\s*[:.]?\s*(menor\s+preço(?:\s+global|\s+por\s+(?:lote|item))?)/i,
-    /(?:critério\s+de\s+julgamento|tipo)\s*[:.]?\s*(maior\s+desconto)/i,
-    /(?:critério\s+de\s+julgamento|tipo)\s*[:.]?\s*(técnica\s+e\s+preço)/i,
-    /(?:critério\s+de\s+julgamento|tipo)\s*[:.]?\s*(melhor\s+técnica)/i,
-    /(menor\s+preço(?:\s+global|\s+por\s+(?:lote|item))?)\s*(?:será|como|é)\s+(?:o\s+)?critério/i,
-  ]) || "Não identificado";
+  const norm = text.replace(/\r\n/g, "\n");
+  const header = norm.slice(0, 20000);
+  const candidates: Array<{ value: string; score: number; index: number }> = [];
+
+  const addCandidate = (raw: string | null | undefined, boost = 0, index = 0) => {
+    if (!raw) return;
+    const cleaned = normalizeCriterio(raw);
+    const score = scoreCriterioCandidate(raw, cleaned) + boost - (index > header.length * 0.7 ? 2 : 0);
+    if (cleaned && score >= 12) {
+      candidates.push({ value: cleaned, score, index });
+    }
+  };
+
+  const patterns = [
+    /(?:crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento))\s*[:.\-–—]?\s*([^\n.;]{8,120})/gi,
+    /(?:o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de|as\s+propostas?\s+ser[aã]o\s+julgadas?\s+pelo?\s+crit[ée]rio\s+de)\s+([^\n.;]{8,120})/gi,
+    /((?:menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico)(?:\s+(?:global|por\s+item|por\s+lote|por\s+grupo|por\s+itens|por\s+lotes|por\s+grupos))?)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of header.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 12, match.index ?? 0);
+    }
+  }
+
+  const lines = header
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (/crit[ée]rio|julgamento|menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico/i.test(line)) {
+      addCandidate(line, 8, header.indexOf(line));
+    }
+  }
+
+  const unique = Array.from(
+    new Map(
+      candidates
+        .sort((a, b) => b.score - a.score || a.index - b.index)
+        .map((item) => [item.value.toLowerCase(), item])
+    ).values()
+  ).sort((a, b) => b.score - a.score || a.index - b.index);
+
+  return unique[0]?.value || "Não identificado";
 }
 
 function extractDataSessao(text: string): string {
@@ -808,292 +941,155 @@ function detectFeatures(text: string) {
   };
 }
 
-// ── Resumo em Linguagem Simples (motor avançado) ──
+function lowercaseFirst(value: string): string {
+  return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+}
+
+function buildCriterionHint(criterio: string): string | null {
+  const value = criterio.toLowerCase();
+  if (value.includes("menor preço global")) return "vence a proposta mais barata para o valor total do objeto, desde que a empresa esteja habilitada.";
+  if (value.includes("menor preço por item")) return "cada item pode ser vencido por uma empresa diferente; o foco é o menor valor por item.";
+  if (value.includes("menor preço por lote")) return "vence o menor valor para cada lote, e não necessariamente para o edital inteiro.";
+  if (value.includes("maior desconto")) return "vence quem oferecer o maior desconto sobre a referência do edital.";
+  if (value.includes("técnica e preço")) return "preço não basta: a nota técnica também pesa no resultado.";
+  if (value.includes("melhor técnica")) return "a qualidade técnica é o ponto central da disputa.";
+  return null;
+}
+
+// ── Resumo em Linguagem Simples (enxuto e ancorado no PDF) ──
 function gerarResumoSimples(dados: Record<string, string>, timeline: Record<string, string | null>): string {
-  const fullText = dados._fullText || '';
+  const fullText = dados._fullText || "";
   const feat = detectFeatures(fullText);
   const sections: string[] = [];
 
-  const orgao = dados.orgao !== "Não identificado" ? dados.orgao : "o órgão responsável";
-  const modalidade = dados.modalidade !== "Não identificado" ? dados.modalidade.toLowerCase() : "licitação";
+  const orgao = dados.orgao !== "Não identificado" ? dados.orgao : "Órgão não identificado";
+  const modalidade = dados.modalidade !== "Não identificado" ? dados.modalidade : "Modalidade não identificada";
   const objeto = dados.objeto !== "Não identificado no edital" ? dados.objeto : null;
-  const objetoClean = objeto ? (objeto.length > 250 ? objeto.slice(0, 247) + '...' : objeto) : null;
-  const temValor = dados.valor_estimado !== "Não informado no edital";
-  const temCriterio = dados.criterio !== "Não identificado";
-  const temSessao = dados.data_sessao !== "Não identificado";
-  const temSistema = dados.sistema !== "Não identificado";
+  const criterio = dados.criterio !== "Não identificado" ? dados.criterio : null;
+  const valor = dados.valor_estimado !== "Não informado no edital" ? dados.valor_estimado : null;
+  const sessao = dados.data_sessao !== "Não identificado" ? dados.data_sessao : timeline.data_abertura;
+  const sistema = dados.sistema !== "Não identificado" ? dados.sistema : null;
+  const criterioHint = criterio ? buildCriterionHint(criterio) : null;
 
-  // ── 1. O QUE É ISSO? ──
   {
-    let s = `🔎 O QUE É ESSE EDITAL?\n\n`;
-    s += `Imagine que ${orgao} precisa contratar algo e, por lei, não pode simplesmente escolher quem quiser. `;
-    s += `Precisa abrir um processo público — uma licitação — para que qualquer empresa interessada possa competir de forma justa.\n\n`;
+    const linhas: string[] = [];
+    linhas.push(`• Órgão: ${orgao}`);
+    linhas.push(`• Modalidade: ${modalidade}`);
+    if (objeto) linhas.push(`• Objeto: ${objeto}`);
+    if (criterio) linhas.push(`• Critério de julgamento: ${criterio}`);
+    if (valor) linhas.push(`• Valor estimado: ${valor}`);
 
-    if (objetoClean) {
-      s += `Neste caso, o que se quer contratar é:\n\n`;
-      s += `> "${objetoClean}"\n\n`;
-    }
+    let intro = `${orgao} está promovendo ${modalidade.toLowerCase()}`;
+    if (objeto) intro += ` para ${lowercaseFirst(objeto)}`;
+    intro += ".";
+    if (criterio) intro += ` O julgamento será por ${criterio.toLowerCase()}.`;
+    if (criterioHint) intro += ` Em termos práticos, ${criterioHint}`;
 
-    const modalExpl: Record<string, string> = {
-      "pregão eletrônico": "O Pregão Eletrônico é a modalidade mais comum hoje em dia. Funciona como um leilão reverso pela internet: as empresas enviam propostas e depois disputam lances para oferecer o menor preço. Tudo acontece online, em tempo real.",
-      "pregão presencial": "O Pregão Presencial funciona como o eletrônico, mas as empresas comparecem fisicamente ao local indicado para apresentar propostas e disputar lances ao vivo.",
-      "concorrência": "A Concorrência é usada para contratos de maior vulto ou complexidade. Tem prazos mais longos e exigências de habilitação mais rigorosas.",
-      "tomada de preços": "A Tomada de Preços é uma modalidade para valores intermediários, onde participam empresas já cadastradas no órgão ou que se cadastrem até o prazo previsto.",
-      "dispensa": "A Dispensa de Licitação é uma exceção legal: o órgão pode contratar diretamente, sem competição, quando se enquadra em hipóteses previstas na lei (valor baixo, emergência, etc.).",
-      "inexigibilidade": "A Inexigibilidade ocorre quando a competição é inviável — por exemplo, quando só existe um fornecedor possível ou quando se contrata um profissional de notória especialização.",
-      "diálogo competitivo": "O Diálogo Competitivo é uma modalidade mais recente, usada para objetos complexos e inovadores. O órgão dialoga com os licitantes para construir a melhor solução antes de pedir propostas finais.",
-    };
-    const modalKey = Object.keys(modalExpl).find(k => modalidade.includes(k));
-    if (modalKey) {
-      s += `📌 ${modalExpl[modalKey]}`;
-    }
-
-    if (feat.isSRP) {
-      s += `\n\n📋 Este edital é para **Registro de Preços** (SRP). Isso significa que o órgão não está comprando agora — está "registrando" preços para comprar quando precisar, durante a validade da ata (geralmente 12 meses). O fornecedor registrado tem a expectativa, mas não a garantia, de ser contratado.`;
-    }
-    if (feat.isExclusivoMEEPP) {
-      s += `\n\n🏢 **ATENÇÃO — EXCLUSIVO PARA ME/EPP:** Apenas Microempresas e Empresas de Pequeno Porte podem participar desta licitação. Se sua empresa não se enquadra, infelizmente não poderá concorrer neste edital.`;
-    } else if (feat.beneficioMEEPP) {
-      s += `\n\n🏢 Microempresas e EPPs têm vantagens neste edital (Lei Complementar 123/2006): critério de desempate favorável, possibilidade de regularização fiscal tardia, entre outros benefícios.`;
-    }
-    sections.push(s);
+    sections.push(`📌 VISÃO GERAL\n\n${intro}\n\n${linhas.join("\n")}`);
   }
 
-  // ── 2. QUANTO CUSTA E COMO SE DECIDE QUEM VENCE? ──
   {
-    let s = `💰 QUANTO VALE E QUEM VENCE?\n\n`;
+    const linhas: string[] = [];
+    if (sessao) linhas.push(`• Sessão pública: ${sessao}`);
+    if (sistema) linhas.push(`• Plataforma: ${sistema}`);
+    if (timeline.prazo_impugnacao) linhas.push(`• Prazo para impugnação: ${timeline.prazo_impugnacao}`);
+    if (timeline.prazo_esclarecimento) linhas.push(`• Prazo para esclarecimentos: ${timeline.prazo_esclarecimento}`);
+    if (timeline.data_publicacao) linhas.push(`• Data de publicação identificada: ${timeline.data_publicacao}`);
 
-    if (temValor) {
-      s += `O órgão estima gastar até **${dados.valor_estimado}** nesta contratação. `;
-      s += `Esse é o valor máximo de referência — na prática, a Administração espera pagar menos, e propostas acima desse teto costumam ser desclassificadas.\n\n`;
-    } else {
-      s += `O edital optou por **não divulgar** o valor estimado (a lei permite isso em certos casos). O orçamento sigiloso pode estar disponível apenas para a comissão de licitação. Isso dificulta um pouco a precificação, mas não impede a participação.\n\n`;
+    if (linhas.length > 0) {
+      sections.push(`📅 PRAZOS E PARTICIPAÇÃO\n\n${linhas.join("\n")}`);
     }
-
-    if (temCriterio) {
-      const crit = dados.criterio.toLowerCase();
-      if (crit.includes("menor preço")) {
-        s += `⚖️ **Critério: Menor Preço** — Aqui, preço é tudo. A empresa que oferecer o valor mais baixo (e cumprir todas as exigências) vence. Não há avaliação de qualidade técnica da proposta — apenas preço e conformidade documental.`;
-        if (crit.includes("global")) s += ` O julgamento é pelo preço global (valor total), não item por item.`;
-        if (crit.includes("por item")) s += ` O julgamento é por item — cada item pode ser vencido por uma empresa diferente.`;
-        if (crit.includes("por lote")) s += ` O julgamento é por lote — os itens são agrupados e cada lote pode ser vencido por uma empresa diferente.`;
-      } else if (crit.includes("maior desconto")) {
-        s += `⚖️ **Critério: Maior Desconto** — Vence quem oferecer o maior percentual de desconto sobre a tabela de preços de referência. Atenção: o desconto incide sobre TODOS os itens da tabela, não apenas sobre alguns.`;
-      } else if (crit.includes("técnica e preço")) {
-        s += `⚖️ **Critério: Técnica e Preço** — Este é mais complexo. A proposta recebe duas notas: uma técnica e uma de preço, com pesos definidos no edital. NÃO basta ser o mais barato — a qualidade e experiência contam muito. Leia atentamente os critérios de pontuação técnica.`;
-      } else if (crit.includes("melhor técnica")) {
-        s += `⚖️ **Critério: Melhor Técnica** — A qualidade técnica é o fator decisivo. Após classificação técnica, negocia-se o preço. É essencial investir na proposta técnica.`;
-      } else {
-        s += `⚖️ Critério de julgamento: ${dados.criterio}.`;
-      }
-    }
-
-    if (feat.regimeTributario) {
-      s += `\n\nRegime de execução: **${feat.regimeTributario}**.`;
-    }
-    sections.push(s);
   }
 
-  // ── 3. COMO PARTICIPAR (GUIA PRÁTICO) ──
   {
-    let s = `🖥️ PASSO A PASSO PARA PARTICIPAR\n\n`;
-    s += `Se você decidiu participar, aqui vai o roteiro prático:\n\n`;
+    const habLines = dados.habilitacao
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
 
-    const passos: string[] = [];
-
-    if (temSistema) {
-      passos.push(`**Cadastre-se na plataforma:** Acesse o sistema ${dados.sistema}. Se ainda não tem cadastro, providencie com antecedência — o processo pode levar alguns dias.`);
-    } else {
-      passos.push(`**Identifique a plataforma:** Verifique no edital qual sistema eletrônico será usado e garanta que sua empresa está cadastrada.`);
+    if (habLines.length > 0 && dados.habilitacao !== "Consultar seção de habilitação no edital") {
+      sections.push(`📑 HABILITAÇÃO RESUMIDA\n\n${habLines.join("\n")}`);
     }
-
-    passos.push(`**Leia TUDO:** Edital completo + todos os anexos. Parece óbvio, mas a maioria dos problemas vem de não ter lido algum detalhe. Atenção especial ao Termo de Referência e à Minuta do Contrato.`);
-
-    passos.push(`**Verifique sua elegibilidade:** Antes de investir tempo na proposta, confira se sua empresa atende a TODOS os requisitos de habilitação (documentos, certidões, atestados). Não há como "dar um jeito" depois.`);
-
-    passos.push(`**Monte a proposta comercial:** Siga exatamente o modelo do edital. Erros de formatação ou informações faltantes podem levar à desclassificação.`);
-
-    passos.push(`**Prepare os documentos de habilitação:** Certidões negativas, balanço patrimonial, atestados técnicos — tudo com validade vigente na data da sessão.`);
-
-    if (temSessao) {
-      passos.push(`**Envie antes do prazo:** A proposta deve ser inserida na plataforma ANTES da sessão pública (${dados.data_sessao}). Não deixe para a última hora — problemas técnicos acontecem.`);
-    } else {
-      passos.push(`**Envie antes do prazo:** Insira a proposta na plataforma com antecedência. Problemas técnicos de última hora não são aceitos como justificativa.`);
-    }
-
-    passos.push(`**Participe da sessão:** Fique online durante a sessão pública. Haverá fase de lances (disputa em tempo real) e possivelmente negociação com o pregoeiro. Ter autonomia para dar lances rapidamente é uma vantagem.`);
-
-    s += passos.map((p, i) => `${i + 1}. ${p}`).join('\n\n');
-    sections.push(s);
   }
 
-  // ── 4. O QUE VOCÊ PRECISA COMPROVAR ──
-  {
-    let s = `📑 DOCUMENTAÇÃO NECESSÁRIA\n\n`;
-    s += `Para ser declarado vencedor, não basta ter o menor preço — é preciso comprovar que sua empresa é idônea e capaz. A habilitação geralmente se divide em quatro pilares:\n\n`;
-
-    const cats: { emoji: string; title: string; desc: string; found: boolean }[] = [
-      {
-        emoji: "📜",
-        title: "Habilitação Jurídica",
-        desc: "Prova que sua empresa existe legalmente. Documentos típicos: contrato social atualizado, CNPJ, procuração (se representante).",
-        found: /jurídica|ato\s+constitutivo|contrato\s+social|cnpj/i.test(fullText),
-      },
-      {
-        emoji: "🏦",
-        title: "Regularidade Fiscal e Trabalhista",
-        desc: "Prova que a empresa está em dia com o governo. Inclui: CND federal, estadual, municipal, FGTS (CRF), CNDT (certidão trabalhista), INSS.",
-        found: /regularidade\s+fiscal|certidão.*(?:federal|estadual|municipal)|fgts|inss|cndt/i.test(fullText),
-      },
-      {
-        emoji: "🔧",
-        title: "Qualificação Técnica",
-        desc: "Prova que a empresa já fez algo parecido antes. Geralmente exige atestados de capacidade técnica emitidos por clientes anteriores, com quantidades mínimas compatíveis.",
-        found: /qualificação\s+técnica|atestado|acervo|capacidade\s+técnica/i.test(fullText),
-      },
-      {
-        emoji: "📊",
-        title: "Qualificação Econômico-Financeira",
-        desc: "Prova que a empresa tem saúde financeira para executar o contrato. Documentos típicos: balanço patrimonial, índices contábeis (LC, LG, SG), certidão negativa de falência.",
-        found: /qualificação\s+econômico|balanço|capital\s+social|patrimônio\s+líquido|índice/i.test(fullText),
-      },
-    ];
-
-    const found = cats.filter(c => c.found);
-    const notFound = cats.filter(c => !c.found);
-
-    if (found.length > 0) {
-      s += `Neste edital, identificamos exigências nestas categorias:\n\n`;
-      found.forEach(c => {
-        s += `${c.emoji} **${c.title}:** ${c.desc}\n\n`;
-      });
-    }
-    if (notFound.length > 0 && found.length > 0) {
-      s += `As seguintes categorias não foram explicitamente identificadas na análise automatizada, mas podem constar no edital: ${notFound.map(c => c.title).join(', ')}.\n\n`;
-    }
-    if (found.length === 0) {
-      s += `A análise automatizada não conseguiu detalhar as categorias específicas. Consulte a seção de habilitação diretamente no edital.\n\n`;
-    }
-
-    s += `💡 **Dica de ouro:** Monte um "kit de habilitação" padrão com todos os documentos básicos sempre atualizados. Assim, quando surgir uma licitação interessante, você já está meio caminho andado.`;
-    sections.push(s);
-  }
-
-  // ── 5. DATAS QUE VOCÊ NÃO PODE PERDER ──
-  {
-    let s = `📅 DATAS IMPORTANTES\n\n`;
-    const datas: string[] = [];
-
-    if (timeline.data_publicacao) datas.push(`📰 **Publicação:** ${timeline.data_publicacao} — a partir desta data o edital é público e o "relógio" começa a contar.`);
-    if (timeline.prazo_impugnacao) datas.push(`⚠️ **Impugnação até:** ${timeline.prazo_impugnacao} — se você encontrou algo ilegal ou restritivo no edital, TEM que questionar até esta data. Depois, perde o direito.`);
-    if (timeline.prazo_esclarecimento) datas.push(`❓ **Esclarecimentos até:** ${timeline.prazo_esclarecimento} — dúvidas sobre o edital devem ser enviadas até aqui. O órgão é obrigado a responder.`);
-    if (temSessao) datas.push(`🏁 **Sessão pública:** ${dados.data_sessao} — é neste dia e horário que as propostas são abertas e a disputa acontece.`);
-    if (feat.hasPrazoExecucao) datas.push(`⏱️ **Prazo de execução:** ${feat.hasPrazoExecucao} — é o tempo que o vencedor terá para entregar/executar o objeto.`);
-
-    if (datas.length > 0) {
-      s += datas.join('\n\n');
-      s += `\n\n🚫 **Atenção:** os prazos de impugnação e esclarecimento são **preclusivos** — se passar a data, acabou. Não tem recurso, não tem exceção.`;
-    } else {
-      s += `As datas específicas não foram encontradas na análise automatizada. Consulte o edital para o cronograma completo.`;
-    }
-    sections.push(s);
-  }
-
-  // ── 6. SE VOCÊ VENCER, O QUE ACONTECE? ──
-  {
-    let s = `🏆 VENCEU A LICITAÇÃO — E AGORA?\n\n`;
-    s += `Ganhar a licitação é só o começo. Veja o que esperar após a homologação:\n\n`;
-    const itens: string[] = [];
-
-    if (feat.hasGarantia) {
-      itens.push(`🔒 **Garantia contratual:** Você terá que depositar uma garantia (geralmente 5% do valor do contrato). Pode ser caução em dinheiro, seguro-garantia ou fiança bancária. Inclua esse custo no seu preço.`);
-    }
-    if (feat.localEntrega) {
-      itens.push(`📍 **Local:** ${feat.localEntrega}. Calcule frete e logística.`);
-    }
-    if (feat.hasPrazoExecucao) {
-      itens.push(`⏰ **Prazo:** ${feat.hasPrazoExecucao} para executar/entregar. Atrasos geram multas e podem levar a sanções graves.`);
-    }
-    if (feat.isServicoContinuado) {
-      itens.push(`🔄 **Serviço continuado:** O contrato terá vigência prolongada (geralmente 12 meses), podendo ser prorrogado. Planeje sua operação para o longo prazo.`);
-    }
-    if (feat.hasReajuste) {
-      itens.push(`📈 **Reajuste:** Há previsão de reajuste de preços. Verifique qual índice (IPCA, INPC, etc.) e a periodicidade no edital.`);
-    }
-    if (feat.hasPagamento) {
-      itens.push(`💳 **Pagamento:** O órgão pagará em até ${feat.hasPagamento} após a entrega/prestação e o aceite formal. Planeje seu fluxo de caixa.`);
-    }
-    if (feat.hasPenalidades) {
-      itens.push(`⚡ **Penalidades:** O edital prevê sanções para descumprimento — desde multas até impedimento de licitar por anos. Leve a sério.`);
-    }
-    if (feat.hasMatrizRisco) {
-      itens.push(`📋 **Matriz de Risco:** O edital tem uma matriz de risco. Analise com cuidado quais riscos ficam com você e quais ficam com a Administração. Isso afeta diretamente o seu preço.`);
-    }
-
-    if (itens.length > 0) {
-      s += itens.join('\n\n');
-    } else {
-      s += `Consulte o edital e a minuta do contrato para entender as obrigações pós-contratação, prazos de entrega e condições de pagamento.`;
-    }
-    sections.push(s);
-  }
-
-  // ── 7. CUIDADO COM ESSES PONTOS ──
   {
     const alertas: string[] = [];
-
-    if (feat.hasVisitaTecnica) {
-      alertas.push(`🏗️ **Visita Técnica:** O edital menciona visita técnica. Se for obrigatória, agende o quanto antes — sem ela, sua proposta pode ser inabilitada. Se for facultativa, vá mesmo assim: conhecer o local evita surpresas na execução.`);
-    }
-    if (feat.hasAmostra) {
-      alertas.push(`🧪 **Amostra:** Pode ser exigida apresentação de amostra do produto após a fase de lances. Tenha o material pronto para envio imediato — o prazo costuma ser curto.`);
-    }
-    if (feat.hasProvaConceito) {
-      alertas.push(`💻 **Prova de Conceito (PoC):** O edital prevê demonstração prática do produto/serviço. Prepare um ambiente de teste e garanta que tudo funciona antes da sessão.`);
-    }
-    if (feat.hasConsorcio) {
-      alertas.push(`🤝 **Consórcio:** O edital trata de participação em consórcio. Se você é uma empresa menor, pode ser uma oportunidade de se unir a outros para competir. Verifique as regras específicas.`);
-    }
-    if (feat.hasSubcontratacao) {
-      alertas.push(`🔗 **Subcontratação:** É permitida subcontratação parcial. Atenção ao limite percentual e às condições — a responsabilidade perante o órgão continua sendo integralmente sua.`);
-    }
-    if (feat.hasSustentabilidade) {
-      alertas.push(`🌱 **Critérios Ambientais:** O edital exige conformidade com critérios de sustentabilidade. Verifique se seus produtos/processos atendem (certificações ambientais, descarte adequado, etc.).`);
-    }
-    if (feat.hasEstudoTecnico) {
-      alertas.push(`📐 **Estudo Técnico Preliminar (ETP):** O edital menciona um ETP. Este documento justifica a contratação e pode conter informações valiosas sobre o que o órgão realmente precisa. Vale a leitura.`);
-    }
+    if (feat.isSRP) alertas.push("• O edital usa sistema de registro de preços: pode haver ata sem compra imediata.");
+    if (feat.hasGarantia) alertas.push("• Há exigência de garantia; isso afeta custo e fluxo de caixa.");
+    if (feat.hasVisitaTecnica) alertas.push("• O texto menciona visita técnica; confira se ela é obrigatória.");
+    if (feat.hasAmostra) alertas.push("• Há menção a amostra; prepare material e prazo de apresentação.");
+    if (feat.hasPrazoExecucao) alertas.push(`• O edital menciona prazo de execução/entrega de ${feat.hasPrazoExecucao}.`);
+    if (feat.hasPagamento) alertas.push(`• O pagamento foi identificado em até ${feat.hasPagamento}.`);
+    if (feat.hasPenalidades) alertas.push("• O edital prevê penalidades; vale revisar multas e hipóteses de sanção.");
+    if (feat.hasSubcontratacao) alertas.push("• Há menção a subcontratação; confira os limites permitidos.");
+    if (feat.hasConsorcio) alertas.push("• O edital trata de participação em consórcio.");
 
     if (alertas.length > 0) {
-      let s = `🚨 PONTOS QUE MERECEM SUA ATENÇÃO\n\n`;
-      s += alertas.join('\n\n');
-      sections.push(s);
+      sections.push(`⚠️ PONTOS DE ATENÇÃO\n\n${alertas.slice(0, 4).join("\n")}`);
     }
   }
 
-  // ── 8. RESUMO EXECUTIVO ──
   {
-    let s = `✅ RESUMO FINAL\n\n`;
-    const bullets: string[] = [];
-    bullets.push(`**O quê:** ${modalidade}${feat.isSRP ? ' (Registro de Preços)' : ''}`);
-    bullets.push(`**Quem:** ${orgao}`);
-    if (objetoClean) bullets.push(`**Para quê:** ${objetoClean.length > 120 ? objetoClean.slice(0, 117) + '...' : objetoClean}`);
-    if (temValor) bullets.push(`**Quanto:** ${dados.valor_estimado}`);
-    if (temCriterio) bullets.push(`**Como vence:** ${dados.criterio}`);
-    if (temSessao) bullets.push(`**Quando:** ${dados.data_sessao}`);
-    if (temSistema) bullets.push(`**Onde:** ${dados.sistema}`);
-
-    s += bullets.map(b => `• ${b}`).join('\n');
-
-    s += `\n\n---\n\n📌 **Aviso importante:** Este resumo foi gerado automaticamente por análise textual do edital — sem uso de inteligência artificial. Ele serve como guia de leitura, mas **NÃO substitui a leitura completa do edital e seus anexos**. Decisões de participação devem sempre se basear no documento oficial.`;
-    sections.push(s);
+    const fechamento: string[] = [];
+    if (objeto) fechamento.push(`• O foco deste edital é ${lowercaseFirst(objeto)}.`);
+    if (criterio) fechamento.push(`• Para vencer, o ponto central da disputa é ${criterio.toLowerCase()}.`);
+    fechamento.push("• Use este resumo como roteiro inicial, mas confira o documento oficial e os anexos antes de enviar proposta.");
+    sections.push(`✅ EM SÍNTESE\n\n${fechamento.join("\n")}`);
   }
 
-  return sections.join('\n\n---\n\n');
+  return sections.join("\n\n---\n\n");
+}
+
+function analyzeEditalText(text: string) {
+  const numero_edital = extractNumeroEdital(text);
+  const modalidade = extractModalidade(text);
+  const orgao = extractOrgao(text);
+  const objeto = extractObjeto(text);
+  const valor_estimado = extractValorEstimado(text);
+  const criterio_julgamento = extractCriterio(text);
+  const data_sessao = extractDataSessao(text);
+  const sistema_licitacao = extractSistema(text);
+  const condicoes_habilitacao = extractHabilitacao(text);
+  const planilha_estimada = extractPlanilha(text);
+  const timeline = extractTimeline(text);
+
+  const score_complexidade = calcularComplexidade(text, {
+    valor_estimado,
+    criterio: criterio_julgamento,
+  });
+
+  const resumo_simples = gerarResumoSimples({
+    numero_edital,
+    modalidade,
+    orgao,
+    objeto,
+    valor_estimado,
+    criterio: criterio_julgamento,
+    data_sessao,
+    sistema: sistema_licitacao,
+    habilitacao: condicoes_habilitacao,
+    _fullText: text,
+  }, timeline);
+
+  return {
+    numero_edital,
+    modalidade,
+    orgao,
+    objeto,
+    valor_estimado,
+    planilha_estimada,
+    criterio_julgamento,
+    data_sessao,
+    condicoes_habilitacao,
+    sistema_licitacao,
+    resumo_simples,
+    timeline,
+    score_complexidade,
+  };
 }
 
 // ── Main Handler ──
-Deno.serve(async (req) => {
+async function handleAnalyzeEdital(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -1116,7 +1112,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Extract text from PDF
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
@@ -1138,54 +1133,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Extract all fields via regex/parsing
-    const numero_edital = extractNumeroEdital(text);
-    const modalidade = extractModalidade(text);
-    const orgao = extractOrgao(text);
-    const objeto = extractObjeto(text);
-    const valor_estimado = extractValorEstimado(text);
-    const criterio_julgamento = extractCriterio(text);
-    const data_sessao = extractDataSessao(text);
-    const sistema_licitacao = extractSistema(text);
-    const condicoes_habilitacao = extractHabilitacao(text);
-    const planilha_estimada = extractPlanilha(text);
-    const timeline = extractTimeline(text);
-
-    // 3. Heuristic complexity score
-    const score_complexidade = calcularComplexidade(text, {
-      valor_estimado,
-      criterio: criterio_julgamento,
-    });
-
-    // 4. Template-based summary
-    const resumo_simples = gerarResumoSimples({
-      numero_edital,
-      modalidade,
-      orgao,
-      objeto,
-      valor_estimado,
-      criterio: criterio_julgamento,
-      data_sessao,
-      sistema: sistema_licitacao,
-      habilitacao: condicoes_habilitacao,
-      _fullText: text,
-    }, timeline);
-
-    const result = {
-      numero_edital,
-      modalidade,
-      orgao,
-      objeto,
-      valor_estimado,
-      planilha_estimada,
-      criterio_julgamento,
-      data_sessao,
-      condicoes_habilitacao,
-      sistema_licitacao,
-      resumo_simples,
-      timeline,
-      score_complexidade,
-    };
+    const result = analyzeEditalText(text);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1197,4 +1145,10 @@ Deno.serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handleAnalyzeEdital);
+}
+
+export { analyzeEditalText, extractCriterio, extractOrgao, gerarResumoSimples };

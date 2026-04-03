@@ -12,6 +12,7 @@ const SYSTEM_PROMPT = `Você é um especialista em licitações públicas brasil
 {
   "objeto": "descrição completa do objeto da licitação",
   "valor_estimado": "valor estimado ou máximo, se mencionado (ex: R$ 1.500.000,00). Se não houver, retorne 'Não informado no edital'",
+  "planilha_estimada": "Se houver planilha estimativa, anexo de preços, quadro de quantitativos ou tabela de itens com valores unitários/totais, transcreva os itens principais com quantidade, unidade, valor unitário e valor total. Formate como lista estruturada. Se não houver, retorne 'Não disponível no edital'",
   "criterio_julgamento": "menor preço, maior desconto, técnica e preço, etc.",
   "data_sessao": "data e horário da sessão pública, se mencionados",
   "condicoes_habilitacao": "resumo das principais condições de habilitação exigidas (jurídica, técnica, econômico-financeira, regularidade fiscal)",
@@ -19,14 +20,15 @@ const SYSTEM_PROMPT = `Você é um especialista em licitações públicas brasil
   "modalidade": "pregão eletrônico, concorrência, etc.",
   "numero_edital": "número do edital/processo",
   "orgao": "órgão ou entidade licitante",
-  "resumo_simples": "explicação do edital em linguagem simples, acessível a qualquer pessoa, com 3-5 parágrafos. Explique o que está sendo comprado/contratado, quem pode participar, como participar, e os pontos mais importantes que o licitante deve observar. Use tom didático e acolhedor."
+  "resumo_simples": "explicação detalhada do edital em linguagem simples e acessível, com 5-8 parágrafos substanciais. Deve cobrir: (1) O que está sendo comprado/contratado e por quê; (2) Quem pode participar e quais os requisitos principais; (3) Como participar passo a passo; (4) Prazos e datas importantes; (5) Critério de escolha do vencedor; (6) Pontos de atenção e riscos para o licitante; (7) Garantias ou obrigações pós-contratação. Use tom didático, claro e profissional. Não simplifique demais — o gestor precisa de substância."
 }
 
 IMPORTANTE:
 - Retorne APENAS o JSON, sem markdown, sem blocos de código.
 - Se alguma informação não estiver disponível no texto, indique "Não identificado no edital".
 - Seja preciso e fiel ao conteúdo do edital.
-- O resumo_simples deve ser realmente em linguagem simples, evitando jargão jurídico.`;
+- Para a planilha_estimada, extraia o máximo de detalhes possível sobre itens, quantidades e valores.
+- O resumo_simples deve ser detalhado e útil para tomada de decisão, não apenas um resumo superficial.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

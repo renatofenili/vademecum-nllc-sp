@@ -199,19 +199,18 @@ const FlowNodeEl = ({
       style={{
         position: "absolute",
         left: `${node.x - node.w / 2}%`,
-        top: `${node.y - node.h / 2}%`,
+        top: `${node.y}%`,
         width: `${node.w}%`,
-        minHeight: `${node.h}%`,
         transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
-        transform: visible ? "scale(1)" : "scale(0.5)",
+        transform: visible ? "scale(1) translateY(-50%)" : "scale(0.5) translateY(-50%)",
         opacity: visible ? 1 : 0,
         zIndex: 10,
         cursor: node.expandable ? "pointer" : "default",
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`h-full transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
-        <CardContent className="p-3 flex flex-col items-center justify-center h-full gap-1">
+      <Card className={`transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
+        <CardContent className="px-3 py-2 flex flex-col items-center justify-center gap-0.5">
           <div className="flex items-center gap-1.5">
             <Icon className="h-3.5 w-3.5 text-primary" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

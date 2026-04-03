@@ -210,4 +210,28 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   );
 };
 
+const PlanilhaExpandable = ({ planilha }: { planilha: string }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3">
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 text-xs"
+        onClick={() => setOpen(!open)}
+      >
+        <TableProperties className="h-3.5 w-3.5" />
+        Planilha Estimativa
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </Button>
+      {open && (
+        <div className="mt-3 text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
+          {planilha}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default EditalAnalysisResult;

@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     // Extract text from PDF using the existing extract-pdf-text function pattern
     // For now, we'll send the PDF as base64 to the AI model which supports document understanding
     const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64 = base64Encode(new Uint8Array(arrayBuffer));
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {

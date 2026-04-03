@@ -65,6 +65,10 @@ const arrowDefs: FlowArrow[] = [
 
 const STAGGER_MS = 350;
 
+// Convert **bold** markdown to <strong> tags
+const formatBold = (text: string): string =>
+  text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+
 // ── Complexity Score ──
 const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
   const [showMethodology, setShowMethodology] = useState(false);

@@ -72,60 +72,76 @@ const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
   const justificativa = analysis.score_complexidade?.justificativa ?? "Score calculado com base na análise geral do edital.";
 
   const getColor = (v: number) => {
-    if (v <= 3) return { ring: "text-emerald-500", bg: "bg-emerald-500", label: "Baixa" };
-    if (v <= 6) return { ring: "text-amber-500", bg: "bg-amber-500", label: "Média" };
-    return { ring: "text-red-500", bg: "bg-red-500", label: "Alta" };
+    if (v <= 3) return { stroke: "#22c55e", glow: "rgba(34,197,94,0.25)", label: "Baixa", textClass: "text-emerald-500" };
+    if (v <= 6) return { stroke: "#f59e0b", glow: "rgba(245,158,11,0.25)", label: "Média", textClass: "text-amber-500" };
+    return { stroke: "#ef4444", glow: "rgba(239,68,68,0.25)", label: "Alta", textClass: "text-red-500" };
   };
   const c = getColor(score);
 
-  const circumference = 2 * Math.PI * 18;
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 10) * circumference;
 
   return (
     <div className="relative">
       <button
         onClick={() => setShowMethodology(!showMethodology)}
-        className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-card border border-border shadow-sm hover:shadow-md transition-all cursor-pointer"
+        className="flex items-center gap-3 px-4 py-2 rounded-xl bg-card border border-border/80 shadow-md hover:shadow-lg transition-all cursor-pointer group"
         title="Clique para ver a metodologia"
       >
-        <div className="relative w-10 h-10">
-          <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
-            <circle cx="20" cy="20" r="18" stroke="hsl(var(--muted))" strokeWidth="3" fill="none" />
+        <div className="relative w-14 h-14">
+          <svg className="w-14 h-14 -rotate-90" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r={radius} stroke="hsl(var(--muted))" strokeWidth="4" fill="none" />
             <circle
-              cx="20" cy="20" r="18"
-              stroke="currentColor"
-              className={c.ring}
-              strokeWidth="3"
+              cx="32" cy="32" r={radius}
+              stroke={c.stroke}
+              strokeWidth="4.5"
               fill="none"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
-              style={{ transition: "stroke-dashoffset 1s ease-out" }}
+              style={{
+                transition: "stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                filter: `drop-shadow(0 0 6px ${c.glow})`,
+              }}
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground">
+          <span className="absolute inset-0 flex items-center justify-center text-base font-extrabold text-foreground">
             {score}
           </span>
         </div>
         <div className="text-left">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Complexidade</div>
-          <div className={`text-xs font-bold ${c.ring}`}>{c.label}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Complexidade</div>
+          <div className={`text-sm font-bold ${c.textClass}`}>{c.label}</div>
+          <div className="text-[10px] text-muted-foreground/60 group-hover:text-muted-foreground transition-colors flex items-center gap-0.5">
+            <Info className="h-2.5 w-2.5" />
+            Ver metodologia
+          </div>
         </div>
-        <Info className="h-3 w-3 text-muted-foreground/50" />
       </button>
 
       {showMethodology && (
-        <div className="absolute top-full mt-2 right-0 w-72 bg-card border border-border rounded-lg shadow-xl p-4 z-50 animate-fade-in">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Info className="h-3.5 w-3.5 text-primary" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Metodologia</span>
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowMethodology(false)} />
+          <div className="absolute top-full mt-2 right-0 w-80 bg-card border border-border rounded-xl shadow-2xl p-5 z-50 animate-fade-in">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+                <Info className="h-3 w-3 text-primary" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Metodologia do Score</span>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground mb-4">{justificativa}</p>
+            <Separator className="mb-3" />
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                ⚠️ Este score é gerado por inteligência artificial com base na análise do texto do edital.
+                Fatores considerados: exigências de habilitação, complexidade do objeto, volume documental,
+                prazos, garantias e especificidades técnicas.
+                <strong className="block mt-1.5 text-foreground/80">Não substitui análise jurídica profissional.</strong>
+              </p>
+            </div>
           </div>
-          <p className="text-xs leading-relaxed text-foreground mb-3">{justificativa}</p>
-          <Separator className="mb-2" />
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            ⚠️ Este score é gerado por IA com base na análise do texto do edital. Considere fatores como: exigências de habilitação, complexidade do objeto, volume documental, prazos, garantias e especificidades técnicas. Não substitui análise jurídica profissional.
-          </p>
-        </div>
+        </>
       )}
     </div>
   );

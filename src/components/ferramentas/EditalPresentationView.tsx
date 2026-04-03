@@ -285,12 +285,12 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                   </h4>
                 </div>
                 {Array.isArray(node.extraContent) && typeof node.extraContent[0] === "object" ? (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-xs">
+                  <div className="rounded-lg border border-border">
+                    <table className="w-full text-xs table-fixed">
                       <thead>
                         <tr className="bg-muted">
                           {Object.keys(node.extraContent[0] as Record<string, unknown>).map((h) => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                            <th key={h} className="px-2 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
                               {h.replace(/_/g, " ")}
                             </th>
                           ))}
@@ -300,7 +300,7 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                         {(node.extraContent as Array<Record<string, unknown>>).map((row, i) => (
                           <tr key={i} className={i % 2 === 0 ? "bg-card" : "bg-muted/30"}>
                             {Object.values(row).map((v, j) => (
-                              <td key={j} className="px-3 py-2 text-foreground whitespace-nowrap">{String(v ?? "")}</td>
+                              <td key={j} className="px-2 py-2 text-foreground text-[11px] break-words">{String(v ?? "")}</td>
                             ))}
                           </tr>
                         ))}

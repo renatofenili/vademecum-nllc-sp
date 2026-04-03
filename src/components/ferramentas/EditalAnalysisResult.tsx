@@ -225,12 +225,12 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
   };
 
   return (
-    <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-xs">
+    <div className="mt-3 rounded-lg border border-border">
+      <table className="w-full text-xs table-fixed">
         <thead>
           <tr className="bg-muted">
             {headers.map((h) => (
-              <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+              <th key={h} className="px-2 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
                 {labelMap[h] || h.replace(/_/g, " ")}
               </th>
             ))}
@@ -240,7 +240,7 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
           {data.map((row, i) => (
             <tr key={i} className={i % 2 === 0 ? "bg-card" : "bg-muted/30"}>
               {headers.map((h) => (
-                <td key={h} className="px-3 py-2 text-foreground whitespace-nowrap">
+                <td key={h} className="px-2 py-2 text-foreground text-[11px] break-words">
                   {String(row[h] ?? "")}
                 </td>
               ))}

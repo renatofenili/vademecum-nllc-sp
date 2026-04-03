@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { X, RotateCcw, ChevronDown, ChevronUp, FileText, DollarSign, Scale, Calendar, Shield, Globe, Building2, Hash, Clipboard, MessageSquare, TableProperties, Download, Info, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,11 @@ interface FlowNode {
 interface FlowArrow {
   from: string;
   to: string;
+}
+
+interface ConnectorPath {
+  id: string;
+  d: string;
 }
 
 const truncate = (s: string | undefined, max: number) => {
@@ -63,6 +68,7 @@ const arrowDefs: FlowArrow[] = [
 ];
 
 const STAGGER_MS = 350;
+const CONNECTOR_PADDING = 1.5;
 
 // Convert **bold** markdown to <strong> tags
 const formatBold = (text: string): string =>
@@ -74,6 +80,54 @@ const getGridStyle = (node: FlowNode): React.CSSProperties => ({
   gridRow: node.row + 1,
   gridColumn: node.colSpan === 3 ? "1 / -1" : `${node.col + 1} / span ${node.colSpan}`,
 });
+
+const getRectCenter = (rect: DOMRect, containerRect: DOMRect) => ({
+  x: rect.left - containerRect.left + rect.width / 2,
+  y: rect.top - containerRect.top + rect.height / 2,
+});
+
+const getEdgePoint = (rect: DOMRect, target: { x: number; y: number }, containerRect: DOMRect) => {
+  const center = getRectCenter(rect, containerRect);
+  const halfWidth = Math.max(rect.width / 2, 1);
+  const halfHeight = Math.max(rect.height / 2, 1);
+  const dx = target.x - center.x;
+  const dy = target.y - center.y;
+
+  if (dx === 0 && dy === 0) return center;
+
+  const scale = 1 / Math.max(Math.abs(dx) / halfWidth, Math.abs(dy) / halfHeight);
+  const edgeX = center.x + dx * scale;
+  const edgeY = center.y + dy * scale;
+  const length = Math.hypot(dx, dy) || 1;
+
+  return {
+    x: edgeX + (dx / length) * CONNECTOR_PADDING,
+    y: edgeY + (dy / length) * CONNECTOR_PADDING,
+  };
+};
+
+const buildConnectorPath = (fromRect: DOMRect, toRect: DOMRect, containerRect: DOMRect) => {
+  const fromCenter = getRectCenter(fromRect, containerRect);
+  const toCenter = getRectCenter(toRect, containerRect);
+  const start = getEdgePoint(fromRect, toCenter, containerRect);
+  const end = getEdgePoint(toRect, fromCenter, containerRect);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const horizontalFirst = Math.abs(dx) > Math.abs(dy);
+  const curveStrength = Math.min(40, Math.max(16, Math.hypot(dx, dy) * 0.18));
+  const directionX = dx === 0 ? 0 : Math.sign(dx);
+  const directionY = dy === 0 ? 0 : Math.sign(dy);
+
+  const control1 = horizontalFirst
+    ? { x: start.x + directionX * curveStrength, y: start.y }
+    : { x: start.x, y: start.y + directionY * curveStrength };
+
+  const control2 = horizontalFirst
+    ? { x: end.x - directionX * curveStrength, y: end.y }
+    : { x: end.x, y: end.y - directionY * curveStrength };
+
+  return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${control1.x.toFixed(1)} ${control1.y.toFixed(1)}, ${control2.x.toFixed(1)} ${control2.y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+};
 
 // ── Complexity Score ──
 const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
@@ -284,8 +338,11 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
   const [visibleCount, setVisibleCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
+  const [connectorPaths, setConnectorPaths] = useState<ConnectorPath[]>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const nodes = buildNodes(analysis);
+  const nodes = useMemo(() => buildNodes(analysis), [analysis]);
 
   const start = useCallback(() => {
     setVisibleCount(0);
@@ -325,6 +382,74 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
   );
 
   const allVisible = visibleCount >= nodes.length && !isPlaying;
+
+  useLayoutEffect(() => {
+    const updateConnectors = () => {
+      const containerEl = containerRef.current;
+
+      if (!containerEl || visibleArrows.length === 0) {
+        setConnectorPaths([]);
+        return;
+      }
+
+      const containerRect = containerEl.getBoundingClientRect();
+
+      const nextPaths = visibleArrows.flatMap((arrow) => {
+        const fromEl = nodeRefs.current[arrow.from];
+        const toEl = nodeRefs.current[arrow.to];
+
+        if (!fromEl || !toEl) return [];
+
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+
+        if (!fromRect.width || !fromRect.height || !toRect.width || !toRect.height) return [];
+
+        return [{
+          id: `${arrow.from}-${arrow.to}`,
+          d: buildConnectorPath(fromRect, toRect, containerRect),
+        }];
+      });
+
+      setConnectorPaths((current) => {
+        if (
+          current.length === nextPaths.length &&
+          current.every((path, index) => path.id === nextPaths[index]?.id && path.d === nextPaths[index]?.d)
+        ) {
+          return current;
+        }
+
+        return nextPaths;
+      });
+    };
+
+    const frameId = window.requestAnimationFrame(updateConnectors);
+    const settleTimeoutId = window.setTimeout(updateConnectors, 550);
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => updateConnectors())
+      : null;
+
+    if (containerRef.current) {
+      resizeObserver?.observe(containerRef.current);
+    }
+
+    visibleArrows.forEach(({ from, to }) => {
+      const fromEl = nodeRefs.current[from];
+      const toEl = nodeRefs.current[to];
+
+      if (fromEl) resizeObserver?.observe(fromEl);
+      if (toEl) resizeObserver?.observe(toEl);
+    });
+
+    window.addEventListener("resize", updateConnectors);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(settleTimeoutId);
+      window.removeEventListener("resize", updateConnectors);
+      resizeObserver?.disconnect();
+    };
+  }, [visibleArrows]);
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background">
@@ -370,6 +495,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
 
         {/* Grid container */}
         <div
+          ref={containerRef}
           className="relative mx-auto px-6 py-8"
           style={{
             maxWidth: 900,
@@ -380,7 +506,7 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
           }}
         >
           {/* SVG connector lines between grid nodes */}
-          <GridConnectors nodes={nodes} arrows={visibleArrows} />
+          <GridConnectors paths={connectorPaths} />
 
           {/* Nodes */}
           {nodes.map((node, i) => (
@@ -388,6 +514,9 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
               key={node.id}
               node={node}
               visible={i < visibleCount}
+              nodeRef={(element) => {
+                nodeRefs.current[node.id] = element;
+              }}
               onExpand={() => node.expandable && setExpandedNode(node.id)}
             />
           ))}
@@ -420,10 +549,12 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
 const FlowNodeEl = ({
   node,
   visible,
+  nodeRef,
   onExpand,
 }: {
   node: FlowNode;
   visible: boolean;
+  nodeRef: (element: HTMLDivElement | null) => void;
   onExpand: () => void;
 }) => {
   const Icon = node.icon;
@@ -431,6 +562,7 @@ const FlowNodeEl = ({
 
   return (
     <div
+      ref={nodeRef}
       style={{
         ...getGridStyle(node),
         transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -479,13 +611,24 @@ const FlowNodeEl = ({
   );
 };
 
-// ── Grid Connectors (simple vertical lines between rows) ──
-const GridConnectors = ({ nodes, arrows }: { nodes: FlowNode[]; arrows: FlowArrow[] }) => {
-  // In a CSS Grid layout, we can't easily draw SVG arrows between grid items
-  // since positions are dynamic. Instead we render subtle vertical connector dots
-  // between rows that have visible connections.
-  // This is intentionally minimal to keep the layout clean.
-  return null; // Clean layout without connector lines - the grid structure implies hierarchy
+// ── Grid Connectors ──
+const GridConnectors = ({ paths }: { paths: ConnectorPath[] }) => {
+  if (paths.length === 0) return null;
+
+  return (
+    <svg className="absolute inset-0 h-full w-full pointer-events-none" aria-hidden="true">
+      {paths.map((path) => (
+        <path
+          key={path.id}
+          d={path.d}
+          fill="none"
+          stroke="hsl(var(--primary) / 0.22)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      ))}
+    </svg>
+  );
 };
 
 // ── ExpandedCard ──

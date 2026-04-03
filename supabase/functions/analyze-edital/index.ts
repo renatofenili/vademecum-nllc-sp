@@ -82,6 +82,20 @@ function extractObjeto(text: string): string {
     }
   };
 
+  for (const section of extractObjetoSectionCandidates(norm)) {
+    const context = norm.slice(Math.max(0, section.index - 500), section.index);
+    const primarySectionCandidate = extractPrimaryObjetoFromSection(section.content);
+
+    if (primarySectionCandidate) addCandidate(primarySectionCandidate, 36, context, section.index);
+
+    const explicitSentence = firstMatch(section.content.replace(/\n+/g, " "), [
+      /(?:descri(?:ção|cao)\s*[:.\-–—]?\s*)?(?:o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)|constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)|a\s+presente\s+(?:licitação|contratação)\s+tem\s+por\s+objeto)\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^.]{20,700})/i,
+    ]);
+    if (explicitSentence) addCandidate(explicitSentence, 24, context, section.index);
+
+    addCandidate(section.content, 10, context, section.index);
+  }
+
   const header = norm.slice(0, Math.min(norm.length, 16000));
   const inlinePatterns = [
     /(?:tem\s+por\s+objeto|tem\s+como\s+objeto|cujo\s+objeto\s+[ée]|visa|destina(?:[\-\s]?se)?\s+a)\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^\n.;]{20,500})/gi,
@@ -93,17 +107,6 @@ function extractObjeto(text: string): string {
     for (const match of header.matchAll(pattern)) {
       addCandidate(match[1] || match[0], 12, "", match.index ?? 0);
     }
-  }
-
-  for (const section of extractObjetoSectionCandidates(norm)) {
-    const context = norm.slice(Math.max(0, section.index - 500), section.index);
-
-    const explicitSentence = firstMatch(section.content.replace(/\n+/g, " "), [
-      /(?:o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)|constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)|a\s+presente\s+(?:licitação|contratação)\s+tem\s+por\s+objeto)\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^.]{20,700})/i,
-    ]);
-    if (explicitSentence) addCandidate(explicitSentence, 20, context, section.index);
-
-    addCandidate(section.content, 10, context, section.index);
   }
 
   const ementa = firstMatch(header, [/(?:ementa|súmula)\s*[:.]?\s*([^\n]{20,500})/i]);
@@ -161,6 +164,54 @@ function stripObjetoNumbering(line: string): string {
     .trim();
 }
 
+function stripObjetoLabel(text: string): string {
+  return text
+    .replace(/^(?:descri(?:ção|cao)(?:\s+do\s+objeto)?|objeto|do\s+objeto|finalidade|especifica(?:ção|cao))\s*[:.\-–—]?\s*/i, "")
+    .trim();
+}
+
+function shouldMergeObjetoLines(current: string, next: string): boolean {
+  const upcoming = next.trim();
+  if (!upcoming) return false;
+
+  if (/^(?:cap[íi]tulo|seção|título|cláusula|anexo)\b/i.test(upcoming)) return false;
+  if (/^(?:\d+(?:\.\d+){0,5}|[ivxlcdm]+)[\.\)]\s+(?:do|da|dos|das|cap[íi]tulo|seção|título|cláusula|anexo)\b/i.test(upcoming)) return false;
+  if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s\-\/]{5,}$/.test(upcoming)) return false;
+
+  if (/^(?:descri(?:ção|cao)|objeto|do\s+objeto|finalidade|especifica(?:ção|cao))\b[:.\-–—]?\s*$/i.test(current)) return true;
+  if (/[,;:\-–—]\s*$/.test(current)) return true;
+  if (/^[a-zà-ÿ(]/.test(upcoming)) return true;
+
+  if (/[.!?]\s*$/.test(current) && !/^(?:e|ou|com|para|por|sem|de|da|do|das|dos)\b/i.test(upcoming.toLowerCase())) {
+    return false;
+  }
+
+  return hasStrongObjetoSignal(current) && current.length < 180 && upcoming.length < 180;
+}
+
+function buildObjetoLineWindows(raw: string): string[] {
+  const lines = raw
+    .split("\n")
+    .map((line) => stripObjetoNumbering(line).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const windows: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    let combined = lines[i];
+    windows.push(combined);
+
+    for (let j = i + 1; j < Math.min(lines.length, i + 4); j++) {
+      if (!shouldMergeObjetoLines(combined, lines[j])) break;
+      combined = `${combined} ${lines[j]}`.replace(/\s+/g, " ").trim();
+      windows.push(combined);
+      if (combined.length > 420) break;
+    }
+  }
+
+  return Array.from(new Set(windows));
+}
+
 function stripObjetoLeadIn(text: string): string {
   return text
     .replace(/^o\s+(?:presente\s+)?(?:edital|pregão|certame|licitação|instrumento\s+convocatório|contrato|termo\s+de\s+referência)\s+tem\s+(?:por|como)\s+(?:finalidade|objetivo|objeto)\s*/i, "")
@@ -169,6 +220,65 @@ function stripObjetoLeadIn(text: string): string {
     .replace(/^constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)\s*/i, "")
     .replace(/^[:.\-\s]+/, "")
     .trim();
+}
+
+function stripObjetoTail(text: string): string {
+  return text
+    .replace(/\s*,?\s*conforme\s+(?:as?\s+)?(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?|quantitativos?)\s+(?:técnicas?\s+)?(?:constantes?\s+)?(?:do|da|de)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|edital|instrumento\s+convocatório|projeto\s+básico|estudo\s+técnico\s+preliminar|planilha|memorial)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:na\s+forma|nos\s+termos|de\s+acordo)\s+(?:do|da|dos|das)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|edital|instrumento\s+convocatório|projeto\s+básico)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*que\s+integra\s+(?:este|o)?\s*edital\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:observadas?|obedecidas?)\s+as?\s+(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*anexo(?:s)?\s*[a-z0-9ivxlcdm\-]+\.?$/i, "")
+    .trim();
+}
+
+function normalizeObjetoCandidate(text: string): string {
+  let value = text.replace(/\s+/g, " ").trim();
+  value = stripObjetoLabel(value);
+  value = stripObjetoLeadIn(value);
+
+  const action = value.match(/\b(contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i);
+  if (action && typeof action.index === "number" && action.index > 0 && action.index < 140) {
+    value = value.slice(action.index);
+  }
+
+  value = stripObjetoTail(value)
+    .replace(/^[:.\-\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[;:,\.\-–—]+$/, "")
+    .trim();
+
+  return value;
+}
+
+function extractPrimaryObjetoFromSection(section: string): string | null {
+  const leadingBlock = section
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 10)
+    .join("\n");
+
+  const ranked = buildObjetoLineWindows(leadingBlock)
+    .map((raw) => {
+      const cleaned = normalizeObjetoCandidate(raw);
+      if (!cleaned || cleaned.length < 20 || !hasStrongObjetoSignal(cleaned) || isLikelyNonObjetoClause(cleaned)) {
+        return null;
+      }
+
+      let score = scoreObjetoCandidate(cleaned);
+      if (/^(?:descri(?:ção|cao)|objeto|do\s+objeto)\b/i.test(raw)) score += 12;
+      if (/^(?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i.test(cleaned)) {
+        score += 10;
+      }
+
+      return { value: cleaned, score };
+    })
+    .filter((item): item is { value: string; score: number } => item !== null)
+    .sort((a, b) => b.score - a.score || a.value.length - b.value.length);
+
+  return ranked[0]?.value ?? null;
 }
 
 function startsWithNonObjetoClause(text: string): boolean {
@@ -272,32 +382,12 @@ function scoreObjetoCandidate(text: string): number {
 }
 
 function cleanObjetoText(raw: string): string {
-  const lines = raw
-    .split("\n")
-    .map((line) => stripObjetoNumbering(line).replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-
-  const candidates: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const current = lines[i];
-    const next = lines[i + 1];
-
-    if (current.length >= 20) candidates.push(current);
-
-    if (
-      next &&
-      /(?:tem\s+por\s+objeto|tem\s+como\s+objeto|o\s+objeto\s+do|constitui\s+objeto|a\s+presente\s+(?:licitação|contratação)\s+tem\s+por\s+objeto)$/i.test(current)
-    ) {
-      candidates.push(`${current} ${next}`);
-    }
-  }
-
-  const normalized = candidates
-    .map((line) => stripObjetoLeadIn(line))
+  const normalized = buildObjetoLineWindows(raw)
+    .map((line) => normalizeObjetoCandidate(line))
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter((line) => {
       if (line.length < 20) return false;
-      if (/^(objeto|cláusula|cap[íi]tulo|seção|anexo)\b/i.test(line) && line.length < 50) return false;
+      if (/^(objeto|descri(?:ção|cao)|cláusula|cap[íi]tulo|seção|anexo)\b/i.test(line) && line.length < 60) return false;
       return true;
     });
 

@@ -20,131 +20,179 @@ const items = [
   { key: "sistema_licitacao", label: "ONDE LICITAR", icon: "🌐", colorKey: "cyan" },
 ];
 
+const FRAMES_PER_ITEM = 50;
+
 export const MetadataScene = ({ data, colors }: Props) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  const currentIndex = Math.min(
+    Math.floor(frame / FRAMES_PER_ITEM),
+    items.length - 1
+  );
+
+  const itemFrame = frame - currentIndex * FRAMES_PER_ITEM;
+  const item = items[currentIndex];
+  const color = colors[item.colorKey];
+
+  // Enter animation
+  const enterSpring = spring({
+    frame: itemFrame,
+    fps,
+    config: { damping: 18, stiffness: 120 },
+  });
+
+  const slideX = interpolate(enterSpring, [0, 1], [100, 0]);
+  const opacity = interpolate(enterSpring, [0, 1], [0, 1]);
+
+  // Exit animation (fade out before next item)
+  const exitStart = FRAMES_PER_ITEM - 10;
+  const isLast = currentIndex === items.length - 1;
+  const exitOpacity = isLast
+    ? 1
+    : interpolate(itemFrame, [exitStart, FRAMES_PER_ITEM], [1, 0], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      });
+
+  // Progress dots
+  const progressDots = items.map((_, i) => i <= currentIndex);
+
   return (
     <AbsoluteFill>
-      {items.map((item, index) => {
-        const startFrame = index * 45;
-        const itemFrame = frame - startFrame;
-
-        const s = spring({
-          frame: itemFrame,
-          fps,
-          config: { damping: 18, stiffness: 100 },
-        });
-
-        const opacity = interpolate(s, [0, 1], [0, 1]);
-        const slideX = interpolate(s, [0, 1], [-80, 0]);
-
-        // Fade out previous items slightly
-        const fadeOutStart = startFrame + 120;
-        const fadeOut =
-          index < items.length - 1
-            ? interpolate(frame, [fadeOutStart, fadeOutStart + 30], [1, 0.3], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              })
-            : 1;
-
-        const color = colors[item.colorKey];
-        const isActive =
-          frame >= startFrame && (index === items.length - 1 || frame < (index + 1) * 45 + 60);
-
-        // Position: active item is centered, others stack
-        const baseY = 200 + index * 120;
-        const activeY = 300;
-        const y = isActive
-          ? interpolate(s, [0, 1], [baseY, activeY])
-          : baseY;
-
-        const scale = isActive ? interpolate(s, [0, 1], [0.9, 1]) : 0.85;
-
-        if (itemFrame < -5) return null;
-
-        return (
+      {/* Progress indicator */}
+      <div
+        style={{
+          position: "absolute",
+          top: 60,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        {progressDots.map((active, i) => (
           <div
-            key={item.key}
+            key={i}
+            style={{
+              width: active && i === currentIndex ? 40 : 12,
+              height: 12,
+              borderRadius: 6,
+              background: active
+                ? colors[items[i].colorKey]
+                : `${colors.muted}30`,
+              transition: "none",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Icon */}
+      <div
+        style={{
+          position: "absolute",
+          top: 220,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 72,
+          opacity: opacity * exitOpacity,
+          transform: `translateX(${slideX}px)`,
+        }}
+      >
+        {item.icon}
+      </div>
+
+      {/* Label */}
+      <div
+        style={{
+          position: "absolute",
+          top: 330,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          opacity: opacity * exitOpacity,
+          transform: `translateX(${slideX * 0.7}px)`,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 20,
+            fontWeight: 700,
+            letterSpacing: 4,
+            color: color,
+          }}
+        >
+          {item.label}
+        </div>
+      </div>
+
+      {/* Content card */}
+      <div
+        style={{
+          position: "absolute",
+          top: 400,
+          left: 200,
+          right: 200,
+          opacity: opacity * exitOpacity,
+          transform: `translateX(${slideX * 0.5}px)`,
+        }}
+      >
+        <div
+          style={{
+            padding: "50px 60px",
+            borderRadius: 24,
+            background: `linear-gradient(135deg, ${color}12, ${color}05)`,
+            border: `1px solid ${color}30`,
+            position: "relative",
+          }}
+        >
+          {/* Left accent bar */}
+          <div
             style={{
               position: "absolute",
-              left: 200,
-              right: 200,
-              top: isActive ? activeY : baseY,
-              opacity: opacity * fadeOut,
-              transform: `translateX(${slideX}px) scale(${scale})`,
+              left: 0,
+              top: 20,
+              bottom: 20,
+              width: 4,
+              borderRadius: 4,
+              background: color,
+            }}
+          />
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 600,
+              color: colors.white,
+              lineHeight: 1.5,
+              textAlign: "center",
             }}
           >
-            {/* Card */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 30,
-                padding: isActive ? "40px 50px" : "20px 30px",
-                borderRadius: 20,
-                background: isActive
-                  ? `linear-gradient(135deg, ${color}15, ${color}08)`
-                  : `${colors.bgLight}80`,
-                border: `1px solid ${isActive ? `${color}40` : "transparent"}`,
-                transition: "none",
-              }}
-            >
-              {/* Icon */}
-              <div
-                style={{
-                  fontSize: isActive ? 48 : 32,
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                {item.icon}
-              </div>
-
-              {/* Content */}
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: isActive ? 16 : 13,
-                    fontWeight: 700,
-                    letterSpacing: 3,
-                    color: color,
-                    marginBottom: isActive ? 12 : 6,
-                  }}
-                >
-                  {item.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: isActive ? 30 : 18,
-                    fontWeight: isActive ? 600 : 400,
-                    color: colors.white,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {data[item.key]}
-                </div>
-              </div>
-
-              {/* Accent bar */}
-              {isActive && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 4,
-                    borderRadius: "20px 0 0 20px",
-                    background: color,
-                  }}
-                />
-              )}
-            </div>
+            {data[item.key]}
           </div>
-        );
-      })}
+        </div>
+      </div>
+
+      {/* Step counter */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 80,
+          right: 120,
+          opacity: opacity * exitOpacity * 0.5,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 18,
+            color: colors.muted,
+            fontWeight: 600,
+          }}
+        >
+          {currentIndex + 1} / {items.length}
+        </span>
+      </div>
     </AbsoluteFill>
   );
 };

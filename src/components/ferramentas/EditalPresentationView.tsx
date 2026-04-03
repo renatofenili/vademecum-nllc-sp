@@ -248,7 +248,7 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
           left: "50%",
           top: "50%",
           transform: "translate(-50%, -50%)",
-          width: "min(92%, 600px)",
+          width: "min(95%, 900px)",
           maxHeight: "75vh",
         }}
       >

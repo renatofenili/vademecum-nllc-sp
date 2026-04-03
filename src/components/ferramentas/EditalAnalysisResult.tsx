@@ -250,12 +250,12 @@ const PlanilhaTable = ({ data }: { data: Array<Record<string, unknown>> }) => {
   const grandTotal = valueKey ? data.reduce((sum, row) => sum + parseNumeric(row[valueKey]), 0) : null;
 
   // Column width classes
-  const colClass = (h: string) => {
-    if (isDescriptionKey(h)) return "w-[40%]";
-    if (h === "item") return "w-[6%]";
-    if (h === "unidade") return "w-[7%]";
-    if (h === "quantidade") return "w-[7%]";
-    return undefined; // auto for remaining
+  const colStyle = (h: string): React.CSSProperties | undefined => {
+    if (isDescriptionKey(h)) return { width: "45%" };
+    if (h === "item") return { width: "5%" };
+    if (h === "unidade") return { width: "6%" };
+    if (h === "quantidade") return { width: "7%" };
+    return undefined;
   };
 
   return (

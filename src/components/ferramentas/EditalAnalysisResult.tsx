@@ -80,10 +80,16 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
             <p className="text-sm text-muted-foreground">{fileName}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Nova análise
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowPresentation(true)} className="gap-2">
+            <Play className="h-4 w-4" />
+            Apresentação
+          </Button>
+          <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Nova análise
+          </Button>
+        </div>
       </div>
 
       {/* Quick info badges */}

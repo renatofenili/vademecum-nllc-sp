@@ -23,7 +23,7 @@ interface FlowNode {
   h: number;
   expandable: boolean;
   /** Extra content for special expandable nodes */
-  extraContent?: string;
+  extraContent?: unknown;
 }
 
 interface FlowArrow {
@@ -285,7 +285,13 @@ const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }
                   </h4>
                 </div>
                 <div className="text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
-                  {node.extraContent}
+                  {typeof node.extraContent === "string"
+                    ? node.extraContent
+                    : Array.isArray(node.extraContent)
+                      ? (node.extraContent as Array<Record<string, unknown>>).map((item, i) =>
+                          typeof item === "string" ? item : `${i + 1}. ${Object.entries(item).map(([k, v]) => `${k}: ${v}`).join(" | ")}`
+                        ).join("\n")
+                      : JSON.stringify(node.extraContent, null, 2)}
                 </div>
               </>
             )}

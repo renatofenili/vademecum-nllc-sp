@@ -210,8 +210,31 @@ const EditalAnalysisResult = ({ analysis, fileName, onBack, onNewAnalysis }: Pro
   );
 };
 
-const PlanilhaExpandable = ({ planilha }: { planilha: string }) => {
+const formatPlanilha = (planilha: unknown): string => {
+  if (typeof planilha === "string") return planilha;
+  if (Array.isArray(planilha)) {
+    return planilha
+      .map((item, i) => {
+        if (typeof item === "string") return item;
+        if (typeof item === "object" && item !== null) {
+          const entries = Object.entries(item as Record<string, unknown>)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(" | ");
+          return `${i + 1}. ${entries}`;
+        }
+        return String(item);
+      })
+      .join("\n");
+  }
+  if (typeof planilha === "object" && planilha !== null) {
+    return JSON.stringify(planilha, null, 2);
+  }
+  return String(planilha);
+};
+
+const PlanilhaExpandable = ({ planilha }: { planilha: unknown }) => {
   const [open, setOpen] = useState(false);
+  const formatted = formatPlanilha(planilha);
 
   return (
     <div className="mt-3">
@@ -227,7 +250,7 @@ const PlanilhaExpandable = ({ planilha }: { planilha: string }) => {
       </Button>
       {open && (
         <div className="mt-3 text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
-          {planilha}
+          {formatted}
         </div>
       )}
     </div>

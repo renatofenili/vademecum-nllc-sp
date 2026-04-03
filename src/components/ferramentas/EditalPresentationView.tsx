@@ -204,7 +204,7 @@ const FlowNodeEl = ({
       }}
       onClick={node.expandable ? onExpand : undefined}
     >
-      <Card className={`h-full transition-shadow duration-200 border-border/60 ${node.expandable ? "hover:shadow-md hover:border-primary/30" : ""}`}>
+      <Card className={`h-full transition-shadow duration-200 shadow-sm border-border bg-card ${node.expandable ? "hover:shadow-lg hover:border-primary/40 group" : ""}`}>
         <CardContent className="p-3 flex flex-col items-center justify-center h-full gap-1">
           <div className="flex items-center gap-1.5">
             <Icon className="h-3.5 w-3.5 text-primary" />

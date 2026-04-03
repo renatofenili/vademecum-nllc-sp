@@ -60,6 +60,7 @@ function extractModalidade(text: string): string {
 }
 
 const INSTITUTION_KEYWORD_REGEX = /\b(prefeitura|município|secretaria|ministério|governo|estado|câmara|tribunal|fundação|autarquia|universidade|instituto|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio|agência|superintendência)\b/i;
+const INSTITUTION_CAPTURE_REGEX = /(?:prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|fundação|autarquia|universidade|instituto|ministério|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^,.;\n]{2,180}/i;
 
 function normalizeInstitutionCase(value: string): string {
   const compact = value.replace(/\s+/g, " ").trim();
@@ -83,16 +84,17 @@ function normalizeInstitutionCase(value: string): string {
 
 function cleanOrgaoName(raw: string): string {
   const compact = raw.replace(/\s+/g, " ").trim();
-  const extracted = compact.match(/((?:prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;]{0,40})?|fundação|autarquia|universidade|instituto|ministério|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^,.;\n]{2,160})/i);
+  const extracted = compact.match(INSTITUTION_CAPTURE_REGEX);
 
-  let value = (extracted?.[1] ?? compact)
+  let value = (extracted?.[0] ?? compact)
     .replace(/^\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]?\s*/i, "")
     .replace(/^\s*(?:a|o)\s+/i, "")
     .trim();
 
   value = value
-    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaurar[áa]?|torna\s+p[úu]blico|por\s+meio\s+da\s+comiss[aã]o|por\s+interm[eé]dio\s+da\s+comiss[aã]o|situad[ao]|inscrit[ao]|cadastrad[ao]|representad[ao]|neste\s+ato)\b[\s\S]*$/i, "")
-    .replace(/\s+(?:publicad[ao]|realizar[áa]|promover[áa]|torna\s+p[úu]blico)\b[\s\S]*$/i, "")
+    .replace(/\s+(?:esplanada|rua|avenida|av\.?|praça|travessa|rodovia|bairro|cep|telefone|site|e-?mail|http|www\.|bloco\b|anexo\b|sala\b|andar\b)\s*[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaurar[áa]?|torna\s+p[úu]blico|situad[ao]|inscrit[ao]|cadastrad[ao]|representad[ao]|neste\s+ato)\b[\s\S]*$/i, "")
+    .replace(/\s+(?:por\s+meio|por\s+interm[eé]dio|atrav[ée]s)\s+d[ao]\b[\s\S]*$/i, "")
     .replace(/\s*[-–—:]\s*(?:cnpj|uasg|ug|processo|preg[ãa]o|concorr[êe]ncia|edital)\b[\s\S]*$/i, "")
     .replace(/\s*,?\s*(?:no|na)\s+(?:d\.o\.[ue]\.?|imprensa\s+oficial|forma\s+eletr[ôo]nica)\b[\s\S]*$/i, "")
     .replace(/[;:,\-–—]+$/, "")
@@ -110,8 +112,8 @@ function scoreOrgaoCandidate(value: string): number {
   let score = 0;
 
   const positiveSignals: Array<[RegExp, number]> = [
+    [/\bministério\b/i, 14],
     [/\bsecretaria\b/i, 12],
-    [/\bministério\b/i, 12],
     [/\btribunal\b/i, 11],
     [/\buniversidade\b/i, 11],
     [/\binstituto\b/i, 10],
@@ -160,7 +162,8 @@ function scoreOrgaoCandidate(value: string): number {
 }
 
 function extractOrgao(text: string): string {
-  const header = text.replace(/\r\n/g, "\n").slice(0, 6000);
+  const header = text.replace(/\r\n/g, "\n").slice(0, 12000);
+  const preEditalBlock = header.split(/\bEDITAL\b/i)[0] || header.slice(0, 2500);
   const candidates: Array<{ value: string; score: number; index: number }> = [];
 
   const addCandidate = (raw: string | null | undefined, boost = 0, index = 0) => {
@@ -168,41 +171,46 @@ function extractOrgao(text: string): string {
     const cleaned = cleanOrgaoName(raw);
     if (!cleaned) return;
 
-    const score = scoreOrgaoCandidate(cleaned) + boost - (index > header.length * 0.5 ? 2 : 0);
+    const score = scoreOrgaoCandidate(cleaned) + boost - (index > header.length * 0.6 ? 2 : 0);
     if (score >= 10) candidates.push({ value: cleaned, score, index });
   };
 
   const labeledPatterns = [
-    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,180})/gim,
-    /(?:por\s+intermédio\s+da|por\s+meio\s+da|através\s+da)\s+((?:secretaria|departamento|coordenadoria|autarquia|fundação|instituto|superintendência)[^,.;\n]{4,140})/gim,
+    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,200})/gim,
+    /(?:por\s+interm[eé]dio\s+d[ao]|por\s+meio\s+d[ao]|atrav[ée]s\s+d[ao])\s+((?:ministério|secretaria|prefeitura|município|governo|tribunal|câmara|fundação|autarquia|universidade|instituto|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^,.;\n]{4,180})/gim,
   ];
 
   for (const pattern of labeledPatterns) {
     for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1] || match[0], 30, match.index ?? 0);
+      addCandidate(match[1] || match[0], 34, match.index ?? 0);
     }
   }
 
   const contextualPatterns = [
-    /(?:^|\n)\s*((?:prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,40})?|fundação|autarquia|universidade|instituto|ministério|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^\n]{0,180})/gim,
+    /(?:^|\n)\s*((?:ministério|prefeitura(?:\s+municipal)?|município\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|câmara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|fundação|autarquia|universidade|instituto|superintendência|agência|companhia|empresa\s+(?:pública|municipal)|departamento|serviço\s+autônomo|consórcio)[^\n]{0,220})/gim,
   ];
 
   for (const pattern of contextualPatterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1] || match[0], 18, match.index ?? 0);
+    for (const match of preEditalBlock.matchAll(pattern)) {
+      addCandidate(match[1] || match[0], 24, match.index ?? 0);
     }
   }
 
-  const lines = header
+  const lines = preEditalBlock
     .split("\n")
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean)
-    .slice(0, 30);
+    .slice(0, 40);
 
   for (const line of lines) {
     if (INSTITUTION_KEYWORD_REGEX.test(line)) {
-      addCandidate(line, line === line.toUpperCase() ? 8 : 4, header.indexOf(line));
+      addCandidate(line, line === line.toUpperCase() ? 16 : 12, header.indexOf(line));
     }
+  }
+
+  const inlineMatches = header.match(new RegExp(INSTITUTION_CAPTURE_REGEX.source, "gi")) || [];
+  for (const match of inlineMatches) {
+    addCandidate(match, 10, header.indexOf(match));
   }
 
   const unique = Array.from(

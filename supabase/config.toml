@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.re-extract-articles]
 verify_jwt = false
+
+[functions.analyze-edital]
+verify_jwt = false

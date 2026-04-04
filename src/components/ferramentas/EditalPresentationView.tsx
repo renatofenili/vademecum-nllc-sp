@@ -306,9 +306,9 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
           : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
         }
       </div>
-      <p className="text-sm text-foreground/80 leading-relaxed">
-        {expanded ? card.content : preview}
-      </p>
+      <div className="text-sm text-foreground/80 leading-relaxed">
+        {expanded ? renderWithBullets(card.content) : <span>{preview}</span>}
+      </div>
     </div>
   );
 };

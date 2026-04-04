@@ -1532,7 +1532,8 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (feat.hasLC123 || feat.beneficioMEEPP) disp.push("• Tratamento diferenciado para ME/EPP conforme LC 123/2006.");
     if (feat.hasNegociacao) disp.push("• O edital prevê negociação após a fase de lances.");
     if (feat.hasDesempate) disp.push("• Há regras de desempate previstas.");
-    if (precoMaximoStatus === "sim") disp.push("• Há preço máximo de referência. Propostas acima serão desclassificadas.");
+    if (precoMaximoStatus === "sim" && valor) disp.push(`• Preço máximo/estimado de referência: ${valor}. Propostas acima serão desclassificadas.`);
+    else if (precoMaximoStatus === "sim") disp.push("• Há preço máximo de referência. Propostas acima serão desclassificadas.");
     else if (precoMaximoStatus === "nao_identificado") disp.push("• Preço máximo: não identificado de forma expressa no edital.");
     sections.push(`⚔️ 6. COMO A DISPUTA FUNCIONA\n\n${disp.join("\n")}`);
   }

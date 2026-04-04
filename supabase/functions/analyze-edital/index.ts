@@ -1767,6 +1767,10 @@ function analyzeEditalText(text: string) {
     habilitacao: condicoes_habilitacao,
     _fullText: text,
     _scoreComplexidade: String(score_complexidade.valor),
+    _scoreFaixa: score_complexidade.faixa,
+    _scoreFraseFaixa: score_complexidade.frase_faixa,
+    _scoreFatoresElevaram: score_complexidade.fatores_elevaram.join("; "),
+    _scoreFatoresImpediram: score_complexidade.fatores_impediram.join("; "),
   }, timeline);
 
   return {

@@ -810,15 +810,27 @@ function extractDataSessao(text: string): string {
 }
 
 function extractSistema(text: string): string {
-  const textLower = text.toLowerCase();
-  if (/bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras/i.test(text)) return "BEC/SP - Bolsa Eletrônica de Compras";
+  // Check for explicit platform declarations first
+  const explicit = firstMatch(text, [
+    /(?:plataforma|sistema|endereço\s+eletrônico|sítio|site|portal)\s*[:.\-–—]\s*(?:(?:www\.?|https?:\/\/)?)(compras\.?gov\.?br|comprasnet|licitanet|bllcompras|bll\s+compras|licitações[\-\s]?e|licitacoes[\-\s]?e|bec[\s\-\/]?sp|bolsa\s+eletrônica)/i,
+  ]);
+  if (explicit) {
+    const m = explicit.toLowerCase();
+    if (/compras\.?gov|comprasnet/.test(m)) return "Compras.gov.br";
+    if (/bec|bolsa\s+eletrônica/.test(m)) return "BEC/SP - Bolsa Eletrônica de Compras";
+    if (/licitanet/.test(m)) return "Licitanet";
+    if (/bll/.test(m)) return "BLL Compras";
+    if (/licitações|licitacoes/.test(m)) return "Licitações-e (Banco do Brasil)";
+  }
+
+  // Fallback: keyword presence in full text
   if (/compras\.?gov\.?br|comprasnet/i.test(text)) return "Compras.gov.br";
+  if (/bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras/i.test(text)) return "BEC/SP - Bolsa Eletrônica de Compras";
   if (/licitanet/i.test(text)) return "Licitanet";
   if (/bll\s+compras|bllcompras/i.test(text)) return "BLL Compras";
   if (/licitações[\-\s]?e|licitacoes[\-\s]?e/i.test(text)) return "Licitações-e (Banco do Brasil)";
   if (/portal\s+de\s+compras/i.test(text)) return "Portal de Compras";
-  if (/pregão\s+eletrônico/i.test(text)) return "Sistema eletrônico (ver edital)";
-  return "Não identificado";
+  return "Não identificado no edital";
 }
 
 function extractHabilitacao(text: string): string {

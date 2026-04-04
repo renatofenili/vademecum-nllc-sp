@@ -5,11 +5,60 @@ const corsHeaders = {
 };
 
 // ── PDF Text Extraction ──
+
+/**
+ * Repairs common ligature / encoding artefacts produced by unpdf when the
+ * PDF uses ToUnicode CMap entries that split multi-byte glyphs incorrectly.
+ *
+ * Pattern: a capital letter appears in the middle of a lowercase word where
+ * the original glyph was a ligature (ti→A, fi→B, fl→C, etc.).
+ * Examples:  "AdministraAvas" → "Administrativas"
+ *            "JusAça"         → "Justiça"
+ *            "licitaAção"     → "licitação"
+ */
+function repairLigatures(text: string): string {
+  // Map of known broken patterns → correct replacements
+  const replacements: Array<[RegExp, string]> = [
+    // ti ligature broken as uppercase A mid-word
+    [/([a-záàâãéêíóôõúç])A(vas?\b)/gi, (_m, pre, suf) => `${pre}ti${suf.toLowerCase()}`],
+    [/([a-záàâãéêíóôõúç])A(ção|cão|ca\b|ções|cões)/gi, (_m, pre, suf) => `${pre}ti${suf.toLowerCase()}`],
+    [/([a-záàâãéêíóôõúç])A(vo|va|vos|vas|vidade|vidades|vamente)/gi, (_m, pre, suf) => `${pre}ti${suf.toLowerCase()}`],
+
+    // Generic: "JusAça" pattern — capital letter surrounded by lowercase on both sides
+    // that doesn't make sense in Portuguese
+    [/\bJus(A)(ça)\b/g, "Justiça"],
+    [/\bjus(A)(ça)\b/g, "justiça"],
+    [/\bAdministra(A)(vas?)\b/gi, (_m, _a, suf) => `Administra\u200Btivas`],
+  ];
+
+  let result = text;
+
+  // Broad heuristic: a single uppercase letter between two lowercase sequences
+  // that creates a nonsense word is likely a broken ligature.
+  // Replace A → ti, B → fi, C → fl (most common ligature mappings)
+  result = result.replace(
+    /([a-záàâãéêíóôõúç]{2,})(A)([a-záàâãéêíóôõúç]{2,})/g,
+    (match, pre, _mid, suf) => {
+      const candidate = `${pre}ti${suf}`;
+      // Only replace if the original looks broken (uppercase in middle of word)
+      if (/[a-záàâãéêíóôõúç]$/.test(pre) && /^[a-záàâãéêíóôõúç]/.test(suf)) {
+        return candidate;
+      }
+      return match;
+    }
+  );
+
+  // Clean up zero-width spaces used as markers
+  result = result.replace(/\u200B/g, "");
+
+  return result;
+}
+
 async function extractTextFromPdf(buffer: Uint8Array): Promise<string> {
   const { getDocumentProxy, extractText } = await import("npm:unpdf@0.12.1");
   const pdf = await getDocumentProxy(buffer);
   const { text } = await extractText(pdf, { mergePages: true });
-  return text;
+  return repairLigatures(text);
 }
 
 // ── Utility ──

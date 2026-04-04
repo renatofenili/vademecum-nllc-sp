@@ -85,6 +85,46 @@ function extractSection(text: string, startPatterns: RegExp[], endPatterns: RegE
   return null;
 }
 
+// ── Participação e Unidade de Disputa ──
+function extractParticipacao(text: string): string {
+  const header = text.slice(0, 8000);
+  // Exclusiva ME/EPP
+  if (/(?:exclusiv[oa](?:mente)?\s+(?:para\s+)?(?:(?:micro\s*empresa|me)\s*(?:\/|e)\s*(?:empresa\s+de\s+pequeno\s+porte|epp)))/i.test(header)
+    || /(?:participação|licitação|certame|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa)/i.test(header)
+    || /exclusiv[oa]\s+(?:para\s+)?(?:beneficiári[oa]s?\s+d[ao]\s+)?(?:lei\s+complementar\s+(?:n[°ºo.]*\s*)?123|lc\s*123)/i.test(header)) {
+    return "Exclusiva ME/EPP";
+  }
+  if (/ampla\s+(?:concorrência|participação|disputa|competição)/i.test(header)) {
+    return "Ampla concorrência";
+  }
+  if (/(?:participação|licitação)\s+(?:é\s+)?(?:aberta|ampla)/i.test(header)) {
+    return "Ampla concorrência";
+  }
+  return "Não identificado no edital";
+}
+
+function extractUnidadeDisputa(text: string): string {
+  const header = text.slice(0, 10000);
+  // Explicit declarations
+  const explicit = firstMatch(header, [
+    /(?:modo\s+de\s+disputa|critério\s+de\s+julgamento|julgamento)\s*[:.\-–—]?\s*(?:menor\s+preço\s+)?(por\s+item|por\s+lote|global|por\s+grupo)/i,
+    /(?:tipo|forma)\s+(?:de\s+)?(?:julgamento|adjudicação|disputa)\s*[:.\-–—]?\s*(?:menor\s+preço\s+)?(por\s+item|por\s+lote|global|por\s+grupo)/i,
+  ]);
+  if (explicit) {
+    const m = explicit.toLowerCase().trim();
+    if (/por\s+item/.test(m)) return "Por item";
+    if (/por\s+lote|por\s+grupo/.test(m)) return "Por lote";
+    if (/global/.test(m)) return "Global";
+  }
+  // Keyword search
+  if (/(?:menor\s+preço|julgamento)\s+global/i.test(header) || /(?:preço|valor)\s+global/i.test(header)) return "Global";
+  if (/(?:disputa|adjudicação|julgamento)\s+por\s+item/i.test(header)) return "Por item";
+  if (/(?:disputa|adjudicação|julgamento)\s+por\s+(?:lote|grupo)/i.test(header)) return "Por lote";
+  // Look for lote references
+  if (/\blote\s+(?:único|[0-9])/i.test(header) && !/\bpor\s+item\b/i.test(header)) return "Por lote";
+  return "Não identificado no edital";
+}
+
 // ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
   return firstMatch(text, [

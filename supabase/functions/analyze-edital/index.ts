@@ -1726,22 +1726,22 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   // ── 13. PONTOS DE ATENÇÃO ──
   {
     const alertas: string[] = [];
-    if (amostraStatus === "sim") alertas.push("🔸 Amostra exigida — a empresa deve apresentar amostra no prazo. A não apresentação ou reprovação elimina.");
-    if (garantiaExecucao === "sim") alertas.push("🔸 Garantia contratual exigida — envolve custo financeiro. Avalie as opções (seguro-garantia, fiança, caução).");
+    if (amostraStatus === "sim") alertas.push("🔸 Amostra exigida — prepare e apresente no prazo estipulado.");
+    if (garantiaExecucao === "sim") alertas.push("🔸 Garantia contratual exigida — avalie as opções disponíveis (seguro-garantia, fiança, caução).");
     else if (garantiaExecucao === "nao") alertas.push("🔸 Garantia contratual não exigida neste edital.");
-    if (feat.hasGarantiaProduto) alertas.push("🔸 Garantia do produto — verifique o prazo e as condições exigidas.");
-    if (srpStatus === "sim") alertas.push("🔸 Registro de preços — a Administração não é obrigada a contratar. A ata gera expectativa, não certeza de receita.");
+    if (feat.hasGarantiaProduto) alertas.push("🔸 Garantia do produto — verifique o prazo e as condições previstas.");
+    if (srpStatus === "sim") alertas.push("🔸 Registro de preços — a contratação será conforme demanda efetiva durante a vigência da ata.");
     else if (srpStatus === "nao_identificado") alertas.push("🔸 O edital não indica de forma expressa que se trata de registro de preços.");
-    if (marcaModeloStatus === "sim") alertas.push("🔸 Marca/modelo — confira se a exigência é indicativa ou restritiva. Marcas diferentes podem ser aceitas se houver equivalência.");
-    if (catalogoStatus === "sim") alertas.push("🔸 Catálogo/ficha técnica/laudo — a ausência pode levar à desclassificação.");
-    if (precoMaximoStatus === "sim") alertas.push("🔸 Preço máximo — propostas acima do valor de referência serão desclassificadas.");
-    if (prazoEntregaVal && /\d+\s*dias?\s*(?:úteis|corridos)?$/i.test(prazoEntregaVal)) alertas.push("🔸 Prazo de entrega — confira se é em dias úteis ou corridos. A diferença é significativa.");
-    if (feat.hasMulta) alertas.push(`🔸 Multa — o edital prevê multa de ${feat.hasMulta}. Leia o capítulo de sanções.`);
-    if (feat.hasImpedimentoSancao) alertas.push("🔸 Impedimento — empresas sancionadas estão vedadas. Confira a situação cadastral.");
-    if (feat.hasSICAF || feat.hasCAUFESP) alertas.push("🔸 Cadastro obrigatório — confira a validade e completude do cadastro exigido.");
-    if (feat.hasVisitaTecnica) alertas.push("🔸 Visita técnica — pode ser obrigatória. A não realização pode impedir a participação.");
-    if (consorcioStatus === "nao") alertas.push("🔸 Consórcio vedado — empresas só podem participar individualmente.");
-    if (alertas.length > 0) sections.push(`🚩 13. PONTOS DE ATENÇÃO\n\n${alertas.join("\n")}`);
+    if (marcaModeloStatus === "sim") alertas.push("🔸 Marca/modelo indicados — confira se a exigência é indicativa ou se aceita equivalência.");
+    if (catalogoStatus === "sim") alertas.push("🔸 Catálogo/ficha técnica/laudo — separe a documentação técnica com antecedência.");
+    if (precoMaximoStatus === "sim") alertas.push("🔸 Preço máximo — a proposta deve respeitar o valor de referência.");
+    if (prazoEntregaVal && /\d+\s*dias?\s*(?:úteis|corridos)?$/i.test(prazoEntregaVal)) alertas.push("🔸 Prazo de entrega — confira se é em dias úteis ou corridos.");
+    if (feat.hasMulta) alertas.push(`🔸 Multa de ${feat.hasMulta} prevista — consulte o capítulo de sanções para detalhes.`);
+    if (feat.hasImpedimentoSancao) alertas.push("🔸 Confira a situação cadastral da empresa quanto a impedimentos.");
+    if (feat.hasSICAF || feat.hasCAUFESP) alertas.push("🔸 Cadastro obrigatório — confira a validade e completude.");
+    if (feat.hasVisitaTecnica) alertas.push("🔸 Visita técnica prevista — agende com antecedência.");
+    if (consorcioStatus === "nao") alertas.push("🔸 Participação individual — consórcio não previsto neste edital.");
+    if (alertas.length > 0) sections.push(`📌 13. PONTOS DE ATENÇÃO\n\n${alertas.join("\n")}`);
   }
 
   // ── 14. IMPACTO PRÁTICO PARA O LICITANTE ──

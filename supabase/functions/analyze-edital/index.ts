@@ -1359,13 +1359,11 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
 
   // ── 4. DIAGNÓSTICO EXECUTIVO ──
   {
-    const score = dados._scoreComplexidade ? parseInt(dados._scoreComplexidade) : 0;
-    let nivel = "moderado";
-    if (score >= 7) nivel = "complexo";
-    else if (score <= 3) nivel = "simples";
+    const score = dados._scoreComplexidade ? parseFloat(dados._scoreComplexidade) : 0;
+    const faixa = dados._scoreFaixa || getFaixa(score);
 
     const diag: string[] = [];
-    diag.push(`Avaliação geral: edital ${nivel} para participação (score ${score}/10).`);
+    diag.push(`Avaliação geral: edital **${faixa}** para participação (score ${score}/10).`);
 
     const barreiras: string[] = [];
     if (feat.hasAmostra || amostraStatus === "sim") barreiras.push("exigência de amostra");

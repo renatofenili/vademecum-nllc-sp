@@ -19,6 +19,27 @@ interface Props {
   onClose?: () => void;
   onNewAnalysis?: () => void;
 }
+/* ────────────────────────────────────────────
+   Bullet formatter – splits list-like text into
+   bullet items when it detects separators
+   ──────────────────────────────────────────── */
+const bulletSeparators = /[;•–—]\s*|\n|(?:\d+\))\s*/;
+const renderWithBullets = (text: string) => {
+  if (!text) return null;
+  // Split on common list separators: semicolons, bullets, newlines, numbered items
+  const parts = text.split(/(?:;\s*|\n|•\s*|–\s*|—\s*|\d+\)\s+)/).map(s => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return <span>{text}</span>;
+  return (
+    <ul className="space-y-1 mt-1">
+      {parts.map((item, i) => (
+        <li key={i} className="flex gap-2 items-start text-sm">
+          <span className="text-primary mt-1 shrink-0">•</span>
+          <span>{item.replace(/[.;,]$/, "")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 /* ────────────────────────────────────────────
    Section parser – extracts numbered sections

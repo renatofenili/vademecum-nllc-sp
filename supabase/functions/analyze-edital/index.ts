@@ -128,7 +128,7 @@ function extractUnidadeDisputa(text: string): string {
 // ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
   return firstMatch(text, [
-    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
+    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:\w+\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
     /(?:EDITAL)\s*(?:N[°ºo.]*\s*)?([\w\-]+\/\d{4})/i,
     /(?:PROCESSO\s+(?:LICITATÓRIO\s+)?(?:N[°ºo.]*\s*)?)([\d.\-\/]+\d+)/i,
   ]) || "Não identificado";

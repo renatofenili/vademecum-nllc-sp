@@ -34,7 +34,8 @@ const formatBulletLines = (text: string, maxLines?: number) => {
     .replace(/\s*;\s*/g, "\n• ")
     .replace(/\s*[–—]\s+/g, "\n• ")
     .replace(/\s*\d+[\)\.]\s+/g, "\n• ")
-    .replace(/\s*(✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)\s*/g, "\n$1 ")
+    .replace(/\s*([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])\s*/gu, "\n$1 ")
+    .replace(/\s*:\s+(?=[A-Z])/g, ":\n• ")
     .replace(/\s*\n+\s*/g, "\n")
     .trim();
 

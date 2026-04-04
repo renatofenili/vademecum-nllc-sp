@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
   Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,

@@ -378,6 +378,8 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
   const execPanels = useMemo(() => buildExecPanels(sections), [sections]);
   const axes = useMemo(() => deriveAxes(analysis, sections), [analysis, sections]);
 
+  const [detailOpen, setDetailOpen] = useState(false);
+
   const score = analysis.score_complexidade?.valor ?? 5;
   const scoreColor = getScoreColor(score);
 
@@ -389,6 +391,22 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
 
   // Simple language
   const simpleLangBody = getSectionBody(sections, "linguagem simples", "em linguagem");
+
+  const allFields = [
+    { icon: FileText, label: "Número do Edital", value: analysis.numero_edital },
+    { icon: Building2, label: "Órgão", value: analysis.orgao },
+    { icon: Scale, label: "Modalidade", value: analysis.modalidade },
+    { icon: FileText, label: "Objeto", value: analysis.objeto },
+    { icon: DollarSign, label: "Valor Estimado", value: analysis.valor_estimado },
+    { icon: BarChart3, label: "Critério de Julgamento", value: analysis.criterio_julgamento },
+    { icon: Calendar, label: "Sessão Pública", value: analysis.data_sessao },
+    { icon: Globe, label: "Plataforma", value: analysis.sistema_licitacao },
+    { icon: Users, label: "Participação", value: analysis.participacao },
+    { icon: Hash, label: "Unidade da Disputa", value: analysis.unidade_disputa },
+    { icon: Shield, label: "Habilitação", value: analysis.condicoes_habilitacao },
+  ].filter(f => f.value && f.value !== "Não identificado" && f.value !== "Não identificado no edital");
+
+  const openDetail = useCallback(() => setDetailOpen(true), []);
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background overflow-hidden">

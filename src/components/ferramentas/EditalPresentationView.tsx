@@ -293,7 +293,9 @@ const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
 
 const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.ElementType }) => {
   const [expanded, setExpanded] = useState(false);
-  const preview = card.content.length > 120 ? card.content.slice(0, 120) + "…" : card.content;
+  const plainPreview = card.content.length > 120 ? card.content.slice(0, 120).replace(/\s+\S*$/, "") + "…" : card.content;
+  const bulletPreview = formatBulletLines(card.content, 3);
+  const preview = bulletPreview === card.content ? plainPreview : bulletPreview;
 
   return (
     <div
@@ -315,7 +317,7 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
         }
       </div>
       <div className="text-sm text-foreground/80 leading-relaxed">
-        {expanded ? renderWithBullets(card.content) : <span>{preview}</span>}
+        {expanded ? renderWithBullets(card.content) : renderWithBullets(preview)}
       </div>
     </div>
   );

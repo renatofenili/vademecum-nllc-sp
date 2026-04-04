@@ -866,27 +866,71 @@ function extractDataSessao(text: string): string {
 }
 
 function extractSistema(text: string): string {
-  // Priority 1: Portal de Compras do Governo Federal / gov.br/compras / compras.gov.br / comprasnet
-  if (/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i.test(text)) {
-    return "Portal de Compras do Governo Federal (gov.br/compras)";
+  const candidates: Array<{ value: string; score: number }> = [];
+
+  const addCandidate = (value: string, score: number) => {
+    const cleaned = value.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
+    if (cleaned.length >= 3 && cleaned.length <= 120) {
+      candidates.push({ value: cleaned, score });
+    }
+  };
+
+  // Strategy 1: Labeled fields ("Plataforma:", "Sistema eletrônico:", "Endereço eletrônico:", "Sítio:")
+  const labelPatterns = [
+    /(?:plataforma|sistema\s+eletrônico|sistema\s+eletronico|endereço\s+eletrônico|endereco\s+eletronico|sítio|sitio|site|portal)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
+  ];
+  for (const pattern of labelPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const raw = match[1].trim();
+      // Reject if it's just a generic URL or email
+      if (/^https?:\/\//i.test(raw) && raw.length < 40) continue;
+      addCandidate(raw, 30);
+    }
   }
 
-  // Priority 2: Other specific platforms
-  if (/bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras/i.test(text)) return "BEC/SP - Bolsa Eletrônica de Compras";
-  if (/licitanet/i.test(text)) return "Licitanet";
-  if (/bll\s+compras|bllcompras/i.test(text)) return "BLL Compras";
+  // Strategy 2: Known platform references found IN THE TEXT
+  // Extract the actual text around these references rather than returning hardcoded strings
+  const platformPatterns: Array<[RegExp, number]> = [
+    [/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i, 25],
+    [/(?:licitações[\-\s]e|licitacoes[\-\s]e|www\.licitacoes-e\.com)/i, 22],
+    [/(?:bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras)/i, 22],
+    [/(?:licitanet)/i, 20],
+    [/(?:bll\s+compras|bllcompras)/i, 20],
+    [/(?:portal\s+de\s+compras)/i, 18],
+    [/(?:pregão?\s+eletrônico|pregao\s+eletronico)\s+(?:será|sera)\s+realizad[oa]\s+(?:por\s+meio\s+d[ao]|n[ao]|atrav[ée]s\s+d[ao])\s+([^\n,.;]{5,120})/i, 28],
+  ];
 
-  // Priority 3: Licitações-e — must be an explicit reference to the platform, NOT just the word "licitação/licitações" with "-e" suffix
-  if (/(?:plataforma|sistema|portal|site|sítio|endereço)\s+[^.]{0,40}licitações[\-\s]?e/i.test(text)
-    || /licitações[\-\s]e\s+(?:do\s+)?(?:banco\s+do\s+brasil|bb)/i.test(text)
-    || /www\.licitacoes-e\.com/i.test(text)) {
-    return "Licitações-e (Banco do Brasil)";
+  for (const [pattern, boost] of platformPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      // Extract surrounding context to get the full platform name
+      const idx = match.index ?? 0;
+      const contextStart = Math.max(0, idx - 50);
+      const contextEnd = Math.min(text.length, idx + match[0].length + 80);
+      const context = text.slice(contextStart, contextEnd);
+
+      // Try to find a clean platform name from the context
+      const platformName = match[1] || match[0];
+      addCandidate(platformName.replace(/\s+/g, " ").trim(), boost);
+    }
   }
 
-  // Priority 4: Generic portal de compras
-  if (/portal\s+de\s+compras/i.test(text)) return "Portal de Compras";
+  // Strategy 3: URLs as platform indicators (extract the URL itself)
+  const urlPatterns = [
+    /(?:plataforma|sistema|portal|realizar|acess)\w*[^.]{0,60}((?:www\.|https?:\/\/)[^\s,;)"']+)/gi,
+    /(?:propostas?\s+(?:deverão|devem|serão)\s+ser\s+(?:enviadas?|encaminhadas?|cadastradas?)\s+(?:por\s+meio|através)\s+d[ao]?\s+)([^\n,.;]{5,120})/gi,
+  ];
 
-  return "Não identificado no edital";
+  for (const pattern of urlPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      addCandidate(match[1], 15);
+    }
+  }
+
+  if (candidates.length === 0) return "Não identificado no edital";
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].value;
 }
 
 function extractHabilitacao(text: string): string {

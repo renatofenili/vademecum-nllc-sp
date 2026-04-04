@@ -95,17 +95,43 @@ function extractNumeroEdital(text: string): string {
 }
 
 function extractModalidade(text: string): string {
-  return firstMatch(text, [
+  // Look for explicit declarations first (e.g. "Modalidade: Concorrência Eletrônica")
+  const explicit = firstMatch(text, [
+    /modalidade\s*[:.\-–—]\s*((?:concorrência|pregão|tomada\s+de\s+preços?|convite|leilão|diálogo\s+competitivo|dispensa|inexigibilidade)\s*(?:eletrônic[oa]|presencial|públic[oa]|internacional|de\s+licitação)?)/i,
+  ]);
+  if (explicit) return normalizeModalidade(explicit);
+
+  // Then look in the first 3000 chars (header/preâmbulo) for the declared modalidade
+  const header = text.slice(0, 3000);
+  const headerMatch = firstMatch(header, [
+    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
     /(pregão\s+eletrônico)/i,
     /(pregão\s+presencial)/i,
-    /(concorrência\s+(?:pública|eletrônica|internacional)?)/i,
-    /(tomada\s+de\s+preços?)/i,
-    /(convite)/i,
-    /(leilão)/i,
     /(diálogo\s+competitivo)/i,
-    /(dispensa\s+(?:de\s+licitação|eletrônica)?)/i,
+    /(tomada\s+de\s+preços?)/i,
+    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
     /(inexigibilidade)/i,
-  ]) || "Não identificado";
+    /(leilão)/i,
+    /(convite)/i,
+  ]);
+  if (headerMatch) return normalizeModalidade(headerMatch);
+
+  // Fallback: search full text
+  return normalizeModalidade(firstMatch(text, [
+    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
+    /(pregão\s+eletrônico)/i,
+    /(pregão\s+presencial)/i,
+    /(diálogo\s+competitivo)/i,
+    /(tomada\s+de\s+preços?)/i,
+    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
+    /(inexigibilidade)/i,
+    /(leilão)/i,
+    /(convite)/i,
+  ]) || "Não identificado");
+}
+
+function normalizeModalidade(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 const INSTITUTION_KEYWORD_REGEX = /\b(prefeitura|munic[ií]pio|secretaria|minist[eé]rio|governo|estado|c[aâ]mara|tribunal|funda[cç][aã]o|autarquia|universidade|instituto|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|ag[eê]ncia|superintend[eê]ncia)\b/i;

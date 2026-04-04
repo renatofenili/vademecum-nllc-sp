@@ -334,7 +334,7 @@ const HeroField = ({ icon: Icon, label, value, onClick }: { icon: React.ElementT
       <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
       <div>
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">{label}</span>
-        <span className="text-sm font-medium text-foreground">{value}</span>
+        <div className="text-sm font-medium text-foreground">{renderWithBullets(value)}</div>
       </div>
     </button>
   );

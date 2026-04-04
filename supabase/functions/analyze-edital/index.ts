@@ -1490,17 +1490,17 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
 
     if (garantiaExecucao === "sim" || feat.hasPagamento) {
       const caixa: string[] = [];
-      if (garantiaExecucao === "sim") caixa.push("a garantia contratual compromete recursos financeiros");
-      if (feat.hasPagamento) caixa.push(`o pagamento é em ${feat.hasPagamento}, o que exige capital de giro`);
-      diag.push(`Impacto no caixa: ${caixa.join("; ")}.`);
+      if (garantiaExecucao === "sim") caixa.push("a garantia contratual requer planejamento financeiro");
+      if (feat.hasPagamento) caixa.push(`o pagamento é em ${feat.hasPagamento}, considere o capital de giro necessário`);
+      diag.push(`Planejamento financeiro: ${caixa.join("; ")}.`);
     }
 
     if (feat.hasAmostra || feat.hasVisitaTecnica || feat.hasCatalogo || feat.hasProvaConceito) {
-      diag.push("Custo operacional elevado por exigências técnicas pré-sessão.");
+      diag.push("O edital inclui exigências técnicas pré-sessão — planeje a preparação com antecedência.");
     }
 
     if (feat.hasPenalidades || feat.hasMulta) {
-      diag.push("O edital prevê penalidades relevantes — avalie o risco sancionatório antes de participar.");
+      diag.push("O edital prevê penalidades contratuais — avalie as condições de execução antes de participar.");
     }
 
     const urgencias: string[] = [];

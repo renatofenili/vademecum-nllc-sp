@@ -367,7 +367,7 @@ const RichText = ({ text }: { text: string }) => {
 /* ────────────────────────────────────────────
    Main Component
    ──────────────────────────────────────────── */
-const EditalPresentationView = ({ analysis, onClose }: Props) => {
+const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnalysis }: Props) => {
   const sections = useMemo(() => parseSections(analysis.resumo_simples || ""), [analysis.resumo_simples]);
   const diagCards = useMemo(() => buildDiagCards(sections, analysis), [sections, analysis]);
   const execPanels = useMemo(() => buildExecPanels(sections), [sections]);

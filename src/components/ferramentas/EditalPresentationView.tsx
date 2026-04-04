@@ -13,7 +13,10 @@ import type { EditalAnalysis } from "./EditalAnalyzer";
 
 interface Props {
   analysis: EditalAnalysis;
-  onClose: () => void;
+  fileName?: string;
+  onBack?: () => void;
+  onClose?: () => void;
+  onNewAnalysis?: () => void;
 }
 
 /* ────────────────────────────────────────────

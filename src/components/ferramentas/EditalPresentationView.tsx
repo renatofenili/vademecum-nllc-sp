@@ -505,18 +505,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
               {diagCards.map((card) => {
                 const Icon = card.icon;
                 return (
-                  <Card key={card.title} className="border-border/60">
-                    <CardContent className="p-5">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                          <Icon className="h-4.5 w-4.5 text-primary" />
-                        </div>
-                        <h3 className="text-sm font-bold text-foreground flex-1">{card.title}</h3>
-                        <SeverityDot severity={card.severity} />
-                      </div>
-                      <p className="text-sm text-foreground/80 leading-relaxed">{card.content}</p>
-                    </CardContent>
-                  </Card>
+                  <DiagCardExpandable key={card.title} card={card} Icon={Icon} />
                 );
               })}
             </div>

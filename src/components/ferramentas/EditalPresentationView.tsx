@@ -420,9 +420,9 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
           <section>
             {/* Object title – prominent */}
             {analysis.objeto && analysis.objeto !== "Não identificado no edital" && (
-              <h1 className="text-xl md:text-2xl font-extrabold text-foreground tracking-tight leading-snug mb-4">
+              <p className="text-sm md:text-base font-semibold text-foreground leading-relaxed mb-4">
                 {analysis.objeto}
-              </h1>
+              </p>
             )}
 
             <div className="flex items-start justify-between gap-6 flex-wrap">

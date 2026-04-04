@@ -1307,9 +1307,10 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (valor) p.push(`O valor estimado é de ${valor}.`);
 
     // Dificuldade
-    const score = dados._scoreComplexidade ? parseInt(dados._scoreComplexidade) : 0;
+    const score = dados._scoreComplexidade ? parseFloat(dados._scoreComplexidade) : 0;
+    const faixa = dados._scoreFaixa || getFaixa(score);
     if (score >= 7) p.push("A participação exige atenção redobrada: o edital apresenta diversas exigências que elevam a complexidade.");
-    else if (score >= 4) p.push("A participação exige cuidado com a documentação e prazos, mas não apresenta barreiras atípicas.");
+    else if (score >= 5) p.push("A participação exige cuidado com a documentação e prazos, mas não apresenta barreiras atípicas.");
     else p.push("A participação aparenta ser direta, sem exigências atípicas além das habituais.");
 
     sections.push(`📌 1. VISÃO GERAL DO EDITAL\n\n${p.join(" ")}`);

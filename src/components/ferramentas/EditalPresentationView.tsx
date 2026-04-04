@@ -210,7 +210,7 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
     {
       title: "O que pode me eliminar",
       icon: Ban,
-      content: truncBody(eliminar),
+      content: cleanBody(eliminar),
       severity: scoreSeverity(Math.min(base + 1, 10)),
     },
     {

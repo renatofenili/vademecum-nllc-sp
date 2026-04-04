@@ -622,14 +622,47 @@ function cleanObjetoText(raw: string): string {
 }
 
 function extractValorEstimado(text: string): string {
-  // Look for explicit value statements
-  const valueContext = firstMatch(text, [
-    /(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*(?:\(.*?\)))?)/i,
-    /(?:valor\s+(?:total\s+)?(?:estimado|máximo|global))\s*[:.]?\s*(R\$\s*[\d.,]+)/i,
-    /(?:orçamento\s+(?:estimado|máximo))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+)/i,
-    /(?:montante\s+de)\s*(R\$\s*[\d.,]+)/i,
-  ]);
-  return valueContext || "Não informado no edital";
+  const norm = text.replace(/\r\n/g, "\n");
+  const candidates: Array<{ value: string; score: number }> = [];
+
+  const patterns: Array<[RegExp, number]> = [
+    // Explicit labeled patterns (highest priority)
+    [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 30],
+    [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*[:.]?\s*(R\$\s*[\d.,]+)/gi, 28],
+    [/(?:orçamento\s+(?:estimado|máximo|previsto|sigiloso))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 26],
+    [/(?:preço\s+(?:total\s+)?(?:estimado|máximo|de\s+referência))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+)/gi, 24],
+    [/(?:montante\s+(?:total\s+)?(?:estimado|de|global))\s*(?:é\s+de|de|:)?\s*(R\$\s*[\d.,]+)/gi, 22],
+    // Table-style: "Valor Total | R$ xxx" or "VALOR ESTIMADO R$ xxx"
+    [/(?:valor\s+(?:total|estimado|máximo|global))\s*[|:]\s*(R\$\s*[\d.,]+)/gi, 22],
+    // "no valor de R$"
+    [/(?:no\s+valor\s+(?:total\s+)?de)\s+(R\$\s*[\d.,]+)/gi, 18],
+    // "importa em R$"
+    [/(?:importa(?:ndo)?\s+em)\s+(R\$\s*[\d.,]+)/gi, 16],
+    // Standalone R$ with contextual keywords nearby
+    [/(?:(?:total|global|estimad[oa]|máxim[oa]|referência)\s*(?:de|:)?\s*)(R\$\s*[\d.,]+)/gi, 14],
+    // Broad: just R$ values near "valor" keyword within 200 chars
+    [/valor[^R]{0,80}(R\$\s*[\d.,]+)/gi, 10],
+  ];
+
+  for (const [pattern, boost] of patterns) {
+    for (const match of norm.matchAll(pattern)) {
+      const raw = match[1]?.trim();
+      if (!raw) continue;
+      // Parse numeric value to filter out tiny amounts (likely unit prices)
+      const numStr = raw.replace(/R\$\s*/i, "").replace(/\./g, "").replace(",", ".").replace(/\s*\(.*$/, "");
+      const num = parseFloat(numStr);
+      // Skip values less than R$ 100 (likely unit prices or percentages)
+      if (isNaN(num) || num < 100) continue;
+      // Boost higher values (more likely to be the total)
+      const valueBoost = num > 1000000 ? 4 : num > 100000 ? 2 : 0;
+      candidates.push({ value: raw.replace(/\s+/g, " "), score: boost + valueBoost });
+    }
+  }
+
+  if (candidates.length === 0) return "Não informado no edital";
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].value;
 }
 
 const CRITERIO_BASE_REGEX = /\b(menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico)\b/i;

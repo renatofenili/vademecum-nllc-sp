@@ -70,12 +70,18 @@ Deno.test("analyzeEditalText produces grounded summary from fixture text", () =>
   assertEquals(result.orgao, "Secretaria de Administração");
   assertEquals(result.criterio_julgamento, "Menor preço global");
   assertStringIncludes(result.objeto, "Aquisição de Armários");
-  // New 16-section format checks
+  // 16-section format checks
   assertStringIncludes(result.resumo_simples, "VISÃO GERAL DO EDITAL");
   assertStringIncludes(result.resumo_simples, "EM UMA FRASE");
+  assertStringIncludes(result.resumo_simples, "LEITURA IMEDIATA");
+  assertStringIncludes(result.resumo_simples, "DIAGNÓSTICO EXECUTIVO");
   assertStringIncludes(result.resumo_simples, "COMO A DISPUTA FUNCIONA");
+  assertStringIncludes(result.resumo_simples, "QUEM PODE PARTICIPAR");
   assertStringIncludes(result.resumo_simples, "CONCLUSÃO EXECUTIVA");
   assertStringIncludes(result.resumo_simples, "Secretaria de Administração");
   assertStringIncludes(result.resumo_simples, "menor preço global");
+  // Truth-grounding: must not invent SRP or consórcio without base
   assert(!result.resumo_simples.includes("Imagine que"));
+  // Consórcio should be "não identificado" since fixture doesn't mention it
+  assertStringIncludes(result.resumo_simples, "Consórcio: não identificado");
 });

@@ -235,6 +235,8 @@ function cleanOrgaoCandidate(raw: string): string {
   if (!value || value.length < 4 || value.length > 160) return "";
   // Reject lines that are clearly procedural, not an institution name
   if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|pregao|concorr[êe]ncia|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o|crit[ée]rio|d\.o\.[ue]|habilitaç[ãa]o)\b/i.test(value)) return "";
+  // Reject platform/system names — these are not institutions
+  if (/\b(sistema\s+(?:bec|compras|licitac|eletr[oô]nic)|plataforma|comprasnet|compras\.?gov|licitações[\-\s]e|licitacoes[\-\s]e|bec[\s\-\/]?sp|bolsa\s+eletr[oô]nica|portal\s+de\s+compras|licitanet|bll\s+compras)\b/i.test(value)) return "";
   // Reject if it's just numbers/dates
   if (/^\d[\d.\/\-\s]+$/.test(value)) return "";
   // Reject state abbreviation + number (e.g. "PE 98972")

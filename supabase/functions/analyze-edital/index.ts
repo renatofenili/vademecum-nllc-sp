@@ -182,9 +182,7 @@ function extractModalidade(text: string): string {
   return "Não identificado";
 }
 
-function normalizeModalidade(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().toLowerCase();
-}
+// normalizeModalidade removed — extractModalidade now handles normalization inline
 
 function normalizeInstitutionCase(value: string): string {
   const compact = value.replace(/\s+/g, " ").trim();

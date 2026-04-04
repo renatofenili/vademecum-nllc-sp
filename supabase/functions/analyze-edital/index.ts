@@ -1749,13 +1749,13 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     const imp: string[] = [];
     imp.push("Este edital exige da empresa:");
     imp.push("• Documentação: todos os documentos de habilitação devem estar válidos e organizados antes da sessão.");
-    if (garantiaExecucao === "sim") imp.push("• Caixa: será necessário oferecer garantia contratual, o que compromete recursos financeiros.");
-    if (feat.hasPagamento) imp.push(`• Capital de giro: o pagamento será em ${feat.hasPagamento}. A empresa financiará a operação durante esse intervalo.`);
-    if (prazoEntregaVal) imp.push(`• Logística: entrega em ${prazoEntregaVal}. É preciso confirmar estoque, produção e transporte.`);
+    if (garantiaExecucao === "sim") imp.push("• Caixa: será necessário oferecer garantia contratual — planeje os recursos financeiros.");
+    if (feat.hasPagamento) imp.push(`• Capital de giro: o pagamento será em ${feat.hasPagamento}. Planeje o fluxo de caixa para esse intervalo.`);
+    if (prazoEntregaVal) imp.push(`• Logística: entrega em ${prazoEntregaVal}. Confirme estoque, produção e transporte.`);
     if (amostraStatus === "sim") imp.push("• Preparação técnica: amostra física deverá ser apresentada para avaliação.");
-    if (feat.hasVisitaTecnica) imp.push("• Mobilização: visita técnica exige deslocamento e custos associados.");
-    if (marcaModeloStatus === "sim") imp.push("• Comercial: definir marca e modelo que serão ofertados, com documentação comprobatória.");
-    if (feat.hasPenalidades) imp.push("• Risco de sanção: o edital prevê penalidades por descumprimento. Avalie a capacidade de execução integral.");
+    if (feat.hasVisitaTecnica) imp.push("• Mobilização: visita técnica prevista — considere deslocamento e planejamento.");
+    if (marcaModeloStatus === "sim") imp.push("• Comercial: defina marca e modelo que serão ofertados, com documentação comprobatória.");
+    if (feat.hasPenalidades) imp.push("• Penalidades: o edital prevê sanções contratuais. Confirme a capacidade de execução integral.");
     sections.push(`🏢 14. IMPACTO PRÁTICO PARA O LICITANTE\n\n${imp.join("\n")}`);
   }
 

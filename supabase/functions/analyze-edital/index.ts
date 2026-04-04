@@ -410,7 +410,7 @@ function buildObjetoLineWindows(raw: string): string[] {
       if (!shouldMergeObjetoLines(combined, lines[j])) break;
       combined = `${combined} ${lines[j]}`.replace(/\s+/g, " ").trim();
       windows.push(combined);
-      if (combined.length > 420) break;
+      if (combined.length > 600) break;
     }
   }
 

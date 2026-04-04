@@ -426,7 +426,9 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
                   <span className="text-xs text-muted-foreground">/10</span>
                 </div>
                 <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider ${scoreColor.text}`}>{scoreColor.label}</span>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${scoreColor.text}`}>
+                    {analysis.score_complexidade?.faixa || scoreColor.label}
+                  </span>
                   <span className="text-[10px] text-muted-foreground block">Complexidade</span>
                 </div>
               </div>

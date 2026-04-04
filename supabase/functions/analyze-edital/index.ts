@@ -1011,6 +1011,8 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
   }
 
   // Risco econômico-sancionatório acima do padrão (only high multa, NOT inidoneidade alone — it's in every edital)
+  const multaMatch = text.match(/multa\s+(?:de\s+)?((?:\d+[,.]?\d*)\s*%)/i);
+  const multaPercent = multaMatch ? parseFloat(multaMatch[1].replace(",", ".")) : 0;
   if (multaPercent >= 15) {
     addStrong(0.6, `Risco sancionatório elevado — multa de ${multaPercent}%`);
   } else if (multaPercent >= 10) {

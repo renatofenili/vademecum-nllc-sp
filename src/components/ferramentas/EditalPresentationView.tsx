@@ -20,29 +20,34 @@ interface Props {
   onNewAnalysis?: () => void;
 }
 /* ────────────────────────────────────────────
-   Bullet formatter – splits list-like text into
-   bullet items when it detects separators
+   Bullet formatter – normalizes inline markers
+   into real multi-line bullet text
    ──────────────────────────────────────────── */
-const bulletSeparators = /[;•–—]\s*|\n|(?:\d+\))\s*/;
-const renderWithBullets = (text: string) => {
-  if (!text) return null;
-  // Split on common list separators: semicolons, bullets, squares, newlines, numbered items
-  const parts = text
-    .split(/(?:\s*[□☐■◻◾▪▸►]\s*|\s*•\s*|\s*[;]\s*|\s*\n\s*|\s*–\s*|\s*—\s*|\s*\d+\)\s+)/)
-    .map(s => s.trim())
-    .filter(s => s.length > 2);
-  if (parts.length <= 1) return <span>{text}</span>;
-  return (
-    <ul className="space-y-1 mt-1">
-      {parts.map((item, i) => (
-        <li key={i} className="flex gap-2 items-start text-sm">
-          <span className="text-primary mt-1 shrink-0">•</span>
-          <span>{item.replace(/[.;,]$/, "")}</span>
-        </li>
-      ))}
-    </ul>
-  );
+const bulletLineStart = /^(?:•|✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)/;
+
+const formatBulletLines = (text: string, maxLines?: number) => {
+  if (!text) return "";
+
+  const normalized = text
+    .replace(/\s*([□☐■◻◾▪▸►●◦•])\s*/g, "\n• ")
+    .replace(/\s*;\s*/g, "\n• ")
+    .replace(/\s*[–—]\s+/g, "\n• ")
+    .replace(/\s*\d+[\)\.]\s+/g, "\n• ")
+    .replace(/\s*(✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)\s*/g, "\n$1 ")
+    .replace(/\s*\n+\s*/g, "\n")
+    .trim();
+
+  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length <= 1) return text;
+
+  const bulletLines = lines.map((line) => (bulletLineStart.test(line) ? line : `• ${line}`));
+  if (!maxLines || bulletLines.length <= maxLines) return bulletLines.join("\n");
+  return `${bulletLines.slice(0, maxLines).join("\n")}\n…`;
 };
+
+const renderWithBullets = (text: string, maxLines?: number) => (
+  <div className="whitespace-pre-line">{formatBulletLines(text, maxLines)}</div>
+);
 
 /* ────────────────────────────────────────────
    Section parser – extracts numbered sections
@@ -288,7 +293,9 @@ const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
 
 const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.ElementType }) => {
   const [expanded, setExpanded] = useState(false);
-  const preview = card.content.length > 120 ? card.content.slice(0, 120) + "…" : card.content;
+  const plainPreview = card.content.length > 120 ? card.content.slice(0, 120).replace(/\s+\S*$/, "") + "…" : card.content;
+  const bulletPreview = formatBulletLines(card.content, 3);
+  const preview = bulletPreview === card.content ? plainPreview : bulletPreview;
 
   return (
     <div
@@ -310,7 +317,7 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
         }
       </div>
       <div className="text-sm text-foreground/80 leading-relaxed">
-        {expanded ? renderWithBullets(card.content) : <span>{preview}</span>}
+        {expanded ? renderWithBullets(card.content) : renderWithBullets(preview)}
       </div>
     </div>
   );
@@ -327,7 +334,7 @@ const HeroField = ({ icon: Icon, label, value, onClick }: { icon: React.ElementT
       <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
       <div>
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">{label}</span>
-        <span className="text-sm font-medium text-foreground">{value}</span>
+        <div className="text-sm font-medium text-foreground">{renderWithBullets(value)}</div>
       </div>
     </button>
   );

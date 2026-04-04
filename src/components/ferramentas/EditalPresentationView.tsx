@@ -19,6 +19,27 @@ interface Props {
   onClose?: () => void;
   onNewAnalysis?: () => void;
 }
+/* ────────────────────────────────────────────
+   Bullet formatter – splits list-like text into
+   bullet items when it detects separators
+   ──────────────────────────────────────────── */
+const bulletSeparators = /[;•–—]\s*|\n|(?:\d+\))\s*/;
+const renderWithBullets = (text: string) => {
+  if (!text) return null;
+  // Split on common list separators: semicolons, bullets, newlines, numbered items
+  const parts = text.split(/(?:;\s*|\n|•\s*|–\s*|—\s*|\d+\)\s+)/).map(s => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return <span>{text}</span>;
+  return (
+    <ul className="space-y-1 mt-1">
+      {parts.map((item, i) => (
+        <li key={i} className="flex gap-2 items-start text-sm">
+          <span className="text-primary mt-1 shrink-0">•</span>
+          <span>{item.replace(/[.;,]$/, "")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 /* ────────────────────────────────────────────
    Section parser – extracts numbered sections
@@ -285,9 +306,9 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
           : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
         }
       </div>
-      <p className="text-sm text-foreground/80 leading-relaxed">
-        {expanded ? card.content : preview}
-      </p>
+      <div className="text-sm text-foreground/80 leading-relaxed">
+        {expanded ? renderWithBullets(card.content) : <span>{preview}</span>}
+      </div>
     </div>
   );
 };
@@ -734,9 +755,9 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">
                       {field.label}
                     </span>
-                    <span className={`text-sm font-medium text-foreground ${isLong ? "whitespace-pre-line" : ""}`}>
-                      {field.value}
-                    </span>
+                    <div className="text-sm font-medium text-foreground">
+                      {renderWithBullets(field.value || "")}
+                    </div>
                   </div>
                 </div>
               );

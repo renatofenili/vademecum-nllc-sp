@@ -1365,10 +1365,15 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto|do\s+equipamento)/i, /(?:marca|modelo|fabricante)\s+(?:deverá|deve|será)\s+(?:ser\s+)?(?:indicad|informad)/i],
     []
   );
-  const precoMaximoStatus = truthCheck(fullText,
-    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:máximo|de\s+referência)\s+(?:aceitável|admitido)/i, /não\s+(?:será|serão)\s+aceit\w+\s+(?:proposta|valor|preço)\s+(?:superior|acima)/i],
+  let precoMaximoStatus = truthCheck(fullText,
+    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:máximo|de\s+referência)\s+(?:aceitável|admitido)/i, /não\s+(?:será|serão)\s+aceit\w+\s+(?:proposta|valor|preço)\s+(?:superior|acima)/i,
+     /valor\s+(?:estimado|global|total|orçado|referência|orçament)/i, /preço\s+(?:estimado|de\s+referência|global)/i, /orçamento\s+(?:estimado|previsto|estimativo)/i],
     []
   );
+  // If valor_estimado was extracted, there IS a reference price
+  if (precoMaximoStatus === "nao_identificado" && valor) {
+    precoMaximoStatus = "sim";
+  }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;
   const prazoEntregaVal = feat.prazoEntrega || null;
 
@@ -1527,7 +1532,8 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (feat.hasLC123 || feat.beneficioMEEPP) disp.push("• Tratamento diferenciado para ME/EPP conforme LC 123/2006.");
     if (feat.hasNegociacao) disp.push("• O edital prevê negociação após a fase de lances.");
     if (feat.hasDesempate) disp.push("• Há regras de desempate previstas.");
-    if (precoMaximoStatus === "sim") disp.push("• Há preço máximo de referência. Propostas acima serão desclassificadas.");
+    if (precoMaximoStatus === "sim" && valor) disp.push(`• Preço máximo/estimado de referência: ${valor}. Propostas acima serão desclassificadas.`);
+    else if (precoMaximoStatus === "sim") disp.push("• Há preço máximo de referência. Propostas acima serão desclassificadas.");
     else if (precoMaximoStatus === "nao_identificado") disp.push("• Preço máximo: não identificado de forma expressa no edital.");
     sections.push(`⚔️ 6. COMO A DISPUTA FUNCIONA\n\n${disp.join("\n")}`);
   }

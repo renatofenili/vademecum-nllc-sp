@@ -418,13 +418,20 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
 
           {/* ━━━━ 1. HERO EXECUTIVO ━━━━ */}
           <section>
+            {/* Object title – prominent */}
+            {analysis.objeto && analysis.objeto !== "Não identificado no edital" && (
+              <h1 className="text-xl md:text-2xl font-extrabold text-foreground tracking-tight leading-snug mb-4">
+                {analysis.objeto}
+              </h1>
+            )}
+
             <div className="flex items-start justify-between gap-6 flex-wrap">
               <div className="space-y-1">
-                <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                <p className="text-lg font-bold text-foreground tracking-tight">
                   {analysis.numero_edital || "Edital"}
-                </h1>
+                </p>
                 {analysis.orgao && analysis.orgao !== "Não identificado no edital" && (
-                  <p className="text-base text-muted-foreground">{analysis.orgao}</p>
+                  <p className="text-sm text-muted-foreground">{analysis.orgao}</p>
                 )}
               </div>
 

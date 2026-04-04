@@ -267,28 +267,28 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
   const preview = card.content.length > 120 ? card.content.slice(0, 120) + "…" : card.content;
 
   return (
-    <Card
-      className="border-border/60 cursor-pointer transition-all hover:shadow-md hover:border-primary/30"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => setExpanded(!expanded)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(!expanded); } }}
+      className="rounded-xl border border-border/60 bg-card p-5 cursor-pointer transition-all hover:shadow-md hover:border-primary/30 select-none"
     >
-      <CardContent className="p-5">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-            <Icon className="h-4.5 w-4.5 text-primary" />
-          </div>
-          <h3 className="text-sm font-bold text-foreground flex-1">{card.title}</h3>
-          <SeverityDot severity={card.severity} />
-          {card.content.length > 120 && (
-            expanded
-              ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-              : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-          )}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+          <Icon className="h-4.5 w-4.5 text-primary" />
         </div>
-        <p className="text-sm text-foreground/80 leading-relaxed">
-          {expanded ? card.content : preview}
-        </p>
-      </CardContent>
-    </Card>
+        <h3 className="text-sm font-bold text-foreground flex-1">{card.title}</h3>
+        <SeverityDot severity={card.severity} />
+        {expanded
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+        }
+      </div>
+      <p className="text-sm text-foreground/80 leading-relaxed">
+        {expanded ? card.content : preview}
+      </p>
+    </div>
   );
 };
 

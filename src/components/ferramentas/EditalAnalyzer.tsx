@@ -107,7 +107,7 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
 
   if (result) {
     return (
-      <EditalAnalysisResult
+      <EditalPresentationView
         analysis={result}
         fileName={file?.name || ""}
         onBack={() => setResult(null)}

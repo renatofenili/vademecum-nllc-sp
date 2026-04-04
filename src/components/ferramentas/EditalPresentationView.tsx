@@ -216,7 +216,7 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
     {
       title: "O que pesa no custo",
       icon: Wallet,
-      content: truncBody(custo),
+      content: cleanBody(custo),
       severity: custo.toLowerCase().includes("garantia") || custo.toLowerCase().includes("caução") ? "high" : "medium",
     },
     {

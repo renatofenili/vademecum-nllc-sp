@@ -303,7 +303,7 @@ function extractOrgao(text: string): string {
   }
 
   const contextualPatterns = [
-    /(?:^|\n)\s*((?:minist[eé]rio|prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio)[^\n]{0,220})/gim,
+    /(?:^|\n)\s*((?:minist[eé]rio|prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|banco\s+central(?:\s+do\s+brasil)?)[^\n]{0,220})/gim,
   ];
 
   for (const pattern of contextualPatterns) {

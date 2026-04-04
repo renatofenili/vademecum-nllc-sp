@@ -431,11 +431,10 @@ function stripObjetoTail(text: string): string {
   let result = text
     // Truncate at next numbered clause (e.g. "1.2.", "1.3.", "2.1.")
     .replace(/\s+\d+\.\d+[\.\)]\s[\s\S]*$/, "")
-    .replace(/\s*,?\s*conforme\s+(?:as?\s+)?(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?|quantitativos?)\s+(?:técnicas?\s+)?(?:constantes?\s+)?(?:do|da|de)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|edital|instrumento\s+convocatório|projeto\s+básico|estudo\s+técnico\s+preliminar|planilha|memorial)\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:na\s+forma|nos\s+termos|de\s+acordo)\s+(?:do|da|dos|das)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|edital|instrumento\s+convocatório|projeto\s+básico)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*conforme\s+(?:as?\s+)?(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?|quantitativos?)\s+(?:técnicas?\s+)?(?:constantes?\s+)?(?:do|da|de)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|instrumento\s+convocatório|projeto\s+básico|estudo\s+técnico\s+preliminar|planilha|memorial)\b[\s\S]*$/i, "")
+    .replace(/\s*,?\s*(?:na\s+forma|nos\s+termos|de\s+acordo)\s+(?:do|da|dos|das)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|instrumento\s+convocatório|projeto\s+básico)\b[\s\S]*$/i, "")
     .replace(/\s*,?\s*que\s+integra\s+(?:este|o)?\s*edital\b[\s\S]*$/i, "")
     .replace(/\s*,?\s*(?:observadas?|obedecidas?)\s+as?\s+(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?)\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*anexo(?:s)?\s*[a-z0-9ivxlcdm\-]+\.?$/i, "")
     .trim();
   return result;
 }

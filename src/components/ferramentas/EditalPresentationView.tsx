@@ -24,25 +24,44 @@ interface Props {
    into real multi-line bullet text
    ──────────────────────────────────────────── */
 const emojiPattern = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}]/u;
-const bulletLineStart = /^(?:•|[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])/u;
+const listMarkerPattern = /[□☐☑✅✔✓■◻◾▪▸►●◦•]/u;
+const listMarkerGlobal = /\s*([□☐☑✅✔✓■◻◾▪▸►●◦•])\s*/gu;
+const bulletLineStart = /^(?:[□☐☑✅✔✓■◻◾▪▸►●◦•]|[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])/u;
+const checklistVerbPattern = /\b(?:verificar|conferir|separar|analisar|preparar|calcular|providenciar|checar|reunir|confirmar|organizar|cadastrar|credenciar|revisar|validar|estar\s+preparado)\b/gi;
 
 const formatBulletLines = (text: string, maxLines?: number) => {
   if (!text) return "";
 
-  const normalized = text
-    .replace(/\s*([□☐■◻◾▪▸►●◦•])\s*/g, "\n• ")
-    .replace(/\s*;\s*/g, "\n• ")
-    .replace(/\s*[–—]\s+/g, "\n• ")
-    .replace(/\s*\d+[\)\.]\s+/g, "\n• ")
-    .replace(/\s*([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])\s*/gu, "\n$1 ")
-    .replace(/\s*:\s+(?=[A-Z])/g, ":\n• ")
+  const looksLikeChecklist = listMarkerPattern.test(text) || (text.match(checklistVerbPattern)?.length ?? 0) >= 2;
+  const linePrefix = looksLikeChecklist ? "□ " : "• ";
+
+  let normalized = text
+    .replace(listMarkerGlobal, `\n${linePrefix}`)
+    .replace(/\s*;\s*/g, `\n${linePrefix}`)
+    .replace(/\s*[–—]\s+/g, `\n${linePrefix}`)
+    .replace(/\s*\d+[\)\.]\s+/g, `\n${linePrefix}`)
+    .replace(/\s*([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])\s*/gu, "\n$1 ");
+
+  if (looksLikeChecklist) {
+    normalized = normalized.replace(
+      /\.\s+(?=(?:verificar|conferir|separar|analisar|preparar|calcular|providenciar|checar|reunir|confirmar|organizar|cadastrar|credenciar|revisar|validar|estar\s+preparado)\b)/gi,
+      `.\n${linePrefix}`
+    );
+  }
+
+  normalized = normalized
+    .replace(/\s*:\s+(?=[A-Z])/g, `:\n${linePrefix}`)
     .replace(/\s*\n+\s*/g, "\n")
     .trim();
 
   const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
   if (lines.length <= 1) return text;
 
-  const bulletLines = lines.map((line) => (bulletLineStart.test(line) ? line : `• ${line}`));
+  const bulletLines = lines.map((line) => {
+    if (!bulletLineStart.test(line)) return `${linePrefix}${line}`;
+    return looksLikeChecklist ? line.replace(/^(?:☐|☑|✅|✔|✓|■|◻|◾|▪|▸|►|●|◦|•)\s*/u, "□ ") : line;
+  });
+
   if (!maxLines || bulletLines.length <= maxLines) return bulletLines.join("\n");
   return `${bulletLines.slice(0, maxLines).join("\n")}\n…`;
 };

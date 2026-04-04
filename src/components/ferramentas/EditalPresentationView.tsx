@@ -262,6 +262,36 @@ const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
   return <span className={`inline-block h-2 w-2 rounded-full ${cls} shrink-0`} />;
 };
 
+const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.ElementType }) => {
+  const [expanded, setExpanded] = useState(false);
+  const preview = card.content.length > 120 ? card.content.slice(0, 120) + "…" : card.content;
+
+  return (
+    <Card
+      className="border-border/60 cursor-pointer transition-all hover:shadow-md hover:border-primary/30"
+      onClick={() => setExpanded(!expanded)}
+    >
+      <CardContent className="p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+            <Icon className="h-4.5 w-4.5 text-primary" />
+          </div>
+          <h3 className="text-sm font-bold text-foreground flex-1">{card.title}</h3>
+          <SeverityDot severity={card.severity} />
+          {card.content.length > 120 && (
+            expanded
+              ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+              : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+        </div>
+        <p className="text-sm text-foreground/80 leading-relaxed">
+          {expanded ? card.content : preview}
+        </p>
+      </CardContent>
+    </Card>
+  );
+};
+
 const HeroField = ({ icon: Icon, label, value, onClick }: { icon: React.ElementType; label: string; value: string | undefined; onClick?: () => void }) => {
   if (!value || value === "Não identificado no edital") return null;
   return (

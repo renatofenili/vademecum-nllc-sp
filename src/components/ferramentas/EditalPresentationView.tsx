@@ -222,7 +222,7 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
     {
       title: "O que preciso fazer agora",
       icon: Zap,
-      content: truncBody(agora),
+      content: cleanBody(agora),
       severity: "medium",
     },
   ];

@@ -1628,110 +1628,99 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (prazos.length >= 3) sections.push(`📅 11. PRAZOS CRÍTICOS\n\n${prazos.join("\n")}`);
   }
 
-  // ── 12. RISCOS DO EDITAL ──
+  // ── 12. PONTOS DE PREPARAÇÃO ──
   {
-    const riscos: string[] = [];
+    const prep: string[] = [];
     // Habilitação
-    riscos.push("📂 Risco de habilitação");
-    riscos.push("Fato: o edital exige documentação completa de habilitação jurídica, fiscal, técnica e econômico-financeira.");
-    riscos.push("Efeito: a falta de qualquer documento resulta em inabilitação imediata, independentemente do preço ofertado.");
-    riscos.push("Atenção: certidões vencidas, balanço patrimonial incompleto ou atestado técnico insuficiente são as causas mais comuns de eliminação.");
+    prep.push("📂 Habilitação");
+    prep.push("O edital exige documentação completa de habilitação jurídica, fiscal, técnica e econômico-financeira.");
+    prep.push("Dica: organize todos os documentos com antecedência e confira a validade das certidões, balanço patrimonial e atestados técnicos.");
 
     // Técnico
     if (amostraStatus === "sim" || feat.hasVisitaTecnica || feat.hasProvaConceito || catalogoStatus === "sim") {
-      riscos.push("");
-      riscos.push("🔬 Risco técnico");
+      prep.push("");
+      prep.push("🔬 Preparação técnica");
       if (amostraStatus === "sim") {
-        riscos.push("Fato: o edital exige apresentação de amostra.");
-        riscos.push("Efeito: se a amostra for reprovada ou não apresentada no prazo, a empresa é desclassificada.");
-        riscos.push("Atenção: prepare a amostra com antecedência e confira as especificações.");
+        prep.push("O edital prevê apresentação de amostra.");
+        prep.push("Dica: prepare a amostra com antecedência conforme as especificações do Termo de Referência.");
       }
       if (feat.hasVisitaTecnica) {
-        riscos.push("Fato: visita técnica prevista no edital.");
-        riscos.push("Efeito: a não realização pode impedir a participação.");
-        riscos.push("Atenção: agende com antecedência junto ao órgão.");
+        prep.push("O edital prevê visita técnica.");
+        prep.push("Dica: agende com antecedência junto ao órgão.");
       }
       if (feat.hasProvaConceito) {
-        riscos.push("Fato: o edital exige prova de conceito.");
-        riscos.push("Efeito: demanda preparação técnica específica. A reprovação elimina.");
+        prep.push("O edital prevê prova de conceito, o que demanda preparação técnica específica.");
       }
       if (catalogoStatus === "sim") {
-        riscos.push("Fato: exigência de catálogo, ficha técnica ou laudo.");
-        riscos.push("Efeito: a não apresentação pode levar à desclassificação.");
+        prep.push("O edital exige catálogo, ficha técnica ou laudo.");
+        prep.push("Dica: separe a documentação técnica dos produtos que serão ofertados.");
       }
     }
 
     // Comercial
-    riscos.push("");
-    riscos.push("💵 Risco comercial");
+    prep.push("");
+    prep.push("💵 Formação de preço");
     if (precoMaximoStatus === "sim") {
-      riscos.push("Fato: há preço máximo de referência.");
-      riscos.push("Efeito: proposta acima do teto será desclassificada.");
+      prep.push("Há preço máximo de referência. A proposta deve respeitar esse teto.");
     }
-    riscos.push("Fato: a proposta deve contemplar todos os custos (frete, impostos, encargos).");
-    riscos.push("Efeito: erro de cálculo pode gerar prejuízo na execução ou desclassificação por inexequibilidade.");
+    prep.push("A proposta deve contemplar todos os custos (frete, impostos, encargos). Faça a composição de preços com cuidado.");
 
     // Operacional
     if (prazoEntregaVal || feat.hasPrazoExecucao || feat.localEntrega) {
-      riscos.push("");
-      riscos.push("🏗️ Risco operacional");
+      prep.push("");
+      prep.push("🏗️ Logística e execução");
       if (prazoEntregaVal) {
-        riscos.push(`Fato: o prazo de entrega é de ${prazoEntregaVal}.`);
-        riscos.push("Efeito: descumprimento pode gerar multa e sanção.");
-        riscos.push("Atenção: avalie se a cadeia de suprimentos permite cumprir.");
+        prep.push(`O prazo de entrega previsto é de ${prazoEntregaVal}.`);
+        prep.push("Dica: confirme se a cadeia de suprimentos permite cumprir esse prazo.");
       }
       if (feat.hasPrazoExecucao) {
-        riscos.push(`Fato: o prazo de execução é de ${feat.hasPrazoExecucao}.`);
-        riscos.push("Efeito: o não cumprimento pode gerar multa e sanção.");
+        prep.push(`O prazo de execução previsto é de ${feat.hasPrazoExecucao}.`);
       }
       if (feat.localEntrega) {
-        riscos.push(`Fato: local de entrega/execução: ${feat.localEntrega}.`);
-        riscos.push("Atenção: considere custos logísticos adicionais.");
+        prep.push(`Local de entrega/execução: ${feat.localEntrega}.`);
+        prep.push("Dica: considere os custos logísticos na formação do preço.");
       }
     }
 
     // Financeiro
     if (garantiaExecucao === "sim" || feat.hasPagamento) {
-      riscos.push("");
-      riscos.push("💳 Risco financeiro");
+      prep.push("");
+      prep.push("💳 Planejamento financeiro");
       if (garantiaExecucao === "sim") {
-        riscos.push("Fato: o edital exige garantia contratual.");
-        riscos.push("Efeito: compromete recursos da empresa (até 5% do valor do contrato, em geral).");
+        prep.push("O edital exige garantia contratual (em geral até 5% do valor do contrato).");
+        prep.push("Dica: avalie as opções disponíveis (seguro-garantia, fiança bancária, caução).");
       }
       if (feat.hasPagamento) {
-        riscos.push(`Fato: o pagamento previsto é em ${feat.hasPagamento}.`);
-        riscos.push("Efeito: a empresa financiará a operação durante esse intervalo. Avalie o impacto no capital de giro.");
+        prep.push(`O pagamento previsto é em ${feat.hasPagamento}.`);
+        prep.push("Dica: planeje o capital de giro necessário para esse intervalo.");
       }
     }
 
     // Prazo
-    riscos.push("");
-    riscos.push("⏰ Risco de prazo");
-    riscos.push("Fato: prazos para envio de documentos, proposta readequada e assinatura são rígidos.");
-    riscos.push("Efeito: o descumprimento de prazo resulta em decadência do direito, desclassificação ou perda da adjudicação.");
+    prep.push("");
+    prep.push("⏰ Prazos");
+    prep.push("Os prazos para envio de documentos, proposta readequada e assinatura do contrato devem ser cumpridos rigorosamente.");
 
-    // Sancionatório
+    // Penalidades
     if (feat.hasPenalidades || feat.hasMulta) {
-      riscos.push("");
-      riscos.push("⚖️ Risco sancionatório");
+      prep.push("");
+      prep.push("⚖️ Penalidades contratuais");
       if (feat.hasMulta) {
-        riscos.push(`Fato: o edital prevê multa de ${feat.hasMulta}.`);
-        riscos.push("Efeito: impacto direto sobre o resultado da operação.");
+        prep.push(`O edital prevê multa de ${feat.hasMulta} por descumprimento contratual.`);
       }
-      riscos.push("Fato: descumprimento contratual pode resultar em multa, suspensão do direito de licitar ou declaração de inidoneidade.");
-      riscos.push("Atenção: avalie a capacidade de cumprir integralmente as obrigações antes de participar.");
+      prep.push("Dica: confirme a capacidade de cumprir integralmente as obrigações antes de apresentar proposta.");
     }
 
     // Execução
     if (srpStatus === "sim" || feat.isServicoContinuado || feat.hasSubcontratacao) {
-      riscos.push("");
-      riscos.push("📋 Risco de execução contratual");
-      if (srpStatus === "sim") riscos.push("Como é registro de preços, a empresa deve manter capacidade de fornecimento durante toda a vigência da ata, mesmo sem certeza de contratação.");
-      if (feat.isServicoContinuado) riscos.push("Serviço continuado exige estrutura permanente para execução.");
-      if (feat.hasSubcontratacao) riscos.push("O edital prevê subcontratação, o que adiciona complexidade de gestão.");
+      prep.push("");
+      prep.push("📋 Execução contratual");
+      if (srpStatus === "sim") prep.push("Como é registro de preços, mantenha capacidade de fornecimento durante toda a vigência da ata.");
+      if (feat.isServicoContinuado) prep.push("Serviço continuado requer estrutura permanente para execução.");
+      if (feat.hasSubcontratacao) prep.push("O edital prevê possibilidade de subcontratação.");
     }
 
-    sections.push(`⚠️ 12. RISCOS DO EDITAL\n\n${riscos.join("\n")}`);
+    sections.push(`📋 12. PONTOS DE PREPARAÇÃO\n\n${prep.join("\n")}`);
   }
 
   // ── 13. PONTOS DE ATENÇÃO ──

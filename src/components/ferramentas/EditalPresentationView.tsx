@@ -262,16 +262,20 @@ const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
   return <span className={`inline-block h-2 w-2 rounded-full ${cls} shrink-0`} />;
 };
 
-const HeroField = ({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | undefined }) => {
+const HeroField = ({ icon: Icon, label, value, onClick }: { icon: React.ElementType; label: string; value: string | undefined; onClick?: () => void }) => {
   if (!value || value === "Não identificado no edital") return null;
   return (
-    <div className="flex items-start gap-2.5">
-      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-start gap-2.5 text-left rounded-lg p-2 -m-2 transition-colors hover:bg-accent/50 cursor-pointer group"
+    >
+      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
       <div>
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">{label}</span>
         <span className="text-sm font-medium text-foreground">{value}</span>
       </div>
-    </div>
+    </button>
   );
 };
 

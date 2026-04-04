@@ -127,47 +127,59 @@ function extractUnidadeDisputa(text: string): string {
 
 // ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
-  return firstMatch(text, [
-    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:\w+\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
+  const header = text.slice(0, 8000);
+
+  // Strategy 1: Labeled field ("Edital nº", "Pregão Eletrônico DEMAP nº")
+  const labeled = firstMatch(header, [
+    /(?:EDITAL|PREGÃO|PREGAO|CONCORRÊNCIA|CONCORRENCIA|TOMADA\s+DE\s+PREÇOS?|DISPENSA|INEXIGIBILIDADE|LEILÃO|CONVITE|DIÁLOGO\s+COMPETITIVO)\s*(?:ELETRÔNIC[OA]\s*)?(?:[A-Z][A-Za-z]*\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
     /(?:EDITAL)\s*(?:N[°ºo.]*\s*)?([\w\-]+\/\d{4})/i,
+  ]);
+  if (labeled) return labeled;
+
+  // Strategy 2: Process number
+  const processo = firstMatch(header, [
     /(?:PROCESSO\s+(?:LICITATÓRIO\s+)?(?:N[°ºo.]*\s*)?)([\d.\-\/]+\d+)/i,
-  ]) || "Não identificado";
+  ]);
+  if (processo) return processo;
+
+  // Strategy 3: Any "nº XX/YYYY" pattern near relevant keywords
+  const generic = firstMatch(header, [
+    /(?:n[°ºo.]+)\s*([\d]+[\d.\-\/]*\/\d{4})/i,
+  ]);
+  if (generic) return generic;
+
+  return "Não identificado";
 }
 
 function extractModalidade(text: string): string {
-  // Look for explicit declarations first (e.g. "Modalidade: Concorrência Eletrônica")
-  const explicit = firstMatch(text, [
-    /modalidade\s*[:.\-–—]\s*((?:concorrência|pregão|tomada\s+de\s+preços?|convite|leilão|diálogo\s+competitivo|dispensa|inexigibilidade)\s*(?:eletrônic[oa]|presencial|públic[oa]|internacional|de\s+licitação)?)/i,
-  ]);
-  if (explicit) return normalizeModalidade(explicit);
+  const header = text.slice(0, 6000);
 
-  // Then look in the first 3000 chars (header/preâmbulo) for the declared modalidade
-  const header = text.slice(0, 3000);
-  const headerMatch = firstMatch(header, [
-    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
-    /(pregão\s+eletrônico)/i,
-    /(pregão\s+presencial)/i,
-    /(diálogo\s+competitivo)/i,
-    /(tomada\s+de\s+preços?)/i,
-    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
-    /(inexigibilidade)/i,
-    /(leilão)/i,
-    /(convite)/i,
+  // Strategy 1: Labeled field ("Modalidade: ...")
+  const labeled = firstMatch(header, [
+    /modalidade\s*[:.\-–—]\s*([^\n]{5,80})/i,
   ]);
-  if (headerMatch) return normalizeModalidade(headerMatch);
+  if (labeled) {
+    const cleaned = labeled.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
+    if (cleaned.length >= 5) return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+  }
 
-  // Fallback: search full text
-  return normalizeModalidade(firstMatch(text, [
-    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
-    /(pregão\s+eletrônico)/i,
-    /(pregão\s+presencial)/i,
-    /(diálogo\s+competitivo)/i,
-    /(tomada\s+de\s+preços?)/i,
-    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
-    /(inexigibilidade)/i,
-    /(leilão)/i,
-    /(convite)/i,
-  ]) || "Não identificado");
+  // Strategy 2: Structural patterns in the text — extract the actual words
+  const structuralPatterns = [
+    /((?:concorrência|pregão|pregao|tomada\s+de\s+preços?|dispensa|inexigibilidade|leilão|leilao|convite|diálogo\s+competitivo)\s*(?:eletrônic[oa]|eletronico|presencial|públic[oa]|internacional|de\s+licitação)?)/gi,
+  ];
+
+  // Scan header first, then full text
+  for (const source of [header, text]) {
+    for (const pattern of structuralPatterns) {
+      for (const match of source.matchAll(pattern)) {
+        const raw = match[1].replace(/\s+/g, " ").trim();
+        if (raw.length >= 5) return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+      }
+    }
+    if (source === header) continue;
+  }
+
+  return "Não identificado";
 }
 
 function normalizeModalidade(raw: string): string {

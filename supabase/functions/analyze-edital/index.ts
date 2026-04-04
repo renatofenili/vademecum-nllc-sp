@@ -127,52 +127,62 @@ function extractUnidadeDisputa(text: string): string {
 
 // ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
-  return firstMatch(text, [
-    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:\w+\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
+  const header = text.slice(0, 8000);
+
+  // Strategy 1: Labeled field ("Edital nº", "Pregão Eletrônico DEMAP nº")
+  const labeled = firstMatch(header, [
+    /(?:EDITAL|PREGÃO|PREGAO|CONCORRÊNCIA|CONCORRENCIA|TOMADA\s+DE\s+PREÇOS?|DISPENSA|INEXIGIBILIDADE|LEILÃO|CONVITE|DIÁLOGO\s+COMPETITIVO)\s*(?:ELETRÔNIC[OA]\s*)?(?:[A-Z][A-Za-z]*\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
     /(?:EDITAL)\s*(?:N[°ºo.]*\s*)?([\w\-]+\/\d{4})/i,
+  ]);
+  if (labeled) return labeled;
+
+  // Strategy 2: Process number
+  const processo = firstMatch(header, [
     /(?:PROCESSO\s+(?:LICITATÓRIO\s+)?(?:N[°ºo.]*\s*)?)([\d.\-\/]+\d+)/i,
-  ]) || "Não identificado";
+  ]);
+  if (processo) return processo;
+
+  // Strategy 3: Any "nº XX/YYYY" pattern near relevant keywords
+  const generic = firstMatch(header, [
+    /(?:n[°ºo.]+)\s*([\d]+[\d.\-\/]*\/\d{4})/i,
+  ]);
+  if (generic) return generic;
+
+  return "Não identificado";
 }
 
 function extractModalidade(text: string): string {
-  // Look for explicit declarations first (e.g. "Modalidade: Concorrência Eletrônica")
-  const explicit = firstMatch(text, [
-    /modalidade\s*[:.\-–—]\s*((?:concorrência|pregão|tomada\s+de\s+preços?|convite|leilão|diálogo\s+competitivo|dispensa|inexigibilidade)\s*(?:eletrônic[oa]|presencial|públic[oa]|internacional|de\s+licitação)?)/i,
-  ]);
-  if (explicit) return normalizeModalidade(explicit);
+  const header = text.slice(0, 6000);
 
-  // Then look in the first 3000 chars (header/preâmbulo) for the declared modalidade
-  const header = text.slice(0, 3000);
-  const headerMatch = firstMatch(header, [
-    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
-    /(pregão\s+eletrônico)/i,
-    /(pregão\s+presencial)/i,
-    /(diálogo\s+competitivo)/i,
-    /(tomada\s+de\s+preços?)/i,
-    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
-    /(inexigibilidade)/i,
-    /(leilão)/i,
-    /(convite)/i,
+  // Strategy 1: Labeled field ("Modalidade: ...")
+  const labeled = firstMatch(header, [
+    /modalidade\s*[:.\-–—]\s*([^\n]{5,80})/i,
   ]);
-  if (headerMatch) return normalizeModalidade(headerMatch);
+  if (labeled) {
+    const cleaned = labeled.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
+    if (cleaned.length >= 5) return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+  }
 
-  // Fallback: search full text
-  return normalizeModalidade(firstMatch(text, [
-    /(concorrência\s+(?:eletrônica|pública|internacional))/i,
-    /(pregão\s+eletrônico)/i,
-    /(pregão\s+presencial)/i,
-    /(diálogo\s+competitivo)/i,
-    /(tomada\s+de\s+preços?)/i,
-    /(dispensa\s+(?:de\s+licitação|eletrônica))/i,
-    /(inexigibilidade)/i,
-    /(leilão)/i,
-    /(convite)/i,
-  ]) || "Não identificado");
+  // Strategy 2: Structural patterns in the text — extract the actual words
+  const structuralPatterns = [
+    /((?:concorrência|pregão|pregao|tomada\s+de\s+preços?|dispensa|inexigibilidade|leilão|leilao|convite|diálogo\s+competitivo)\s*(?:eletrônic[oa]|eletronico|presencial|públic[oa]|internacional|de\s+licitação)?)/gi,
+  ];
+
+  // Scan header first, then full text
+  for (const source of [header, text]) {
+    for (const pattern of structuralPatterns) {
+      for (const match of source.matchAll(pattern)) {
+        const raw = match[1].replace(/\s+/g, " ").trim();
+        if (raw.length >= 5) return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+      }
+    }
+    if (source === header) continue;
+  }
+
+  return "Não identificado";
 }
 
-function normalizeModalidade(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().toLowerCase();
-}
+// normalizeModalidade removed — extractModalidade now handles normalization inline
 
 function normalizeInstitutionCase(value: string): string {
   const compact = value.replace(/\s+/g, " ").trim();
@@ -836,45 +846,101 @@ function extractCriterio(text: string): string {
 }
 
 function extractDataSessao(text: string): string {
-  const match = firstMatch(text, [
-    /(?:sessão\s+pública|abertura\s+d[aoe]s?\s+propostas?|data\s+d[aoe]\s+sessão|abertura\s+d[ao]\s+certame)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})/i,
-    /(?:sessão\s+pública|abertura)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})/i,
-  ], 0);
+  // Strategy 1: Labeled fields
+  const labeledPatterns = [
+    /(?:data\s+(?:e\s+hor[áa]rio?\s+)?(?:da\s+)?sessão\s+pública|data\s+(?:e\s+hor[áa]rio?\s+)?(?:de\s+)?abertura|sessão\s+pública|abertura\s+d[aoe]s?\s+propostas?|abertura\s+d[ao]\s+certame|data\s+d[aoe]\s+sessão|data\s+d[aoe]\s+certame|início\s+da\s+sessão)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
+  ];
 
-  if (match) {
-    // Clean and return the full match context
-    const dateMatch = match.match(/(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/i);
-    if (dateMatch) {
-      const date = dateMatch[1].replace(/\s/g, '');
-      const time = dateMatch[2]?.replace(/\s/g, '') || '';
-      return time ? `${date} às ${time}` : date;
+  for (const pattern of labeledPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const date = match[1]?.replace(/\s/g, '');
+      const time = match[2]?.replace(/\s/g, '') || '';
+      if (date) return time ? `${date} às ${time}` : date;
     }
   }
+
+  // Strategy 2: Date near session keywords
+  const contextPatterns = [
+    /(?:sessão|abertura|certame|disputa)\s+[^.]{0,80}?(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
+  ];
+
+  for (const pattern of contextPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const date = match[1]?.replace(/\s/g, '');
+      const time = match[2]?.replace(/\s/g, '') || '';
+      if (date) return time ? `${date} às ${time}` : date;
+    }
+  }
+
   return "Não identificado";
 }
 
 function extractSistema(text: string): string {
-  // Priority 1: Portal de Compras do Governo Federal / gov.br/compras / compras.gov.br / comprasnet
-  if (/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i.test(text)) {
-    return "Portal de Compras do Governo Federal (gov.br/compras)";
+  const candidates: Array<{ value: string; score: number }> = [];
+
+  const addCandidate = (value: string, score: number) => {
+    const cleaned = value.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
+    if (cleaned.length >= 3 && cleaned.length <= 120) {
+      candidates.push({ value: cleaned, score });
+    }
+  };
+
+  // Strategy 1: Labeled fields ("Plataforma:", "Sistema eletrônico:", "Endereço eletrônico:", "Sítio:")
+  const labelPatterns = [
+    /(?:plataforma|sistema\s+eletrônico|sistema\s+eletronico|endereço\s+eletrônico|endereco\s+eletronico|sítio|sitio|site|portal)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
+  ];
+  for (const pattern of labelPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const raw = match[1].trim();
+      // Reject if it's just a generic URL or email
+      if (/^https?:\/\//i.test(raw) && raw.length < 40) continue;
+      addCandidate(raw, 30);
+    }
   }
 
-  // Priority 2: Other specific platforms
-  if (/bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras/i.test(text)) return "BEC/SP - Bolsa Eletrônica de Compras";
-  if (/licitanet/i.test(text)) return "Licitanet";
-  if (/bll\s+compras|bllcompras/i.test(text)) return "BLL Compras";
+  // Strategy 2: Known platform references found IN THE TEXT
+  // Extract the actual text around these references rather than returning hardcoded strings
+  const platformPatterns: Array<[RegExp, number]> = [
+    [/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i, 25],
+    [/(?:licitações[\-\s]e|licitacoes[\-\s]e|www\.licitacoes-e\.com)/i, 22],
+    [/(?:bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras)/i, 22],
+    [/(?:licitanet)/i, 20],
+    [/(?:bll\s+compras|bllcompras)/i, 20],
+    [/(?:portal\s+de\s+compras)/i, 18],
+    [/(?:pregão?\s+eletrônico|pregao\s+eletronico)\s+(?:será|sera)\s+realizad[oa]\s+(?:por\s+meio\s+d[ao]|n[ao]|atrav[ée]s\s+d[ao])\s+([^\n,.;]{5,120})/i, 28],
+  ];
 
-  // Priority 3: Licitações-e — must be an explicit reference to the platform, NOT just the word "licitação/licitações" with "-e" suffix
-  if (/(?:plataforma|sistema|portal|site|sítio|endereço)\s+[^.]{0,40}licitações[\-\s]?e/i.test(text)
-    || /licitações[\-\s]e\s+(?:do\s+)?(?:banco\s+do\s+brasil|bb)/i.test(text)
-    || /www\.licitacoes-e\.com/i.test(text)) {
-    return "Licitações-e (Banco do Brasil)";
+  for (const [pattern, boost] of platformPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      // Extract surrounding context to get the full platform name
+      const idx = match.index ?? 0;
+      const contextStart = Math.max(0, idx - 50);
+      const contextEnd = Math.min(text.length, idx + match[0].length + 80);
+      const context = text.slice(contextStart, contextEnd);
+
+      // Try to find a clean platform name from the context
+      const platformName = match[1] || match[0];
+      addCandidate(platformName.replace(/\s+/g, " ").trim(), boost);
+    }
   }
 
-  // Priority 4: Generic portal de compras
-  if (/portal\s+de\s+compras/i.test(text)) return "Portal de Compras";
+  // Strategy 3: URLs as platform indicators (extract the URL itself)
+  const urlPatterns = [
+    /(?:plataforma|sistema|portal|realizar|acess)\w*[^.]{0,60}((?:www\.|https?:\/\/)[^\s,;)"']+)/gi,
+    /(?:propostas?\s+(?:deverão|devem|serão)\s+ser\s+(?:enviadas?|encaminhadas?|cadastradas?)\s+(?:por\s+meio|através)\s+d[ao]?\s+)([^\n,.;]{5,120})/gi,
+  ];
 
-  return "Não identificado no edital";
+  for (const pattern of urlPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      addCandidate(match[1], 15);
+    }
+  }
+
+  if (candidates.length === 0) return "Não identificado no edital";
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].value;
 }
 
 function extractHabilitacao(text: string): string {

@@ -1713,21 +1713,24 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
 
   // ── 16. CONCLUSÃO EXECUTIVA ──
   {
-    const score = dados._scoreComplexidade ? parseInt(dados._scoreComplexidade) : 0;
-    let nivel = "moderado";
-    if (score >= 7) nivel = "complexo";
-    else if (score <= 3) nivel = "simples";
+    const score = dados._scoreComplexidade ? parseFloat(dados._scoreComplexidade) : 0;
+    const faixa = dados._scoreFaixa || getFaixa(score);
+    const fraseFaixa = dados._scoreFraseFaixa || "";
+    const fatoresElevaram = dados._scoreFatoresElevaram || "";
+    const fatoresImpediram = dados._scoreFatoresImpediram || "";
 
-    let conclusao = `Este edital aparenta ser ${nivel} para participação.`;
-    const fatores: string[] = [];
-    if (garantiaExecucao === "sim") fatores.push("exigência de garantia contratual");
-    if (amostraStatus === "sim") fatores.push("exigência de amostra");
-    if (feat.hasVisitaTecnica) fatores.push("visita técnica obrigatória");
-    if (score >= 7) fatores.push("extensão e volume de exigências do documento");
-    if (garantiaExecucao === "sim" && feat.hasPagamento) fatores.push("impacto relevante no fluxo de caixa");
-    if (feat.hasPenalidades) fatores.push("regime sancionatório detalhado");
-    if (fatores.length > 0) conclusao += ` Os principais fatores que justificam essa avaliação são: ${fatores.join(", ")}.`;
-    else conclusao += " Não foram identificados fatores de complexidade elevada além das exigências habituais de habilitação e proposta.";
+    let conclusao = `Este edital aparenta ser **${faixa}** para participação (score ${score}/10).`;
+    if (fraseFaixa) conclusao += ` ${fraseFaixa}`;
+
+    if (fatoresElevaram) {
+      conclusao += `\n\n**Fatores que elevaram a nota:** ${fatoresElevaram}.`;
+    }
+    if (fatoresImpediram) {
+      conclusao += `\n\n**Fatores que impediram nota maior:** ${fatoresImpediram}.`;
+    }
+    if (!fatoresElevaram && !fatoresImpediram) {
+      conclusao += " Não foram identificados agravantes fortes além das exigências habituais.";
+    }
     sections.push(`🏁 16. CONCLUSÃO EXECUTIVA\n\n${conclusao}`);
   }
 

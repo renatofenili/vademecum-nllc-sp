@@ -20,29 +20,34 @@ interface Props {
   onNewAnalysis?: () => void;
 }
 /* ────────────────────────────────────────────
-   Bullet formatter – splits list-like text into
-   bullet items when it detects separators
+   Bullet formatter – normalizes inline markers
+   into real multi-line bullet text
    ──────────────────────────────────────────── */
-const bulletSeparators = /[;•–—]\s*|\n|(?:\d+\))\s*/;
-const renderWithBullets = (text: string) => {
-  if (!text) return null;
-  // Split on common list separators: semicolons, bullets, squares, newlines, numbered items
-  const parts = text
-    .split(/(?:\s*[□☐■◻◾▪▸►]\s*|\s*•\s*|\s*[;]\s*|\s*\n\s*|\s*–\s*|\s*—\s*|\s*\d+\)\s+)/)
-    .map(s => s.trim())
-    .filter(s => s.length > 2);
-  if (parts.length <= 1) return <span>{text}</span>;
-  return (
-    <ul className="space-y-1 mt-1">
-      {parts.map((item, i) => (
-        <li key={i} className="flex gap-2 items-start text-sm">
-          <span className="text-primary mt-1 shrink-0">•</span>
-          <span>{item.replace(/[.;,]$/, "")}</span>
-        </li>
-      ))}
-    </ul>
-  );
+const bulletLineStart = /^(?:•|✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)/;
+
+const formatBulletLines = (text: string, maxLines?: number) => {
+  if (!text) return "";
+
+  const normalized = text
+    .replace(/\s*([□☐■◻◾▪▸►●◦•])\s*/g, "\n• ")
+    .replace(/\s*;\s*/g, "\n• ")
+    .replace(/\s*[–—]\s+/g, "\n• ")
+    .replace(/\s*\d+[\)\.]\s+/g, "\n• ")
+    .replace(/\s*(✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)\s*/g, "\n$1 ")
+    .replace(/\s*\n+\s*/g, "\n")
+    .trim();
+
+  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length <= 1) return text;
+
+  const bulletLines = lines.map((line) => (bulletLineStart.test(line) ? line : `• ${line}`));
+  if (!maxLines || bulletLines.length <= maxLines) return bulletLines.join("\n");
+  return `${bulletLines.slice(0, maxLines).join("\n")}\n…`;
 };
+
+const renderWithBullets = (text: string, maxLines?: number) => (
+  <div className="whitespace-pre-line">{formatBulletLines(text, maxLines)}</div>
+);
 
 /* ────────────────────────────────────────────
    Section parser – extracts numbered sections

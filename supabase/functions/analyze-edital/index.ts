@@ -970,6 +970,7 @@ function detectFeatures(text: string) {
     isExclusivoMEEPP: /exclusiv[oa]\s*(para\s+)?(me|epp|microempresa|empresa\s+de\s+pequeno)/i.test(text),
     isSRP: /registro\s+de\s+preços|ata\s+de\s+registro/i.test(text),
     hasGarantia: /garantia\s+(de\s+)?(execução|contratual)|seguro[\-\s]garantia/i.test(text),
+    hasGarantiaProduto: /garantia\s+(?:do\s+)?(?:produto|equipamento|material|bem|mercadoria)/i.test(text),
     hasVisitaTecnica: /visita\s+técnica/i.test(text),
     hasAmostra: /amostra/i.test(text) && !/sem\s+amostra/i.test(text),
     hasConsorcio: /consórcio/i.test(text),
@@ -998,6 +999,51 @@ function detectFeatures(text: string) {
     localEntrega: firstMatch(text, [
       /(?:local\s+(?:de\s+)?(?:entrega|execução|prestação))\s*[:.]?\s*([^\n]{15,150})/i,
     ]),
+    // ── Extended detections ──
+    vedacaoConsorcio: /(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i.test(text),
+    hasSICAF: /sicaf/i.test(text),
+    hasCAUFESP: /caufesp/i.test(text),
+    hasCadastroPreObrigatorio: /cadastr(?:o|amento)\s+(?:prévio|obrigatório|no\s+(?:sicaf|portal|sistema))/i.test(text),
+    hasCredenciamento: /credenciamento/i.test(text),
+    hasMarcaModelo: /marca|modelo|fabricante/i.test(text) && /proposta|oferta|cotação/i.test(text),
+    hasCatalogo: /catálogo|ficha\s+técnica|laudo/i.test(text),
+    hasPrecoMaximo: /preço\s+(?:máximo|unitário\s+máximo|de\s+referência)|valor\s+(?:máximo|de\s+referência)/i.test(text),
+    validadeProposta: firstMatch(text, [
+      /validade\s+d[aoe]s?\s+propostas?\s*(?:será\s+de|de|:)\s*(\d+\s*(?:dias?|meses?))/i,
+      /propostas?\s+ter[ãa]o?\s+validade\s+(?:de\s+)?(\d+\s*(?:dias?|meses?))/i,
+    ]),
+    prazoAssinatura: firstMatch(text, [
+      /prazo\s+(?:para\s+)?(?:assinatura|celebração)\s+(?:do\s+)?contrato\s*(?:será\s+de|de|:)\s*(\d+\s*(?:dias?|meses?)(?:\s*(?:úteis|corridos))?)/i,
+      /assinar\s+(?:o\s+)?contrato\s+(?:em\s+até|no\s+prazo\s+de)\s+(\d+\s*(?:dias?|meses?))/i,
+    ]),
+    prazoEntrega: firstMatch(text, [
+      /prazo\s+(?:de\s+)?entrega\s*(?:será\s+de|de|:)\s*(\d+\s*(?:dias?|meses?)(?:\s*(?:úteis|corridos|consecutivos|após\s+[^\n]{0,60})?)?)/i,
+      /entreg(?:ar|ue)\s+(?:em\s+até|no\s+prazo\s+de)\s+(\d+\s*(?:dias?|meses?))/i,
+    ]),
+    prazoSubstituicao: firstMatch(text, [
+      /(?:substituição|troca|reposição)\s+(?:do[s]?\s+)?(?:produto|material|bem|equipamento|item)[^.]{0,80}(?:em\s+até|no\s+prazo\s+de)\s+(\d+\s*(?:dias?|meses?)(?:\s*(?:úteis|corridos))?)/i,
+    ]),
+    propostaReadequada: /proposta\s+(?:readequada|ajustada|adequada)|readequação\s+(?:da|de)\s+proposta/i.test(text),
+    hasModoDisputaAberto: /modo\s+de\s+disputa\s*[:.]?\s*aberto/i.test(text) || /disputa\s+abert/i.test(text),
+    hasModoDisputaFechado: /modo\s+de\s+disputa\s*[:.]?\s*fechado/i.test(text) || /disputa\s+fechad/i.test(text),
+    hasModoAbFechado: /aberto[\s\-]+e[\s\-]+fechado|aberto[\s\-]+fechado/i.test(text),
+    hasNegociacao: /negocia(?:ção|r)/i.test(text),
+    hasDesempate: /desempate|empate/i.test(text),
+    hasLC123: /lei\s+complementar\s+(?:n[°º.]?\s*)?123/i.test(text),
+    hasMulta: firstMatch(text, [
+      /multa\s+(?:de\s+)?(?:até\s+)?(\d+[,.]?\d*\s*%[^\n]{0,80})/i,
+    ]),
+    hasImpedimentoSancao: /impedid[oa]\s+de\s+licitar|declarad[oa]\s+inid[ôo]ne[oa]|suspens[ãa]o\s+(?:do\s+)?direito\s+de\s+licitar/i.test(text),
+    hasCotaReservada: /cota\s+reservada/i.test(text),
+    inicioPropostas: firstMatch(text, [
+      /(?:início|inicio|recebimento)\s+(?:d[ao]s?\s+)?(?:envio\s+(?:d[ao]s?\s+)?)?propostas?\s*[:.]?\s*(?:a\s+partir\s+(?:de|do\s+dia)\s+)?(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})/i,
+    ]),
+    prazoDocComplementar: firstMatch(text, [
+      /(?:document(?:o|os|ação)\s+complementar|habilitação\s+complementar)[^.]{0,80}(?:em\s+até|no\s+prazo\s+de)\s+(\d+\s*(?:dias?|horas?)(?:\s*(?:úteis|corridos))?)/i,
+    ]),
+    prazoRecurso: firstMatch(text, [
+      /prazo\s+(?:para\s+)?recurso\s*(?:será\s+de|de|:)\s*(\d+\s*(?:dias?|horas?)(?:\s*(?:úteis|corridos))?)/i,
+    ]),
   };
 }
 
@@ -1016,7 +1062,7 @@ function buildCriterionHint(criterio: string): string | null {
   return null;
 }
 
-// ── Resumo em Linguagem Simples (enxuto e ancorado no PDF) ──
+// ── Resumo em Linguagem Simples (análise holística em 16 seções) ──
 function gerarResumoSimples(dados: Record<string, string>, timeline: Record<string, string | null>): string {
   const fullText = dados._fullText || "";
   const feat = detectFeatures(fullText);
@@ -1031,36 +1077,149 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   const sistema = dados.sistema !== "Não identificado" ? dados.sistema : null;
   const criterioHint = criterio ? buildCriterionHint(criterio) : null;
 
+  // ── 1. VISÃO GERAL ──
   {
-    const linhas: string[] = [];
-    linhas.push(`• Órgão: ${orgao}`);
-    linhas.push(`• Modalidade: ${modalidade}`);
-    if (objeto) linhas.push(`• Objeto: ${objeto}`);
-    if (criterio) linhas.push(`• Critério de julgamento: ${criterio}`);
-    if (valor) linhas.push(`• Valor estimado: ${valor}`);
-
-    let intro = `${orgao} está promovendo ${modalidade.toLowerCase()}`;
-    if (objeto) intro += ` para ${lowercaseFirst(objeto)}`;
-    intro += ".";
-    if (criterio) intro += ` O julgamento será por ${criterio.toLowerCase()}.`;
-    if (criterioHint) intro += ` Em termos práticos, ${criterioHint}`;
-
-    sections.push(`📌 VISÃO GERAL\n\n${intro}\n\n${linhas.join("\n")}`);
+    let p = `${orgao} está promovendo ${modalidade.toLowerCase()}`;
+    if (objeto) p += ` para ${lowercaseFirst(objeto)}`;
+    p += ".";
+    if (criterio) p += ` O critério de julgamento é ${criterio.toLowerCase()}`;
+    if (criterioHint) p += ` — ou seja, ${criterioHint}`;
+    else if (criterio) p += ".";
+    if (feat.isSRP) p += " Trata-se de registro de preços, o que significa que a Administração não é obrigada a contratar imediatamente; ela registra os preços para contratações futuras conforme a necessidade.";
+    if (feat.isExclusivoMEEPP) p += " A participação é exclusiva para microempresas e empresas de pequeno porte.";
+    if (sistema) p += ` A disputa ocorre na plataforma ${sistema}.`;
+    if (sessao) p += ` A sessão pública está marcada para ${sessao}.`;
+    if (valor) p += ` O valor estimado é de ${valor}.`;
+    sections.push(`📌 1. VISÃO GERAL DO EDITAL\n\n${p}`);
   }
 
+  // ── 2. EM UMA FRASE ──
   {
-    const linhas: string[] = [];
-    if (sessao) linhas.push(`• Sessão pública: ${sessao}`);
-    if (sistema) linhas.push(`• Plataforma: ${sistema}`);
-    if (timeline.prazo_impugnacao) linhas.push(`• Prazo para impugnação: ${timeline.prazo_impugnacao}`);
-    if (timeline.prazo_esclarecimento) linhas.push(`• Prazo para esclarecimentos: ${timeline.prazo_esclarecimento}`);
-    if (timeline.data_publicacao) linhas.push(`• Data de publicação identificada: ${timeline.data_publicacao}`);
+    let frase = "Este edital trata ";
+    if (objeto) frase += `de ${lowercaseFirst(objeto)}`;
+    else frase += "de contratação pública";
+    frase += `, por ${modalidade.toLowerCase()}`;
+    if (criterio) frase += `, com julgamento por ${criterio.toLowerCase()}`;
+    frase += `, promovido por ${orgao}.`;
+    sections.push(`💬 2. EM UMA FRASE\n\n${frase}`);
+  }
 
-    if (linhas.length > 0) {
-      sections.push(`📅 PRAZOS E PARTICIPAÇÃO\n\n${linhas.join("\n")}`);
+  // ── 3. O QUE O LICITANTE PRECISA SABER IMEDIATAMENTE ──
+  {
+    const pontos: string[] = [];
+    if (feat.isExclusivoMEEPP) pontos.push("• Participação exclusiva para ME/EPP.");
+    else if (feat.beneficioMEEPP) pontos.push("• Há tratamento diferenciado para ME/EPP (LC 123), mas a participação não é exclusiva.");
+    else pontos.push("• Participação aberta a empresas de todos os portes, salvo impedimentos legais.");
+    if (feat.hasSICAF) pontos.push("• Exige cadastro no SICAF.");
+    if (feat.hasCAUFESP) pontos.push("• Exige cadastro no CAUFESP.");
+    if (feat.hasCadastroPreObrigatorio) pontos.push("• Há exigência de cadastramento prévio em sistema ou portal específico.");
+    if (feat.hasCredenciamento) pontos.push("• É necessário credenciamento na plataforma de disputa.");
+    if (sistema) pontos.push(`• A disputa acontece em: ${sistema}.`);
+    if (criterio) {
+      const unidade = /por\s+item/i.test(criterio) ? "por item" : /por\s+lote/i.test(criterio) ? "por lote" : /por\s+grupo/i.test(criterio) ? "por grupo" : /global/i.test(criterio) ? "global" : "";
+      if (unidade) pontos.push(`• Disputa ${unidade}.`);
+    }
+    if (feat.hasAmostra) pontos.push("• Há exigência de amostra — a empresa deve se preparar para apresentá-la no prazo indicado no edital.");
+    if (feat.hasCatalogo) pontos.push("• Há exigência de catálogo, ficha técnica ou laudo do produto.");
+    if (feat.hasMarcaModelo) pontos.push("• O edital faz referência a marca, modelo ou fabricante — confira se é indicativo ou obrigatório.");
+    if (feat.validadeProposta) pontos.push(`• Validade da proposta: ${feat.validadeProposta}.`);
+    if (feat.prazoEntrega) pontos.push(`• Prazo de entrega: ${feat.prazoEntrega}.`);
+    if (feat.hasGarantiaProduto) pontos.push("• Há exigência de garantia do produto.");
+    if (feat.hasGarantia) pontos.push("• Há exigência de garantia contratual (pode envolver seguro-garantia, fiança ou caução).");
+    if (feat.prazoAssinatura) pontos.push(`• Prazo para assinatura do contrato: ${feat.prazoAssinatura}.`);
+    if (feat.propostaReadequada) pontos.push("• Após a disputa, pode ser exigida proposta readequada com o lance vencedor.");
+    if (feat.vedacaoConsorcio) pontos.push("• Participação em consórcio é vedada.");
+    else if (feat.hasConsorcio) pontos.push("• O edital trata de participação em consórcio.");
+    if (feat.hasPrecoMaximo) pontos.push("• Há preço máximo ou valor de referência; propostas acima podem ser desclassificadas.");
+    if (feat.hasPenalidades) pontos.push("• O edital prevê sanções e penalidades (multa, impedimento, suspensão).");
+    if (pontos.length > 0) sections.push(`🚨 3. O QUE O LICITANTE PRECISA SABER IMEDIATAMENTE\n\n${pontos.join("\n")}`);
+  }
+
+  // ── 4. DIAGNÓSTICO EXECUTIVO ──
+  {
+    const diag: string[] = [];
+    const score = dados._scoreComplexidade ? parseInt(dados._scoreComplexidade) : 0;
+    if (score >= 7) diag.push("• Este edital apresenta complexidade elevada e exige análise detalhada antes de decidir participar.");
+    else if (score >= 4) diag.push("• Este edital apresenta complexidade moderada; vale a pena revisar os pontos de habilitação e execução com atenção.");
+    else diag.push("• Este edital aparenta ser relativamente simples, mas ainda exige conferência da documentação.");
+    if (feat.hasGarantia) diag.push("• Barreiras de entrada: há exigência de garantia contratual, o que impacta o fluxo de caixa.");
+    if (feat.hasVisitaTecnica) diag.push("• Barreiras de entrada: o edital menciona visita técnica, o que pode exigir deslocamento e custo.");
+    if (feat.hasAmostra) diag.push("• Risco de eliminação: há exigência de amostra; a não apresentação ou reprovação elimina a empresa.");
+    if (feat.hasPagamento) diag.push(`• Impacto no caixa: pagamento previsto em ${feat.hasPagamento}. Avalie o impacto sobre o capital de giro.`);
+    if (feat.hasPrazoExecucao) diag.push(`• Risco operacional: prazo de execução/entrega de ${feat.hasPrazoExecucao}. Verifique se é factível.`);
+    if (feat.hasMulta) diag.push(`• Risco sancionatório: multa prevista de ${feat.hasMulta}.`);
+    if (sessao) diag.push(`• A sessão pública está marcada para ${sessao}. Verifique se há tempo hábil para preparar toda a documentação.`);
+    sections.push(`🔍 4. DIAGNÓSTICO EXECUTIVO\n\n${diag.join("\n")}`);
+  }
+
+  // ── 5. O QUE ESTÁ SENDO COMPRADO ──
+  {
+    if (objeto) {
+      let desc = `O edital busca ${lowercaseFirst(objeto)}.`;
+      if (feat.isSRP) desc += " Como se trata de registro de preços, a contratação efetiva ocorrerá sob demanda, sem garantia de volume.";
+      if (feat.isServicoContinuado) desc += " Trata-se de serviço de natureza continuada.";
+      if (feat.localEntrega) desc += ` O local de entrega ou execução indicado é: ${feat.localEntrega}.`;
+      sections.push(`📦 5. O QUE ESTÁ SENDO COMPRADO\n\n${desc}`);
     }
   }
 
+  // ── 6. COMO A DISPUTA FUNCIONA ──
+  {
+    const disp: string[] = [];
+    disp.push(`• Modalidade: ${modalidade}.`);
+    if (criterio) disp.push(`• Critério de julgamento: ${criterio}.`);
+    if (feat.hasModoAbFechado) disp.push("• Modo de disputa: aberto e fechado.");
+    else if (feat.hasModoDisputaAberto) disp.push("• Modo de disputa: aberto (lances sucessivos em tempo real).");
+    else if (feat.hasModoDisputaFechado) disp.push("• Modo de disputa: fechado (proposta única, sem lances).");
+    if (feat.hasDesempate) {
+      let desempate = "• Desempate: ";
+      if (feat.hasLC123) desempate += "aplica-se a LC 123 (preferência para ME/EPP em caso de empate ficto).";
+      else desempate += "há regras de desempate previstas no edital.";
+      disp.push(desempate);
+    }
+    if (feat.beneficioMEEPP) disp.push("• Há tratamento diferenciado para ME/EPP conforme LC 123.");
+    if (feat.hasNegociacao) disp.push("• O edital prevê fase de negociação com o licitante melhor classificado.");
+    if (feat.propostaReadequada) disp.push("• Após a disputa, o vencedor deverá enviar proposta readequada com o valor final.");
+    sections.push(`⚔️ 6. COMO A DISPUTA FUNCIONA\n\n${disp.join("\n")}`);
+  }
+
+  // ── 7. QUEM PODE PARTICIPAR ──
+  {
+    const partic: string[] = [];
+    if (feat.isExclusivoMEEPP) partic.push("• Participação exclusiva para microempresas e empresas de pequeno porte.");
+    else if (feat.hasCotaReservada) partic.push("• Participação aberta, mas com cota reservada para ME/EPP.");
+    else partic.push("• Participação aberta a empresas de qualquer porte, salvo vedações legais.");
+    if (feat.hasSICAF) partic.push("• Exige cadastro ativo no SICAF.");
+    if (feat.hasCAUFESP) partic.push("• Exige cadastro ativo no CAUFESP.");
+    if (feat.hasCredenciamento) partic.push("• É necessário credenciamento na plataforma de disputa antes da sessão.");
+    if (feat.vedacaoConsorcio) partic.push("• Não é permitida a participação em consórcio.");
+    else if (feat.hasConsorcio) partic.push("• O edital admite participação em consórcio.");
+    if (feat.hasImpedimentoSancao) partic.push("• Empresas impedidas, suspensas ou declaradas inidôneas não podem participar.");
+    sections.push(`👥 7. QUEM PODE PARTICIPAR\n\n${partic.join("\n")}`);
+  }
+
+  // ── 8. CHECKLIST ANTES DE PARTICIPAR ──
+  {
+    const check: string[] = [];
+    if (sistema) check.push(`☐ Verificar cadastro e credenciamento na plataforma ${sistema}.`);
+    if (feat.hasSICAF) check.push("☐ Conferir situação cadastral no SICAF (validade dos documentos).");
+    if (feat.hasCAUFESP) check.push("☐ Conferir situação no CAUFESP.");
+    check.push("☐ Separar todos os documentos de habilitação exigidos no edital.");
+    check.push("☐ Verificar validade de certidões (CND Federal, Estadual, Municipal, FGTS, CNDT).");
+    check.push("☐ Analisar o Termo de Referência com atenção para entender as especificações.");
+    if (feat.hasAmostra) check.push("☐ Preparar amostra conforme especificações do edital.");
+    if (feat.hasCatalogo) check.push("☐ Separar catálogo, ficha técnica ou laudo do produto.");
+    if (feat.hasMarcaModelo) check.push("☐ Confirmar marca e modelo a serem ofertados.");
+    check.push("☐ Calcular custos detalhados (incluindo frete, impostos, encargos).");
+    if (feat.hasGarantia) check.push("☐ Providenciar garantia contratual (seguro-garantia, fiança bancária ou caução).");
+    if (feat.hasVisitaTecnica) check.push("☐ Agendar visita técnica, se obrigatória.");
+    check.push("☐ Preparar proposta inicial com todos os itens exigidos.");
+    if (feat.propostaReadequada) check.push("☐ Estar preparado para enviar proposta readequada após a fase de lances.");
+    if (feat.prazoEntrega) check.push(`☐ Avaliar capacidade de entrega no prazo de ${feat.prazoEntrega}.`);
+    sections.push(`✅ 8. CHECKLIST: O QUE FAZER ANTES DE PARTICIPAR\n\n${check.join("\n")}`);
+  }
+
+  // ── 9. DOCUMENTOS DE HABILITAÇÃO ──
   {
     const habLines = dados.habilitacao
       .split("\n")
@@ -1068,33 +1227,196 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
       .filter(Boolean);
 
     if (habLines.length > 0 && dados.habilitacao !== "Consultar seção de habilitação no edital") {
-      sections.push(`📑 HABILITAÇÃO RESUMIDA\n\n${habLines.join("\n")}`);
+      const comentarios: string[] = [];
+      comentarios.push("Cada bloco abaixo representa uma categoria de documentos. A ausência de qualquer item pode resultar em inabilitação.");
+      comentarios.push("");
+      comentarios.push(...habLines);
+      comentarios.push("");
+      comentarios.push("Efeito prático: a empresa que não apresentar qualquer documento exigido será inabilitada, mesmo que tenha o menor preço. Confira cada item com antecedência.");
+      sections.push(`📑 9. DOCUMENTOS DE HABILITAÇÃO\n\n${comentarios.join("\n")}`);
+    } else {
+      sections.push(`📑 9. DOCUMENTOS DE HABILITAÇÃO\n\nO edital contém seção de habilitação, mas os detalhes devem ser conferidos diretamente no documento original.`);
     }
   }
 
+  // ── 10. PROPOSTA COMERCIAL ──
+  {
+    const prop: string[] = [];
+    prop.push("A proposta deve conter os valores detalhados conforme exigido no edital. Pontos importantes:");
+    if (feat.hasPrecoMaximo) prop.push("• Há preço máximo de referência. Propostas com valores superiores podem ser desclassificadas.");
+    if (feat.hasMarcaModelo) prop.push("• O edital exige indicação de marca, modelo e/ou fabricante na proposta.");
+    if (feat.validadeProposta) prop.push(`• A proposta deve ter validade mínima de ${feat.validadeProposta}.`);
+    prop.push("• Os custos devem contemplar frete, impostos, encargos e todas as despesas necessárias para entrega/execução.");
+    if (feat.propostaReadequada) prop.push("• Após a fase de lances, o vencedor deverá enviar proposta readequada ao valor final negociado.");
+    if (feat.hasCatalogo) prop.push("• Pode ser exigido catálogo, ficha técnica ou laudo junto à proposta.");
+    sections.push(`💰 10. PROPOSTA COMERCIAL\n\n${prop.join("\n")}`);
+  }
+
+  // ── 11. PRAZOS CRÍTICOS ──
+  {
+    const prazos: string[] = [];
+    if (feat.inicioPropostas) prazos.push(`• Início do envio de propostas: ${feat.inicioPropostas}.`);
+    if (sessao) prazos.push(`• Data e hora da sessão pública: ${sessao}.`);
+    if (feat.validadeProposta) prazos.push(`• Validade da proposta: ${feat.validadeProposta}.`);
+    if (feat.propostaReadequada) prazos.push("• Prazo para envio de proposta readequada: conforme definido no edital após a sessão.");
+    if (feat.prazoDocComplementar) prazos.push(`• Prazo para envio de documentos complementares: ${feat.prazoDocComplementar}.`);
+    if (feat.prazoEntrega) prazos.push(`• Prazo de entrega: ${feat.prazoEntrega}.`);
+    if (feat.prazoSubstituicao) prazos.push(`• Prazo para substituição de produtos: ${feat.prazoSubstituicao}.`);
+    if (feat.prazoAssinatura) prazos.push(`• Prazo para assinatura do contrato: ${feat.prazoAssinatura}.`);
+    if (feat.prazoRecurso) prazos.push(`• Prazo para recurso: ${feat.prazoRecurso}.`);
+    if (timeline.prazo_impugnacao) prazos.push(`• Prazo para impugnação: ${timeline.prazo_impugnacao}.`);
+    if (timeline.prazo_esclarecimento) prazos.push(`• Prazo para pedido de esclarecimento: ${timeline.prazo_esclarecimento}.`);
+    if (timeline.data_publicacao) prazos.push(`• Data de publicação: ${timeline.data_publicacao}.`);
+    if (feat.hasPagamento) prazos.push(`• Prazo de pagamento: ${feat.hasPagamento}.`);
+    if (prazos.length > 0) sections.push(`📅 11. PRAZOS CRÍTICOS\n\n${prazos.join("\n")}`);
+  }
+
+  // ── 12. RISCOS DO EDITAL ──
+  {
+    const riscos: string[] = [];
+    // Habilitação
+    riscos.push("📂 Risco de habilitação");
+    riscos.push("A falta de qualquer documento exigido resulta em inabilitação imediata. Certidões vencidas, balanço patrimonial incompleto ou atestado técnico insuficiente são as causas mais comuns de eliminação.");
+    // Técnico
+    if (feat.hasAmostra || feat.hasVisitaTecnica || feat.hasProvaConceito || feat.hasCatalogo) {
+      riscos.push("");
+      riscos.push("🔬 Risco técnico");
+      if (feat.hasAmostra) riscos.push("A exigência de amostra é um ponto de eliminação: se a amostra for reprovada ou não apresentada no prazo, a empresa é desclassificada.");
+      if (feat.hasVisitaTecnica) riscos.push("A visita técnica, se obrigatória, deve ser realizada antes da sessão; a ausência pode impedir a participação.");
+      if (feat.hasProvaConceito) riscos.push("Há exigência de prova de conceito, o que demanda preparação técnica específica.");
+      if (feat.hasCatalogo) riscos.push("A não apresentação de catálogo ou ficha técnica pode levar à desclassificação.");
+    }
+    // Comercial
+    {
+      riscos.push("");
+      riscos.push("💵 Risco comercial");
+      if (feat.hasPrecoMaximo) riscos.push("Há preço máximo de referência. Proposta acima do teto será desclassificada.");
+      riscos.push("Erro de cálculo na proposta (esquecer frete, impostos ou encargos) pode gerar prejuízo na execução ou desclassificação por inexequibilidade.");
+    }
+    // Operacional
+    if (feat.prazoEntrega || feat.hasPrazoExecucao || feat.localEntrega) {
+      riscos.push("");
+      riscos.push("🏗️ Risco operacional");
+      if (feat.prazoEntrega) riscos.push(`O prazo de entrega é de ${feat.prazoEntrega}. Avalie se a cadeia de suprimentos permite cumprir.`);
+      if (feat.hasPrazoExecucao) riscos.push(`O prazo de execução é de ${feat.hasPrazoExecucao}. O não cumprimento pode gerar multa e sanção.`);
+      if (feat.localEntrega) riscos.push(`O local de entrega ou execução indicado é: ${feat.localEntrega}. Considere custos logísticos.`);
+    }
+    // Financeiro
+    if (feat.hasGarantia || feat.hasPagamento) {
+      riscos.push("");
+      riscos.push("💳 Risco financeiro");
+      if (feat.hasGarantia) riscos.push("A exigência de garantia contratual compromete recursos da empresa (até 5% do valor do contrato, em geral).");
+      if (feat.hasPagamento) riscos.push(`O pagamento previsto é em ${feat.hasPagamento}. Avalie o impacto sobre o capital de giro.`);
+    }
+    // Sancionatório
+    if (feat.hasPenalidades || feat.hasMulta) {
+      riscos.push("");
+      riscos.push("⚖️ Risco sancionatório");
+      if (feat.hasMulta) riscos.push(`O edital prevê multa de ${feat.hasMulta}. Avalie o impacto sobre o resultado.`);
+      riscos.push("Descumprimento contratual pode resultar em multa, suspensão do direito de licitar ou declaração de inidoneidade.");
+    }
+    sections.push(`⚠️ 12. RISCOS DO EDITAL\n\n${riscos.join("\n")}`);
+  }
+
+  // ── 13. PONTOS DE ATENÇÃO ──
   {
     const alertas: string[] = [];
-    if (feat.isSRP) alertas.push("• O edital usa sistema de registro de preços: pode haver ata sem compra imediata.");
-    if (feat.hasGarantia) alertas.push("• Há exigência de garantia; isso afeta custo e fluxo de caixa.");
-    if (feat.hasVisitaTecnica) alertas.push("• O texto menciona visita técnica; confira se ela é obrigatória.");
-    if (feat.hasAmostra) alertas.push("• Há menção a amostra; prepare material e prazo de apresentação.");
-    if (feat.hasPrazoExecucao) alertas.push(`• O edital menciona prazo de execução/entrega de ${feat.hasPrazoExecucao}.`);
-    if (feat.hasPagamento) alertas.push(`• O pagamento foi identificado em até ${feat.hasPagamento}.`);
-    if (feat.hasPenalidades) alertas.push("• O edital prevê penalidades; vale revisar multas e hipóteses de sanção.");
-    if (feat.hasSubcontratacao) alertas.push("• Há menção a subcontratação; confira os limites permitidos.");
-    if (feat.hasConsorcio) alertas.push("• O edital trata de participação em consórcio.");
-
-    if (alertas.length > 0) {
-      sections.push(`⚠️ PONTOS DE ATENÇÃO\n\n${alertas.slice(0, 4).join("\n")}`);
-    }
+    if (feat.hasAmostra) alertas.push("🔸 Amostra: a empresa precisa estar preparada para apresentar amostra no prazo. A não apresentação elimina.");
+    if (feat.hasGarantia) alertas.push("🔸 Garantia contratual: envolve custo financeiro. Avalie as opções (seguro-garantia, fiança, caução).");
+    if (feat.hasGarantiaProduto) alertas.push("🔸 Garantia do produto: verifique o prazo e as condições exigidas no edital.");
+    if (feat.isSRP) alertas.push("🔸 Registro de preços: a Administração não é obrigada a contratar. A ata gera expectativa, não certeza.");
+    if (feat.hasMarcaModelo) alertas.push("🔸 Marca/modelo: confira se a exigência é indicativa ou restritiva. Marcas diferentes podem ser aceitas se houver equivalência.");
+    if (feat.hasCatalogo) alertas.push("🔸 Catálogo/ficha técnica/laudo: a ausência pode levar à desclassificação.");
+    if (feat.hasPrecoMaximo) alertas.push("🔸 Preço máximo: propostas acima do valor de referência serão desclassificadas.");
+    if (feat.prazoEntrega && /\d+\s*dias?\s*(?:úteis|corridos)?$/i.test(feat.prazoEntrega)) alertas.push("🔸 Prazo de entrega: confira se é em dias úteis ou corridos — a diferença é significativa.");
+    if (feat.hasMulta) alertas.push(`🔸 Multa: o edital prevê multa de ${feat.hasMulta}. Leia o capítulo de sanções.`);
+    if (feat.hasImpedimentoSancao) alertas.push("🔸 Impedimento: empresas sancionadas estão vedadas. Confira a situação cadastral.");
+    if (feat.hasSICAF || feat.hasCAUFESP) alertas.push("🔸 Cadastro obrigatório: confira a validade e completude do cadastro exigido.");
+    if (feat.hasVisitaTecnica) alertas.push("🔸 Visita técnica: pode ser obrigatória; a não realização pode impedir a participação.");
+    if (alertas.length > 0) sections.push(`🚩 13. PONTOS DE ATENÇÃO\n\n${alertas.join("\n")}`);
   }
 
+  // ── 14. IMPACTO PRÁTICO PARA O LICITANTE ──
   {
-    const fechamento: string[] = [];
-    if (objeto) fechamento.push(`• O foco deste edital é ${lowercaseFirst(objeto)}.`);
-    if (criterio) fechamento.push(`• Para vencer, o ponto central da disputa é ${criterio.toLowerCase()}.`);
-    fechamento.push("• Use este resumo como roteiro inicial, mas confira o documento oficial e os anexos antes de enviar proposta.");
-    sections.push(`✅ EM SÍNTESE\n\n${fechamento.join("\n")}`);
+    const imp: string[] = [];
+    imp.push("Este edital exige da empresa:");
+    imp.push(`• Estrutura documental: todos os documentos de habilitação devem estar válidos e organizados antes da sessão.`);
+    if (feat.hasGarantia) imp.push("• Recursos financeiros: será necessário oferecer garantia contratual, o que compromete caixa ou crédito.");
+    if (feat.hasPagamento) imp.push(`• Fluxo de caixa: o pagamento será em ${feat.hasPagamento}. A empresa precisará financiar a operação durante esse intervalo.`);
+    if (feat.prazoEntrega) imp.push(`• Capacidade logística: entrega em ${feat.prazoEntrega}. É preciso confirmar estoque, produção e transporte.`);
+    if (feat.hasAmostra) imp.push("• Preparação técnica: amostra física deverá ser apresentada para avaliação.");
+    if (feat.hasVisitaTecnica) imp.push("• Mobilização: visita técnica exige deslocamento e custos associados.");
+    if (feat.hasMarcaModelo) imp.push("• Comercialização: definir marca e modelo que serão ofertados, com documentação comprobatória.");
+    sections.push(`🏢 14. IMPACTO PRÁTICO PARA O LICITANTE\n\n${imp.join("\n")}`);
+  }
+
+  // ── 15. EM LINGUAGEM SIMPLES ──
+  {
+    const sub: string[] = [];
+    // O que este edital busca
+    sub.push("📎 O que este edital busca");
+    if (objeto) sub.push(`${orgao} quer ${lowercaseFirst(objeto)}. ${feat.isSRP ? "É um registro de preços, então a compra efetiva acontecerá conforme a necessidade." : "A contratação será formalizada por meio de contrato após a homologação."}`);
+    else sub.push(`${orgao} está realizando contratação pública.`);
+    // Como a empresa vence
+    sub.push("");
+    sub.push("🏆 Como a empresa vence");
+    if (criterioHint) sub.push(`O julgamento é por ${criterio!.toLowerCase()}. Na prática, ${criterioHint}`);
+    else if (criterio) sub.push(`O julgamento é por ${criterio.toLowerCase()}.`);
+    else sub.push("Confira o critério de julgamento no edital.");
+    // Quem pode participar
+    sub.push("");
+    sub.push("🙋 Quem pode participar");
+    if (feat.isExclusivoMEEPP) sub.push("Apenas microempresas e empresas de pequeno porte.");
+    else sub.push("Empresas de qualquer porte que atendam às exigências de habilitação e não estejam impedidas de licitar.");
+    // O que exige mais atenção
+    sub.push("");
+    sub.push("🔎 O que exige mais atenção");
+    const atencao: string[] = [];
+    if (feat.hasAmostra) atencao.push("amostra");
+    if (feat.hasGarantia) atencao.push("garantia contratual");
+    if (feat.hasVisitaTecnica) atencao.push("visita técnica");
+    if (feat.hasPrecoMaximo) atencao.push("preço máximo");
+    if (feat.prazoEntrega) atencao.push("prazo de entrega");
+    atencao.push("documentação de habilitação");
+    sub.push(`Os pontos que merecem mais cuidado são: ${atencao.join(", ")}.`);
+    // O que a empresa deve fazer agora
+    sub.push("");
+    sub.push("🎯 O que a empresa deve fazer agora");
+    sub.push("1. Ler o edital completo e o Termo de Referência.");
+    sub.push("2. Conferir toda a documentação de habilitação.");
+    if (sistema) sub.push(`3. Confirmar cadastro e credenciamento em ${sistema}.`);
+    sub.push(`${sistema ? "4" : "3"}. Calcular custos e preparar proposta.`);
+    if (sessao) sub.push(`${sistema ? "5" : "4"}. Estar online na plataforma em ${sessao}.`);
+    // Resumo final
+    sub.push("");
+    sub.push("📋 Resumo final");
+    let resumo = `Este edital, promovido por ${orgao}, `;
+    if (objeto) resumo += `visa ${lowercaseFirst(objeto)}`;
+    resumo += `. ${criterio ? `O julgamento será por ${criterio.toLowerCase()}. ` : ""}`;
+    if (feat.isSRP) resumo += "Trata-se de registro de preços. ";
+    resumo += "A empresa interessada deve preparar documentação, calcular custos e participar da sessão dentro dos prazos. Este resumo é um guia de leitura — consulte sempre o edital oficial e seus anexos antes de tomar decisões.";
+    sub.push(resumo);
+    sections.push(`📖 15. EM LINGUAGEM SIMPLES\n\n${sub.join("\n")}`);
+  }
+
+  // ── 16. CONCLUSÃO EXECUTIVA ──
+  {
+    const score = dados._scoreComplexidade ? parseInt(dados._scoreComplexidade) : 0;
+    let nivel = "moderado";
+    if (score >= 7) nivel = "complexo";
+    else if (score <= 3) nivel = "simples";
+
+    let conclusao = `Este edital aparenta ser ${nivel} para participação. `;
+    const fatores: string[] = [];
+    if (feat.hasGarantia) fatores.push("exigência de garantia contratual");
+    if (feat.hasAmostra) fatores.push("exigência de amostra");
+    if (feat.hasVisitaTecnica) fatores.push("visita técnica");
+    if (score >= 7) fatores.push("volume e extensão do documento");
+    if (feat.hasGarantia && feat.hasPagamento) fatores.push("impacto relevante no fluxo de caixa");
+    if (fatores.length > 0) conclusao += `Os principais fatores que justificam essa avaliação são: ${fatores.join(", ")}.`;
+    else conclusao += "Não foram identificados fatores de complexidade elevada além das exigências habituais de habilitação e proposta.";
+    conclusao += "\n\nEste resumo é um guia de leitura baseado na extração automatizada do texto do edital. Sempre confira o documento oficial e os anexos antes de tomar decisões.";
+    sections.push(`🏁 16. CONCLUSÃO EXECUTIVA\n\n${conclusao}`);
   }
 
   return sections.join("\n\n---\n\n");
@@ -1129,6 +1451,7 @@ function analyzeEditalText(text: string) {
     sistema: sistema_licitacao,
     habilitacao: condicoes_habilitacao,
     _fullText: text,
+    _scoreComplexidade: String(score_complexidade.valor),
   }, timeline);
 
   return {

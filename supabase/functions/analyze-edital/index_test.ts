@@ -70,9 +70,12 @@ Deno.test("analyzeEditalText produces grounded summary from fixture text", () =>
   assertEquals(result.orgao, "Secretaria de Administração");
   assertEquals(result.criterio_julgamento, "Menor preço global");
   assertStringIncludes(result.objeto, "Aquisição de Armários");
-  assertStringIncludes(result.resumo_simples, "Órgão: Secretaria de Administração");
-  assertStringIncludes(result.resumo_simples, "Critério de julgamento: Menor preço global");
-  assertStringIncludes(result.resumo_simples, "Sessão pública: 15/03/2025 às 10h");
+  // New 16-section format checks
+  assertStringIncludes(result.resumo_simples, "VISÃO GERAL DO EDITAL");
+  assertStringIncludes(result.resumo_simples, "EM UMA FRASE");
+  assertStringIncludes(result.resumo_simples, "COMO A DISPUTA FUNCIONA");
+  assertStringIncludes(result.resumo_simples, "CONCLUSÃO EXECUTIVA");
+  assertStringIncludes(result.resumo_simples, "Secretaria de Administração");
+  assertStringIncludes(result.resumo_simples, "menor preço global");
   assert(!result.resumo_simples.includes("Imagine que"));
-  assert(result.resumo_simples.length < 2200);
 });

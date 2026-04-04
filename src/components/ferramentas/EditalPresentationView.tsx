@@ -23,7 +23,8 @@ interface Props {
    Bullet formatter – normalizes inline markers
    into real multi-line bullet text
    ──────────────────────────────────────────── */
-const bulletLineStart = /^(?:•|✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)/;
+const emojiPattern = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}]/u;
+const bulletLineStart = /^(?:•|[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])/u;
 
 const formatBulletLines = (text: string, maxLines?: number) => {
   if (!text) return "";

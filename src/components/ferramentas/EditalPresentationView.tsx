@@ -190,10 +190,9 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
   const custo = getSectionBody(sections, "custo", "impacto", "financeiro", "caixa");
   const agora = getSectionBody(sections, "fazer agora", "checklist", "antes de participar", "providência");
 
-  const truncBody = (b: string, max = 250) => {
+  const cleanBody = (b: string) => {
     if (!b) return "Informação não identificada de forma expressa no edital.";
-    const clean = b.replace(/^[^\w]*/, "").trim();
-    return clean.length > max ? clean.slice(0, max).replace(/\s+\S*$/, "") + "…" : clean;
+    return b.replace(/^[^\w]*/, "").trim();
   };
 
   const scoreSeverity = (score: number): DiagCard["severity"] =>

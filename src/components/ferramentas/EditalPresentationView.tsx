@@ -204,7 +204,7 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
     {
       title: "Posso participar?",
       icon: Users,
-      content: truncBody(participacao),
+      content: cleanBody(participacao),
       severity: participacao.toLowerCase().includes("exclusiv") || participacao.toLowerCase().includes("restrit") ? "high" : "low",
     },
     {

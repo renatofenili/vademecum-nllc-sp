@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import EditalAnalysisResult from "./EditalAnalysisResult";
+import EditalPresentationView from "./EditalPresentationView";
 
 export interface EditalTimeline {
   data_publicacao: string | null;

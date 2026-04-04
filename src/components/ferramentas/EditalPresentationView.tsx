@@ -26,8 +26,11 @@ interface Props {
 const bulletSeparators = /[;•–—]\s*|\n|(?:\d+\))\s*/;
 const renderWithBullets = (text: string) => {
   if (!text) return null;
-  // Split on common list separators: semicolons, bullets, newlines, numbered items
-  const parts = text.split(/(?:;\s*|\n|•\s*|–\s*|—\s*|\d+\)\s+)/).map(s => s.trim()).filter(Boolean);
+  // Split on common list separators: semicolons, bullets, squares, newlines, numbered items
+  const parts = text
+    .split(/(?:\s*[□☐■◻◾▪▸►]\s*|\s*•\s*|\s*[;]\s*|\s*\n\s*|\s*–\s*|\s*—\s*|\s*\d+\)\s+)/)
+    .map(s => s.trim())
+    .filter(s => s.length > 2);
   if (parts.length <= 1) return <span>{text}</span>;
   return (
     <ul className="space-y-1 mt-1">

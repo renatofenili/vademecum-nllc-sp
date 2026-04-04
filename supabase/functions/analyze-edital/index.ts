@@ -227,7 +227,10 @@ function cleanOrgaoCandidate(raw: string): string {
   if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|pregao|concorr[êe]ncia|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o|crit[ée]rio|d\.o\.[ue]|habilitaç[ãa]o)\b/i.test(value)) return "";
   // Reject if it's just numbers/dates
   if (/^\d[\d.\/\-\s]+$/.test(value)) return "";
-
+  // Reject state abbreviation + number (e.g. "PE 98972")
+  if (/^(?:PE|PI|PA|RJ|SP|MG|BA|PR|RS|SC|GO|CE|MA|MT|MS|AM|RN|PB|AL|SE|RO|AC|AP|RR|TO|DF|ES)\s+\d/i.test(value)) return "";
+  // Reject address fragments
+  if (/^(?:esplanada|rua|avenida|av\.?|praça|travessa|rodovia|setor|quadra|lote)\b/i.test(value)) return "";
   return normalizeInstitutionCase(value);
 }
 

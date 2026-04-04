@@ -888,52 +888,198 @@ function extractTimeline(text: string) {
   };
 }
 
-// ── Complexity Score (heuristic) ──
-function calcularComplexidade(text: string, dados: Record<string, string>): { valor: number; justificativa: string } {
-  let score = 2;
-  const fatores: string[] = [];
+// ── Complexity Score (conservative calibration) ──
+interface ComplexidadeResult {
+  valor: number;
+  faixa: string;
+  justificativa: string;
+  fatores_elevaram: string[];
+  fatores_impediram: string[];
+  frase_faixa: string;
+}
+
+function getFaixa(score: number): string {
+  if (score <= 2) return "muito simples";
+  if (score <= 4) return "simples";
+  if (score <= 6) return "moderado";
+  if (score <= 8) return "complexo";
+  return "muito complexo";
+}
+
+function calcularComplexidade(text: string, dados: Record<string, string>): ComplexidadeResult {
   const textLower = text.toLowerCase();
-  const pageEstimate = Math.ceil(text.length / 3000);
 
-  // Document length
-  if (pageEstimate > 50) { score += 2; fatores.push("documento muito extenso (estimado +" + pageEstimate + " págs.)"); }
-  else if (pageEstimate > 25) { score += 1; fatores.push("documento extenso"); }
+  // ── Detect base profile ──
+  const isPregao = /pregão\s+eletrônico/i.test(text);
+  const isBensComuns = /\b(aquisição|fornecimento|compra|material|bens?\s+comun|bens?\s+de\s+consumo|equipamento)\b/i.test(text)
+    && !/\b(serviço\s+(?:de\s+natureza\s+)?continu|prestação\s+de\s+serviços?\s+(?:de\s+natureza\s+)?continu|execução\s+de\s+obras?|obra)\b/i.test(text);
+  const isMenorPreco = /menor\s+preço/i.test(text);
+  const isPregaoBensComuns = isPregao && isBensComuns && isMenorPreco;
 
-  // Value
-  const valorStr = dados.valor_estimado?.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
-  const valorNum = parseFloat(valorStr || '0');
-  if (valorNum > 10000000) { score += 2; fatores.push("valor acima de R$ 10 milhões"); }
-  else if (valorNum > 1000000) { score += 1; fatores.push("valor acima de R$ 1 milhão"); }
+  // ── Anchor: pregão de bens comuns starts at 3 ──
+  let score = isPregaoBensComuns ? 3 : 3.5;
 
-  // Technical complexity indicators
-  if (/consórcio/i.test(text)) { score += 1; fatores.push("admite ou exige consórcio"); }
-  if (/garantia\s+(de\s+)?(execução|contratual)|seguro[\-\s]garantia/i.test(text)) { score += 1; fatores.push("exige garantia contratual"); }
-  if (/subcontrata/i.test(text)) { score += 0.5; fatores.push("prevê subcontratação"); }
-  if (/amostra|prova\s+de\s+conceito/i.test(text)) { score += 1; fatores.push("exige amostra ou prova de conceito"); }
-  if (/técnica\s+e\s+preço/i.test(text)) { score += 1; fatores.push("julgamento por técnica e preço"); }
-  if (/sustentabilidade|ambiental|iso\s*14/i.test(text)) { score += 0.5; fatores.push("critérios de sustentabilidade"); }
-  if (/registro\s+de\s+preços|ata\s+de\s+registro/i.test(text)) { score += 0.5; fatores.push("sistema de registro de preços"); }
-  if (/(?:me|epp|microempresa|empresa\s+de\s+pequeno\s+porte)\s+exclusiv/i.test(text)) { fatores.push("exclusivo para ME/EPP"); }
-  if (/visita\s+técnica/i.test(text)) { score += 0.5; fatores.push("exige visita técnica"); }
-  if (/sigilo|proposta\s+sigilosa/i.test(text)) { score += 0.5; fatores.push("propostas sigilosas"); }
+  const fatoresElevaram: string[] = [];
+  const fatoresImpediram: string[] = [];
 
-  // Count habilitação categories
-  const habCats = [
-    /habilitação\s+jurídica|ato\s+constitutivo/i,
-    /regularidade\s+fiscal/i,
-    /qualificação\s+técnica|atestado/i,
-    /qualificação\s+econômico|balanço\s+patrimonial/i,
-    /regularidade\s+trabalhista|cndt/i,
-  ].filter(p => p.test(text)).length;
-  if (habCats >= 4) { score += 1; fatores.push("exigências de habilitação abrangentes (" + habCats + " categorias)"); }
+  // ── Strong aggravators (each counts toward the 2-aggravator threshold) ──
+  let strongAggravators = 0;
 
-  score = Math.min(10, Math.max(1, Math.round(score)));
+  const addStrong = (points: number, label: string) => {
+    score += points;
+    fatoresElevaram.push(label);
+    strongAggravators++;
+  };
 
-  const justificativa = fatores.length > 0
-    ? `Score ${score}/10 baseado em análise textual automatizada. Fatores identificados: ${fatores.join("; ")}.`
-    : "Edital com características padrão, sem elementos de complexidade adicional identificados na análise automatizada.";
+  // Amostra eliminatória
+  if (/(?:exig|apresent|entreg)\w*\s+(?:de\s+)?amostra/i.test(text) && !/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i.test(text) && !/sem\s+(?:necessidade\s+de\s+)?amostra/i.test(text)) {
+    addStrong(1.5, "Amostra exigida — eliminatória se reprovada ou não apresentada");
+  }
 
-  return { valor: score, justificativa };
+  // Qualificação técnica robusta (atestados com requisitos de volume/percentual)
+  if (/atestado[^.]{0,200}(?:comprovan|demonstran)[^.]{0,200}(?:no\s+mínimo|pelo\s+menos|mínimo\s+de)\s*\d/i.test(text)
+    || /(?:crea|cau|registro\s+(?:no\s+)?conselho)/i.test(text)) {
+    addStrong(1, "Qualificação técnica robusta — atestados com requisitos específicos");
+  }
+
+  // Garantia de execução
+  if (/garantia\s+(?:de\s+)?(?:execução|contratual)\s+(?:será|deverá|é)\s+(?:exigid|apresentad|prestad)/i.test(text)
+    || /exig(?:e|ir)\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i.test(text)
+    || /seguro[\-\s]garantia/i.test(text)) {
+    if (!/(?:não\s+(?:será|é)\s+exigid|dispensad|não\s+(?:haverá|há))\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i.test(text)) {
+      addStrong(1, "Garantia de execução exigida — compromete caixa da empresa");
+    }
+  }
+
+  // Visita técnica obrigatória
+  if (/visita\s+técnica/i.test(text)) {
+    addStrong(0.8, "Visita técnica — pode ser obrigatória e eliminatória");
+  }
+
+  // Execução contratual complexa (serviço continuado, SLA, obrigação continuada)
+  if (/serviço\s+(?:de\s+natureza\s+)?continu/i.test(text) || /(?:sla|nível\s+de\s+serviço|acordo\s+de\s+nível)/i.test(text)) {
+    addStrong(1, "Execução contratual complexa — serviço continuado ou SLA");
+  }
+
+  // Técnica e preço
+  if (/técnica\s+e\s+preço/i.test(text)) {
+    addStrong(1.5, "Julgamento por técnica e preço — exige proposta técnica detalhada");
+  }
+
+  // Prova de conceito
+  if (/prova\s+de\s+conceito/i.test(text)) {
+    addStrong(1, "Prova de conceito — demanda preparação técnica e pode eliminar");
+  }
+
+  // Risco econômico-sancionatório acima do padrão
+  const multaMatch = text.match(/multa\s+(?:de\s+)?((?:\d+[,.]?\d*)\s*%)/i);
+  const multaPercent = multaMatch ? parseFloat(multaMatch[1].replace(",", ".")) : 0;
+  if (multaPercent >= 10 || /declaração\s+de\s+inidoneidade/i.test(text)) {
+    addStrong(0.8, `Risco sancionatório elevado${multaPercent >= 10 ? ` — multa de ${multaPercent}%` : ""}`);
+  }
+
+  // Forte densidade técnica (obra, engenharia, sistema de informação complexo)
+  if (/execução\s+de\s+obras?/i.test(text) || /\b(bdi|composição\s+de\s+custos|planilha\s+orçamentária\s+detalhada)\b/i.test(text)) {
+    addStrong(1.5, "Forte densidade técnica — obra ou composição de custos detalhada");
+  }
+
+  // ── Moderate factors (lighter weight) ──
+  if (/propost[ao]\s+(?:readequada|ajustada|adequada)/i.test(text)) {
+    score += 0.3;
+    fatoresElevaram.push("Proposta readequada exigida após lances");
+  }
+
+  if (/(?:catálogo|ficha\s+técnica|laudo)\s+(?:deverá|será|deve)\s+(?:ser\s+)?(?:apresentad|enviad|juntad)/i.test(text)) {
+    score += 0.3;
+    fatoresElevaram.push("Catálogo, ficha técnica ou laudo exigido");
+  }
+
+  if (/(?:exclusiv[oa]\s*(para\s+)?(me|epp|microempresa))/i.test(text)) {
+    score += 0.2;
+    fatoresElevaram.push("Participação exclusiva para ME/EPP");
+  }
+
+  if (/marca|modelo|fabricante/i.test(text) && /proposta|oferta|cotação/i.test(text)) {
+    score += 0.2;
+    fatoresElevaram.push("Indicação de marca/modelo/fabricante na proposta");
+  }
+
+  // Value-based adjustment (conservative — only for very high values)
+  const valorStr = dados.valor_estimado?.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
+  const valorNum = parseFloat(valorStr || "0");
+  if (valorNum > 50000000) { score += 1; fatoresElevaram.push("Valor acima de R$ 50 milhões"); }
+  else if (valorNum > 10000000) { score += 0.5; fatoresElevaram.push("Valor acima de R$ 10 milhões"); }
+
+  // SRP (minor factor)
+  if (/sistema\s+de\s+registro\s+de\s+preços|ata\s+de\s+registro/i.test(text)) {
+    score += 0.2;
+    fatoresElevaram.push("Sistema de registro de preços");
+  }
+
+  // Subcontratação
+  if (/subcontrata/i.test(text)) {
+    score += 0.3;
+    fatoresElevaram.push("Prevê subcontratação");
+  }
+
+  // Matriz de risco
+  if (/matriz\s+de\s+risco/i.test(text)) {
+    score += 0.3;
+    fatoresElevaram.push("Exige matriz de risco");
+  }
+
+  // ── CAP: pregão de bens comuns sem 2+ strong aggravators = max 6.5 ──
+  if (isPregaoBensComuns && strongAggravators < 2) {
+    if (score > 6.5) {
+      score = 6.5;
+      fatoresImpediram.push("Pregão eletrônico de bens comuns sem dois ou mais agravantes fortes — nota limitada a 6,5");
+    }
+  }
+
+  // ── Factors that PREVENTED higher score ──
+  if (!(/(?:exig|apresent|entreg)\w*\s+(?:de\s+)?amostra/i.test(text) && !/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i.test(text))) {
+    fatoresImpediram.push("Sem exigência de amostra eliminatória");
+  }
+  if (/(?:não\s+(?:será|é)\s+exigid|dispensad|não\s+(?:haverá|há))\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i.test(text)) {
+    fatoresImpediram.push("Garantia de execução dispensada");
+  } else if (!/garantia\s+(?:de\s+)?(?:execução|contratual)/i.test(text)) {
+    fatoresImpediram.push("Sem exigência de garantia contratual");
+  }
+  if (!/visita\s+técnica/i.test(text)) {
+    fatoresImpediram.push("Sem exigência de visita técnica");
+  }
+  if (!/técnica\s+e\s+preço/i.test(text)) {
+    fatoresImpediram.push("Julgamento não é por técnica e preço");
+  }
+  if (isPregaoBensComuns) {
+    fatoresImpediram.push("Pregão eletrônico de bens comuns — perfil de complexidade-base baixo");
+  }
+
+  // ── DO NOT elevate for: ──
+  // - mere document length (NOT a complexity factor)
+  // - standard sanctions present in virtually every edital
+  // - standard habilitação requirements
+
+  // ── Final rounding and clamping ──
+  score = Math.min(10, Math.max(1, Math.round(score * 2) / 2)); // round to nearest 0.5
+
+  const faixa = getFaixa(score);
+  const justificativa = fatoresElevaram.length > 0
+    ? `Score ${score}/10 (${faixa}). Fatores que elevaram: ${fatoresElevaram.join("; ")}.`
+    : `Score ${score}/10 (${faixa}). Edital com características padrão, sem agravantes fortes identificados.`;
+
+  const fraseFaixa = isPregaoBensComuns && score <= 5
+    ? `Pregão eletrônico padrão de bens comuns, com habilitação ordinária e disputa por menor preço — classificado como ${faixa}.`
+    : `Edital classificado como ${faixa} com base em ${strongAggravators} agravante(s) forte(s) identificado(s) no texto.`;
+
+  return {
+    valor: score,
+    faixa,
+    justificativa,
+    fatores_elevaram: fatoresElevaram,
+    fatores_impediram: fatoresImpediram,
+    frase_faixa: fraseFaixa,
+  };
 }
 
 // ── Planilha Estimada ──

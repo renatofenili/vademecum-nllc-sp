@@ -755,9 +755,9 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">
                       {field.label}
                     </span>
-                    <span className={`text-sm font-medium text-foreground ${isLong ? "whitespace-pre-line" : ""}`}>
-                      {field.value}
-                    </span>
+                    <div className="text-sm font-medium text-foreground">
+                      {renderWithBullets(field.value || "")}
+                    </div>
                   </div>
                 </div>
               );

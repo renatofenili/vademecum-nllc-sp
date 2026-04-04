@@ -228,6 +228,7 @@ function scoreOrgaoCandidate(value: string): number {
 
   const positiveSignals: Array<[RegExp, number]> = [
     [/\bminist[eé]rio\b/i, 14],
+    [/\bbanco\s+central\b/i, 14],
     [/\bsecretaria\b/i, 12],
     [/\btribunal\b/i, 11],
     [/\buniversidade\b/i, 11],

@@ -691,6 +691,70 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
           Dossiê gerado por extração textual automatizada — não substitui análise jurídica profissional
         </span>
       </div>
+
+      {/* ── Detail Dialog ── */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              Ficha Completa do Edital
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            {allFields.map((field, i) => {
+              const Icon = field.icon;
+              const isLong = (field.value?.length || 0) > 80;
+              return (
+                <div key={i} className="flex gap-3 items-start">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0 mt-0.5">
+                    <Icon className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">
+                      {field.label}
+                    </span>
+                    <span className={`text-sm font-medium text-foreground ${isLong ? "whitespace-pre-line" : ""}`}>
+                      {field.value}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Complexity score */}
+            {analysis.score_complexidade && (
+              <div className="flex gap-3 items-start pt-2 border-t border-border">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0 mt-0.5">
+                  <Zap className="h-4 w-4 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">
+                    Complexidade
+                  </span>
+                  <span className={`text-lg font-extrabold ${scoreColor.text}`}>
+                    {score}<span className="text-xs text-muted-foreground font-normal">/10</span>
+                  </span>
+                  <span className={`text-xs font-bold uppercase ml-2 ${scoreColor.text}`}>
+                    {analysis.score_complexidade.faixa}
+                  </span>
+                  {analysis.score_complexidade.frase_faixa && (
+                    <p className="text-xs text-muted-foreground mt-1">{analysis.score_complexidade.frase_faixa}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-border">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Info className="h-3 w-3" />
+              Todos os dados extraídos diretamente do PDF — sem inferências ou dados inventados.
+            </span>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

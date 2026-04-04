@@ -1451,6 +1451,7 @@ function analyzeEditalText(text: string) {
     sistema: sistema_licitacao,
     habilitacao: condicoes_habilitacao,
     _fullText: text,
+    _scoreComplexidade: String(score_complexidade.valor),
   }, timeline);
 
   return {

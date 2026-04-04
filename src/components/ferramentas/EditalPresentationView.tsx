@@ -1,5 +1,10 @@
-import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from "react";
-import { X, RotateCcw, ChevronDown, ChevronUp, FileText, DollarSign, Scale, Calendar, Shield, Globe, Building2, Hash, Clipboard, MessageSquare, TableProperties, Download, Info, Clock } from "lucide-react";
+import { useState, useMemo } from "react";
+import {
+  X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
+  Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,
+  CheckCircle2, Ban, Wallet, ListChecks, Eye, Users, FileCheck,
+  Gavel, ScrollText, ClipboardList, BarChart3, Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,790 +16,612 @@ interface Props {
   onClose: () => void;
 }
 
-interface FlowNode {
-  id: string;
-  label: string;
-  value: string;
-  fullValue: string;
-  icon: React.ElementType;
-  row: number;
-  col: number;
-  colSpan: number;
-  expandable: boolean;
-  extraContent?: unknown;
+/* ────────────────────────────────────────────
+   Section parser – extracts numbered sections
+   from the resumo_simples text
+   ──────────────────────────────────────────── */
+interface ParsedSection {
+  number: number;
+  title: string;
+  body: string;
 }
 
-interface FlowArrow {
-  from: string;
-  to: string;
-}
+const parseSections = (resumo: string): ParsedSection[] => {
+  if (!resumo) return [];
+  const sections: ParsedSection[] = [];
 
-interface ConnectorPath {
-  id: string;
-  d: string;
-}
+  // Split by --- separators first, then by numbered headers
+  const rawBlocks = resumo.split(/\n\n---\n\n|\n---\n/);
 
-const truncate = (s: string | undefined, max: number) => {
-  if (!s) return "Não identificado";
-  return s.length > max ? s.slice(0, max) + "…" : s;
+  for (const block of rawBlocks) {
+    const headerMatch = block.match(/^[^\n]*?(\d+)\.\s+(.+?)(?:\n|$)/);
+    if (headerMatch) {
+      const num = parseInt(headerMatch[1]);
+      const title = headerMatch[2].replace(/\*\*/g, "").trim();
+      const body = block.slice(headerMatch[0].length).trim();
+      sections.push({ number: num, title, body });
+    } else if (block.trim()) {
+      // Fallback: unnumbered block
+      const firstLine = block.split("\n")[0]?.trim() || "";
+      sections.push({ number: 0, title: firstLine, body: block.trim() });
+    }
+  }
+  return sections;
 };
 
-const buildNodes = (a: EditalAnalysis): FlowNode[] => [
-  { id: "edital",      label: "Edital",             value: a.numero_edital || "Edital",                       fullValue: a.numero_edital || "Edital",                       icon: Hash,           row: 0, col: 1, colSpan: 1, expandable: false },
-  { id: "modalidade",  label: "Modalidade",         value: truncate(a.modalidade, 30),                        fullValue: a.modalidade || "Não identificado",                icon: Clipboard,      row: 1, col: 0, colSpan: 1, expandable: false },
-  { id: "orgao",       label: "Órgão",              value: truncate(a.orgao, 40),                             fullValue: a.orgao || "Não identificado",                     icon: Building2,      row: 1, col: 2, colSpan: 1, expandable: true },
-  { id: "objeto",      label: "Objeto",             value: truncate(a.objeto, 80),                            fullValue: a.objeto || "Não identificado",                    icon: FileText,       row: 2, col: 0, colSpan: 3, expandable: true },
-  { id: "criterio",    label: "Critério",           value: truncate(a.criterio_julgamento, 30),               fullValue: a.criterio_julgamento || "Não identificado",       icon: Scale,          row: 3, col: 0, colSpan: 1, expandable: true },
-  { id: "sessao",      label: "Sessão Pública",     value: truncate(a.data_sessao, 30),                       fullValue: a.data_sessao || "Não identificado",               icon: Calendar,       row: 3, col: 1, colSpan: 1, expandable: false },
-  { id: "valor",       label: "Valor Estimado",     value: truncate(a.valor_estimado, 25),                    fullValue: a.valor_estimado || "Não informado",               icon: DollarSign,     row: 3, col: 2, colSpan: 1, expandable: true, extraContent: a.planilha_estimada },
-  { id: "habilitacao", label: "Habilitação",        value: truncate(a.condicoes_habilitacao, 40),             fullValue: a.condicoes_habilitacao || "Não identificado",     icon: Shield,         row: 4, col: 0, colSpan: 1, expandable: true },
-  { id: "sistema",     label: "Onde Licitar",       value: truncate(a.sistema_licitacao, 35),                 fullValue: a.sistema_licitacao || "Não identificado",         icon: Globe,          row: 4, col: 2, colSpan: 1, expandable: false },
-  { id: "resumo",      label: "Em Linguagem Simples", value: truncate(a.resumo_simples, 90),                  fullValue: a.resumo_simples || "Não identificado",           icon: MessageSquare,  row: 5, col: 0, colSpan: 3, expandable: true },
-];
+const getSectionByKeyword = (sections: ParsedSection[], ...keywords: string[]): ParsedSection | undefined =>
+  sections.find((s) =>
+    keywords.some((kw) => s.title.toLowerCase().includes(kw.toLowerCase()))
+  );
 
-const arrowDefs: FlowArrow[] = [
-  { from: "edital", to: "modalidade" },
-  { from: "edital", to: "orgao" },
-  { from: "modalidade", to: "objeto" },
-  { from: "orgao", to: "objeto" },
-  { from: "objeto", to: "criterio" },
-  { from: "objeto", to: "sessao" },
-  { from: "objeto", to: "valor" },
-  { from: "criterio", to: "habilitacao" },
-  { from: "sessao", to: "sistema" },
-  { from: "valor", to: "sistema" },
-  { from: "habilitacao", to: "resumo" },
-  { from: "sistema", to: "resumo" },
-];
+const getSectionBody = (sections: ParsedSection[], ...keywords: string[]): string =>
+  getSectionByKeyword(sections, ...keywords)?.body || "";
 
-const STAGGER_MS = 350;
-const CONNECTOR_PADDING = 1.5;
-
-// Convert **bold** markdown to <strong> tags
+/* ────────────────────────────────────────────
+   Formatting helpers
+   ──────────────────────────────────────────── */
 const formatBold = (text: string): string =>
   text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
 
-// ── Grid layout helper ──
-// 3-column grid, 6 rows. Returns CSS grid placement.
-const getGridStyle = (node: FlowNode): React.CSSProperties => ({
-  gridRow: node.row + 1,
-  gridColumn: node.colSpan === 3 ? "1 / -1" : `${node.col + 1} / span ${node.colSpan}`,
-});
+const stripEmoji = (text: string): string =>
+  text.replace(/^[^\w\s]*\s*/, "").trim();
 
-const getRectCenter = (rect: DOMRect, containerRect: DOMRect) => ({
-  x: rect.left - containerRect.left + rect.width / 2,
-  y: rect.top - containerRect.top + rect.height / 2,
-});
+/* ────────────────────────────────────────────
+   Complexity per-axis derivation
+   ──────────────────────────────────────────── */
+interface AxisScore {
+  label: string;
+  score: number;
+  justification: string;
+  icon: React.ElementType;
+}
 
-const getEdgePoint = (rect: DOMRect, target: { x: number; y: number }, containerRect: DOMRect) => {
-  const center = getRectCenter(rect, containerRect);
-  const halfWidth = Math.max(rect.width / 2, 1);
-  const halfHeight = Math.max(rect.height / 2, 1);
-  const dx = target.x - center.x;
-  const dy = target.y - center.y;
+const deriveAxes = (analysis: EditalAnalysis, sections: ParsedSection[]): AxisScore[] => {
+  const base = analysis.score_complexidade?.valor ?? 5;
+  const resumo = analysis.resumo_simples?.toLowerCase() || "";
+  const habBody = getSectionBody(sections, "habilitação", "habilitacao").toLowerCase();
+  const riskBody = getSectionBody(sections, "risco").toLowerCase();
+  const propBody = getSectionBody(sections, "proposta").toLowerCase();
+  const execBody = getSectionBody(sections, "execução", "execucao", "impacto").toLowerCase();
+  const prazoBody = getSectionBody(sections, "prazo").toLowerCase();
 
-  if (dx === 0 && dy === 0) return center;
+  const clamp = (v: number) => Math.max(1, Math.min(10, Math.round(v)));
 
-  const scale = 1 / Math.max(Math.abs(dx) / halfWidth, Math.abs(dy) / halfHeight);
-  const edgeX = center.x + dx * scale;
-  const edgeY = center.y + dy * scale;
-  const length = Math.hypot(dx, dy) || 1;
-
-  return {
-    x: edgeX + (dx / length) * CONNECTOR_PADDING,
-    y: edgeY + (dy / length) * CONNECTOR_PADDING,
-  };
+  return [
+    {
+      label: "Objeto e especificação",
+      icon: FileText,
+      score: clamp(base + (resumo.includes("amostra") ? 1 : 0) + (resumo.includes("catálogo") || resumo.includes("catalogo") ? 1 : 0) - 1),
+      justification: resumo.includes("amostra") ? "Exigência de amostra eleva a complexidade do objeto." :
+        resumo.includes("catálogo") ? "Exigência de catálogo ou ficha técnica." : "Objeto com especificação padrão.",
+    },
+    {
+      label: "Habilitação",
+      icon: Shield,
+      score: clamp(base + (habBody.includes("técnic") ? 1 : 0) + (habBody.includes("econômico") || habBody.includes("econômic") ? 1 : 0) - 1),
+      justification: habBody.includes("técnic") ? "Qualificação técnica exigida aumenta barreira." :
+        "Habilitação com requisitos padrão.",
+    },
+    {
+      label: "Proposta e julgamento",
+      icon: Scale,
+      score: clamp(base + (propBody.includes("marca") || propBody.includes("modelo") ? 1 : 0) - 1),
+      justification: propBody.includes("marca") ? "Exigência de marca/modelo na proposta." :
+        "Proposta com formatação padrão.",
+    },
+    {
+      label: "Execução contratual",
+      icon: ClipboardList,
+      score: clamp(base + (execBody.includes("garantia") ? 1 : 0) - 1),
+      justification: execBody.includes("garantia") ? "Garantia contratual ou de execução exigida." :
+        "Execução sem complexidade adicional identificada.",
+    },
+    {
+      label: "Procedimento e prazos",
+      icon: Calendar,
+      score: clamp(base + (prazoBody.includes("curto") || prazoBody.includes("imediato") ? 1 : 0) - 1),
+      justification: prazoBody.includes("curto") ? "Prazos curtos exigem ação rápida." :
+        "Prazos dentro da normalidade.",
+    },
+    {
+      label: "Risco econômico-sancionatório",
+      icon: AlertTriangle,
+      score: clamp(base + (riskBody.includes("multa") || riskBody.includes("sanç") ? 1 : 0) + (riskBody.includes("suspens") ? 1 : 0) - 1),
+      justification: riskBody.includes("multa") ? "Sanções com multas relevantes identificadas." :
+        riskBody.includes("sanç") ? "Cláusulas sancionatórias presentes." : "Risco sancionatório padrão.",
+    },
+  ];
 };
 
-const buildConnectorPath = (fromRect: DOMRect, toRect: DOMRect, containerRect: DOMRect) => {
-  const fromCenter = getRectCenter(fromRect, containerRect);
-  const toCenter = getRectCenter(toRect, containerRect);
-  const start = getEdgePoint(fromRect, toCenter, containerRect);
-  const end = getEdgePoint(toRect, fromCenter, containerRect);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const horizontalFirst = Math.abs(dx) > Math.abs(dy);
-  const curveStrength = Math.min(40, Math.max(16, Math.hypot(dx, dy) * 0.18));
-  const directionX = dx === 0 ? 0 : Math.sign(dx);
-  const directionY = dy === 0 ? 0 : Math.sign(dy);
-
-  const control1 = horizontalFirst
-    ? { x: start.x + directionX * curveStrength, y: start.y }
-    : { x: start.x, y: start.y + directionY * curveStrength };
-
-  const control2 = horizontalFirst
-    ? { x: end.x - directionX * curveStrength, y: end.y }
-    : { x: end.x, y: end.y - directionY * curveStrength };
-
-  return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${control1.x.toFixed(1)} ${control1.y.toFixed(1)}, ${control2.x.toFixed(1)} ${control2.y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+const getScoreColor = (v: number) => {
+  if (v <= 3) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Baixo" };
+  if (v <= 6) return { bg: "bg-amber-500/10", text: "text-amber-600", bar: "bg-amber-500", label: "Médio" };
+  return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Alto" };
 };
 
-// ── Complexity Score ──
-const ComplexityScore = ({ analysis }: { analysis: EditalAnalysis }) => {
-  const [showMethodology, setShowMethodology] = useState(false);
-  const score = analysis.score_complexidade?.valor ?? 5;
-  const justificativa = analysis.score_complexidade?.justificativa ?? "Score calculado com base na análise geral do edital.";
+/* ────────────────────────────────────────────
+   Diagnosis card builder
+   ──────────────────────────────────────────── */
+interface DiagCard {
+  title: string;
+  icon: React.ElementType;
+  content: string;
+  severity: "low" | "medium" | "high";
+}
 
-  const getColor = (v: number) => {
-    if (v <= 3) return { stroke: "#22c55e", glow: "rgba(34,197,94,0.25)", label: "Baixa", textClass: "text-emerald-500" };
-    if (v <= 6) return { stroke: "#f59e0b", glow: "rgba(245,158,11,0.25)", label: "Média", textClass: "text-amber-500" };
-    return { stroke: "#ef4444", glow: "rgba(239,68,68,0.25)", label: "Alta", textClass: "text-red-500" };
+const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): DiagCard[] => {
+  const participacao = getSectionBody(sections, "participar", "participação", "participacao");
+  const eliminar = getSectionBody(sections, "eliminar", "habilitação", "habilitacao", "risco de habilitação");
+  const custo = getSectionBody(sections, "custo", "impacto", "financeiro", "caixa");
+  const agora = getSectionBody(sections, "fazer agora", "checklist", "antes de participar", "providência");
+
+  const truncBody = (b: string, max = 250) => {
+    if (!b) return "Informação não identificada de forma expressa no edital.";
+    const clean = b.replace(/^[^\w]*/, "").trim();
+    return clean.length > max ? clean.slice(0, max).replace(/\s+\S*$/, "") + "…" : clean;
   };
-  const c = getColor(score);
 
-  const radius = 28;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 10) * circumference;
+  const scoreSeverity = (score: number): DiagCard["severity"] =>
+    score <= 3 ? "low" : score <= 6 ? "medium" : "high";
 
+  const base = analysis.score_complexidade?.valor ?? 5;
+
+  return [
+    {
+      title: "Posso participar?",
+      icon: Users,
+      content: truncBody(participacao),
+      severity: participacao.toLowerCase().includes("exclusiv") || participacao.toLowerCase().includes("restrit") ? "high" : "low",
+    },
+    {
+      title: "O que pode me eliminar",
+      icon: Ban,
+      content: truncBody(eliminar),
+      severity: scoreSeverity(Math.min(base + 1, 10)),
+    },
+    {
+      title: "O que pesa no custo",
+      icon: Wallet,
+      content: truncBody(custo),
+      severity: custo.toLowerCase().includes("garantia") || custo.toLowerCase().includes("caução") ? "high" : "medium",
+    },
+    {
+      title: "O que preciso fazer agora",
+      icon: Zap,
+      content: truncBody(agora),
+      severity: "medium",
+    },
+  ];
+};
+
+/* ────────────────────────────────────────────
+   Executive reading panels
+   ──────────────────────────────────────────── */
+interface ExecPanel {
+  title: string;
+  icon: React.ElementType;
+  body: string;
+}
+
+const buildExecPanels = (sections: ParsedSection[]): ExecPanel[] => [
+  { title: "Visão Geral", icon: Eye, body: getSectionBody(sections, "visão geral", "visao geral") },
+  { title: "Participação", icon: Users, body: getSectionBody(sections, "participar", "participação") },
+  { title: "Proposta", icon: FileCheck, body: getSectionBody(sections, "proposta comercial", "proposta") },
+  { title: "Habilitação", icon: Shield, body: getSectionBody(sections, "habilitação", "habilitacao") },
+  { title: "Execução", icon: ClipboardList, body: getSectionBody(sections, "execução", "impacto prático", "impacto") },
+  { title: "Sanções", icon: Gavel, body: getSectionBody(sections, "sanç", "risco sancion", "pontos de atenção") },
+];
+
+/* ────────────────────────────────────────────
+   PDF Export
+   ──────────────────────────────────────────── */
+const exportPdf = (analysis: EditalAnalysis) => {
+  const fields = [
+    { label: "EDITAL", value: analysis.numero_edital },
+    { label: "ÓRGÃO", value: analysis.orgao },
+    { label: "MODALIDADE", value: analysis.modalidade },
+    { label: "OBJETO", value: analysis.objeto },
+    { label: "VALOR ESTIMADO", value: analysis.valor_estimado },
+    { label: "CRITÉRIO", value: analysis.criterio_julgamento },
+    { label: "SESSÃO", value: analysis.data_sessao },
+    { label: "HABILITAÇÃO", value: analysis.condicoes_habilitacao },
+    { label: "PLATAFORMA", value: analysis.sistema_licitacao },
+  ];
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dossiê - ${analysis.numero_edital || "Edital"}</title>
+<style>@media print{@page{margin:20mm}}body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;max-width:800px;margin:0 auto;padding:40px 20px}
+h1{font-size:22px;color:#991b1b;border-bottom:2px solid #991b1b;padding-bottom:8px}
+h2{font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:2px;margin-top:24px;margin-bottom:4px}
+p{font-size:14px;line-height:1.7;margin:4px 0 16px}.footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
+</style></head><body>`;
+  html += `<h1>Dossiê Executivo — ${analysis.numero_edital || "Edital"}</h1>`;
+  fields.forEach((f) => { html += `<h2>${f.label}</h2><p>${f.value || "Não identificado"}</p>`; });
+  html += `<h2>ANÁLISE COMPLETA</h2><div style="white-space:pre-line;font-size:14px;line-height:1.8">${analysis.resumo_simples || ""}</div>`;
+  html += `<div class="footer">Dossiê gerado por Vade Mecum em Licitações — ${new Date().toLocaleDateString("pt-BR")}</div></body></html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (w) w.onload = () => setTimeout(() => w.print(), 500);
+};
+
+/* ────────────────────────────────────────────
+   Sub-components
+   ──────────────────────────────────────────── */
+
+const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
+  const cls =
+    severity === "low" ? "bg-emerald-500" :
+    severity === "medium" ? "bg-amber-500" : "bg-red-500";
+  return <span className={`inline-block h-2 w-2 rounded-full ${cls} shrink-0`} />;
+};
+
+const HeroField = ({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | undefined }) => {
+  if (!value || value === "Não identificado no edital") return null;
   return (
-    <div className="relative">
-      <button
-        onClick={() => setShowMethodology(!showMethodology)}
-        className="flex items-center gap-3 px-4 py-2 rounded-xl bg-card border border-border/80 shadow-md hover:shadow-lg transition-all cursor-pointer group"
-        title="Clique para ver a metodologia"
-      >
-        <div className="relative w-14 h-14">
-          <svg className="w-14 h-14 -rotate-90" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r={radius} stroke="hsl(var(--muted))" strokeWidth="4" fill="none" />
-            <circle
-              cx="32" cy="32" r={radius}
-              stroke={c.stroke}
-              strokeWidth="4.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-              style={{
-                transition: "stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                filter: `drop-shadow(0 0 6px ${c.glow})`,
-              }}
-            />
-          </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-base font-extrabold text-foreground">
-            {score}
-          </span>
-        </div>
-        <div className="text-left">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Complexidade</div>
-          <div className={`text-sm font-bold ${c.textClass}`}>{c.label}</div>
-          <div className="text-[10px] text-muted-foreground/60 group-hover:text-muted-foreground transition-colors flex items-center gap-0.5">
-            <Info className="h-2.5 w-2.5" />
-            Ver metodologia
-          </div>
-        </div>
-      </button>
+    <div className="flex items-start gap-2.5">
+      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+      <div>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">{label}</span>
+        <span className="text-sm font-medium text-foreground">{value}</span>
+      </div>
+    </div>
+  );
+};
 
-      {showMethodology && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowMethodology(false)} />
-          <div className="absolute top-full mt-2 right-0 w-80 bg-card border border-border rounded-xl shadow-2xl p-5 z-50 animate-fade-in">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-                <Info className="h-3 w-3 text-primary" />
-              </div>
-              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Metodologia do Score</span>
-            </div>
-            <p className="text-sm leading-relaxed text-foreground mb-4">{justificativa}</p>
-            <Separator className="mb-3" />
-            <div className="bg-muted/50 rounded-lg p-3">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                ⚠️ Este score é calculado automaticamente por análise textual do edital (sem IA).
-                Fatores considerados: extensão do documento, valor estimado, exigências de habilitação,
-                complexidade do objeto, garantias, subcontratação e especificidades técnicas.
-                <strong className="block mt-1.5 text-foreground/80">Não substitui análise jurídica profissional.</strong>
-              </p>
-            </div>
+const ExpandableSection = ({ title, icon: Icon, children, defaultOpen = false }: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-4 bg-card hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Icon className="h-4 w-4 text-primary" />
           </div>
-        </>
+          <span className="text-sm font-bold text-foreground">{title}</span>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="px-5 pb-5 pt-2 bg-card">
+          {children}
+        </div>
       )}
     </div>
   );
 };
 
-// ── Timeline ──
-const TimelineBar = ({ analysis }: { analysis: EditalAnalysis }) => {
-  const t = analysis.timeline;
-  if (!t) return null;
+const RichText = ({ text }: { text: string }) => {
+  if (!text) return <p className="text-sm text-muted-foreground italic">Informação não identificada de forma expressa no edital.</p>;
 
-  const steps = [
-    { label: "Publicação", value: t.data_publicacao, icon: FileText },
-    { label: "Impugnação", value: t.prazo_impugnacao, icon: Shield, sublabel: "Prazo limite" },
-    { label: "Esclarecimento", value: t.prazo_esclarecimento, icon: MessageSquare, sublabel: "Prazo limite" },
-    { label: "Abertura", value: t.data_abertura, icon: Calendar },
-  ].filter(s => s.value);
-
-  if (steps.length === 0) return null;
-
+  const paragraphs = text.split(/\n\n+/);
   return (
-    <div className="flex items-center gap-0 justify-center w-full px-6">
-      {steps.map((step, i) => {
-        const Icon = step.icon;
-        return (
-          <div key={step.label} className="flex items-center">
-            <div className="flex flex-col items-center px-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
-                <Icon className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">
-                {step.label}
-              </span>
-              <span className="text-[11px] font-medium text-foreground">
-                {step.value}
-              </span>
-              {step.sublabel && (
-                <span className="text-[9px] text-muted-foreground">{step.sublabel}</span>
-              )}
-            </div>
-            {i < steps.length - 1 && (
-              <div className="w-12 h-px bg-primary/20 relative -mt-6">
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0 h-0 border-t-[3px] border-b-[3px] border-l-[5px] border-transparent border-l-primary/30" />
-              </div>
-            )}
-          </div>
-        );
+    <div className="space-y-3">
+      {paragraphs.map((para, i) => {
+        const trimmed = para.trim();
+        if (!trimmed) return null;
+
+        // Numbered list
+        if (/^\d+\.\s/.test(trimmed)) {
+          return (
+            <ol key={i} className="space-y-2 pl-1">
+              {trimmed.split("\n").filter(Boolean).map((item, j) => (
+                <li key={j} className="flex gap-3 text-sm text-foreground">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                    {item.match(/^(\d+)\./)?.[1]}
+                  </span>
+                  <span className="flex-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBold(item.replace(/^\d+\.\s*/, "")) }} />
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        // Bullet list (emoji bullets)
+        if (/^[•✅⚠️❌📌🔒💳📈🏗️📜🏦🔧📊📝⚡🤝🔄🌱🔎🏆🚫📍⏰📐🧪💻💡📋📦🖥️📑📅🚨🎯🏁❓⏱️🔗]/.test(trimmed)) {
+          return (
+            <ul key={i} className="space-y-2 pl-1">
+              {trimmed.split("\n").filter(Boolean).map((item, j) => {
+                const emoji = item.match(/^[^\w\s]*/u)?.[0]?.trim() || "•";
+                const rest = item.replace(/^[^\w\s]*\s*/, "");
+                return (
+                  <li key={j} className="flex gap-3 text-sm text-foreground">
+                    <span className="shrink-0 text-base">{emoji}</span>
+                    <span className="flex-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBold(rest) }} />
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
+
+        // Blockquote
+        if (trimmed.startsWith(">")) {
+          return (
+            <blockquote key={i} className="border-l-2 border-primary/30 pl-4 py-2 bg-primary/[0.03] rounded-r-lg text-sm text-foreground/90 italic">
+              {trimmed.replace(/^>\s*/, "").replace(/^"/, "").replace(/"$/, "")}
+            </blockquote>
+          );
+        }
+
+        // Regular paragraph
+        return <p key={i} className="text-sm leading-relaxed text-foreground" dangerouslySetInnerHTML={{ __html: formatBold(trimmed) }} />;
       })}
     </div>
   );
 };
 
-// ── PDF Export ──
-const exportPdf = (analysis: EditalAnalysis) => {
-  const sections = [
-    { title: "EDITAL", value: analysis.numero_edital },
-    { title: "MODALIDADE", value: analysis.modalidade },
-    { title: "ÓRGÃO", value: analysis.orgao },
-    { title: "OBJETO", value: analysis.objeto },
-    { title: "VALOR ESTIMADO", value: analysis.valor_estimado },
-    { title: "CRITÉRIO DE JULGAMENTO", value: analysis.criterio_julgamento },
-    { title: "DATA DA SESSÃO", value: analysis.data_sessao },
-    { title: "CONDIÇÕES DE HABILITAÇÃO", value: analysis.condicoes_habilitacao },
-    { title: "ONDE LICITAR", value: analysis.sistema_licitacao },
-  ];
-
-  const score = analysis.score_complexidade;
-  const timeline = analysis.timeline;
-
-  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Análise - ${analysis.numero_edital || "Edital"}</title>
-<style>
-  @media print { @page { margin: 20mm; } }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
-  h1 { font-size: 20px; color: #b91c1c; border-bottom: 2px solid #b91c1c; padding-bottom: 8px; }
-  h2 { font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px; margin-top: 24px; margin-bottom: 4px; }
-  p { font-size: 14px; line-height: 1.7; margin: 4px 0 16px; }
-  .score { display: inline-block; background: #f3f4f6; padding: 8px 16px; border-radius: 8px; margin: 8px 0; font-weight: 600; }
-  .timeline { display: flex; gap: 20px; margin: 12px 0 24px; flex-wrap: wrap; }
-  .timeline-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; text-align: center; }
-  .timeline-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; font-weight: 600; }
-  .timeline-value { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-top: 2px; }
-  .resumo { background: #fef2f2; border-left: 3px solid #b91c1c; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 8px; }
-  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
-</style></head><body>`;
-
-  html += `<h1>📋 Análise de Edital</h1>`;
-
-  if (score) {
-    const label = score.valor <= 3 ? "Baixa" : score.valor <= 6 ? "Média" : "Alta";
-    html += `<div class="score">Complexidade: ${score.valor}/10 — ${label}</div>`;
-    html += `<p style="font-size:12px;color:#6b7280;">${score.justificativa}</p>`;
-  }
-
-  if (timeline) {
-    const items = [
-      { label: "Publicação", value: timeline.data_publicacao },
-      { label: "Impugnação", value: timeline.prazo_impugnacao },
-      { label: "Esclarecimento", value: timeline.prazo_esclarecimento },
-      { label: "Abertura", value: timeline.data_abertura },
-    ].filter(i => i.value);
-    if (items.length > 0) {
-      html += `<h2>📅 Cronograma</h2><div class="timeline">`;
-      items.forEach(i => {
-        html += `<div class="timeline-item"><div class="timeline-label">${i.label}</div><div class="timeline-value">${i.value}</div></div>`;
-      });
-      html += `</div>`;
-    }
-  }
-
-  sections.forEach(s => {
-    html += `<h2>${s.title}</h2><p>${s.value || "Não identificado"}</p>`;
-  });
-
-  html += `<h2>📝 EM LINGUAGEM SIMPLES</h2><div class="resumo"><p>${(analysis.resumo_simples || "").replace(/\n/g, "</p><p>")}</p></div>`;
-
-  html += `<div class="footer">Gerado por Vade Mecum em Licitações — ${new Date().toLocaleDateString("pt-BR")}</div>`;
-  html += `</body></html>`;
-
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank");
-  if (w) {
-    w.onload = () => {
-      setTimeout(() => { w.print(); }, 500);
-    };
-  }
-};
-
-// ── Main ──
+/* ────────────────────────────────────────────
+   Main Component
+   ──────────────────────────────────────────── */
 const EditalPresentationView = ({ analysis, onClose }: Props) => {
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedNode, setExpandedNode] = useState<string | null>(null);
-  const [connectorPaths, setConnectorPaths] = useState<ConnectorPath[]>([]);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sections = useMemo(() => parseSections(analysis.resumo_simples || ""), [analysis.resumo_simples]);
+  const diagCards = useMemo(() => buildDiagCards(sections, analysis), [sections, analysis]);
+  const execPanels = useMemo(() => buildExecPanels(sections), [sections]);
+  const axes = useMemo(() => deriveAxes(analysis, sections), [analysis, sections]);
 
-  const nodes = useMemo(() => buildNodes(analysis), [analysis]);
+  const score = analysis.score_complexidade?.valor ?? 5;
+  const scoreColor = getScoreColor(score);
 
-  const start = useCallback(() => {
-    setVisibleCount(0);
-    setExpandedNode(null);
-    setIsPlaying(true);
-  }, []);
+  // Checklist
+  const checklistBody = getSectionBody(sections, "fazer antes", "checklist", "antes de participar", "fazer agora");
 
-  useEffect(() => {
-    if (!isPlaying) return;
-    if (visibleCount >= nodes.length) {
-      setIsPlaying(false);
-      return;
-    }
-    const timer = setTimeout(() => setVisibleCount((c) => c + 1), STAGGER_MS);
-    return () => clearTimeout(timer);
-  }, [isPlaying, visibleCount, nodes.length]);
+  // Conclusion
+  const conclusionBody = getSectionBody(sections, "conclusão", "conclusao");
 
-  useEffect(() => {
-    const t = setTimeout(() => start(), 300);
-    return () => clearTimeout(t);
-  }, [start]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (expandedNode) setExpandedNode(null);
-        else onClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose, expandedNode]);
-
-  const visibleNodeIds = new Set(nodes.slice(0, visibleCount).map((n) => n.id));
-  const visibleArrows = arrowDefs.filter(
-    (a) => visibleNodeIds.has(a.from) && visibleNodeIds.has(a.to)
-  );
-
-  const allVisible = visibleCount >= nodes.length && !isPlaying;
-
-  useLayoutEffect(() => {
-    const updateConnectors = () => {
-      const containerEl = containerRef.current;
-
-      if (!containerEl || visibleArrows.length === 0) {
-        setConnectorPaths([]);
-        return;
-      }
-
-      const containerRect = containerEl.getBoundingClientRect();
-
-      const nextPaths = visibleArrows.flatMap((arrow) => {
-        const fromEl = nodeRefs.current[arrow.from];
-        const toEl = nodeRefs.current[arrow.to];
-
-        if (!fromEl || !toEl) return [];
-
-        const fromRect = fromEl.getBoundingClientRect();
-        const toRect = toEl.getBoundingClientRect();
-
-        if (!fromRect.width || !fromRect.height || !toRect.width || !toRect.height) return [];
-
-        return [{
-          id: `${arrow.from}-${arrow.to}`,
-          d: buildConnectorPath(fromRect, toRect, containerRect),
-        }];
-      });
-
-      setConnectorPaths((current) => {
-        if (
-          current.length === nextPaths.length &&
-          current.every((path, index) => path.id === nextPaths[index]?.id && path.d === nextPaths[index]?.d)
-        ) {
-          return current;
-        }
-
-        return nextPaths;
-      });
-    };
-
-    const frameId = window.requestAnimationFrame(updateConnectors);
-    const settleTimeoutId = window.setTimeout(updateConnectors, 550);
-    const resizeObserver = typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(() => updateConnectors())
-      : null;
-
-    if (containerRef.current) {
-      resizeObserver?.observe(containerRef.current);
-    }
-
-    visibleArrows.forEach(({ from, to }) => {
-      const fromEl = nodeRefs.current[from];
-      const toEl = nodeRefs.current[to];
-
-      if (fromEl) resizeObserver?.observe(fromEl);
-      if (toEl) resizeObserver?.observe(toEl);
-    });
-
-    window.addEventListener("resize", updateConnectors);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.clearTimeout(settleTimeoutId);
-      window.removeEventListener("resize", updateConnectors);
-      resizeObserver?.disconnect();
-    };
-  }, [visibleArrows]);
+  // Simple language
+  const simpleLangBody = getSectionBody(sections, "linguagem simples", "em linguagem");
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-background">
-      {/* Top bar */}
+    <div className="fixed inset-0 z-[100] flex flex-col bg-background overflow-hidden">
+      {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-primary-foreground bg-primary">
-            V
-          </div>
+          <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-primary-foreground bg-primary">V</div>
           <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Mapa do Edital
+            Dossiê Executivo
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {allVisible && <ComplexityScore analysis={analysis} />}
-          {allVisible && (
-            <Button variant="outline" size="sm" onClick={() => exportPdf(analysis)} className="gap-1.5 text-muted-foreground">
-              <Download className="h-3.5 w-3.5" />
-              PDF
-            </Button>
-          )}
-          {!isPlaying && visibleCount >= nodes.length && (
-            <Button variant="ghost" size="sm" onClick={start} className="gap-1.5 text-muted-foreground">
-              <RotateCcw className="h-3.5 w-3.5" />
-              Replay
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={() => exportPdf(analysis)} className="gap-1.5 text-muted-foreground">
+            <Download className="h-3.5 w-3.5" />
+            PDF
+          </Button>
           <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Canvas - CSS Grid layout */}
-      <div className="flex-1 relative overflow-auto" style={{ background: "linear-gradient(135deg, hsl(var(--muted) / 0.5), hsl(var(--background)), hsl(var(--muted) / 0.3))" }}>
-        {/* Subtle grid background */}
-        <svg className="absolute inset-0 w-full h-full opacity-[0.03] pointer-events-none">
-          <pattern id="cleanGrid" width="48" height="48" patternUnits="userSpaceOnUse">
-            <path d="M 48 0 L 0 0 0 48" fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.5" />
-          </pattern>
-          <rect width="100%" height="100%" fill="url(#cleanGrid)" />
-        </svg>
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
 
-        {/* Grid container */}
-        <div
-          ref={containerRef}
-          className="relative mx-auto px-6 py-8"
-          style={{
-            maxWidth: 900,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gridTemplateRows: "repeat(6, auto)",
-            gap: "16px 16px",
-          }}
-        >
-          {/* SVG connector lines between grid nodes */}
-          <GridConnectors paths={connectorPaths} />
-
-          {/* Nodes */}
-          {nodes.map((node, i) => (
-            <FlowNodeEl
-              key={node.id}
-              node={node}
-              visible={i < visibleCount}
-              nodeRef={(element) => {
-                nodeRefs.current[node.id] = element;
-              }}
-              onExpand={() => node.expandable && setExpandedNode(node.id)}
-            />
-          ))}
-        </div>
-
-        {/* Expanded overlay */}
-        {expandedNode && (
-          <ExpandedCard
-            node={nodes.find((n) => n.id === expandedNode)!}
-            onClose={() => setExpandedNode(null)}
-          />
-        )}
-      </div>
-
-      {/* Bottom timeline */}
-      {allVisible && analysis.timeline && (
-        <div className="px-6 py-3 border-t border-border bg-card flex items-center justify-center shrink-0">
-          <div className="flex items-center gap-2 mr-4">
-            <Clock className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cronograma</span>
-          </div>
-          <TimelineBar analysis={analysis} />
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── FlowNodeEl (grid-based) ──
-const FlowNodeEl = ({
-  node,
-  visible,
-  nodeRef,
-  onExpand,
-}: {
-  node: FlowNode;
-  visible: boolean;
-  nodeRef: (element: HTMLDivElement | null) => void;
-  onExpand: () => void;
-}) => {
-  const Icon = node.icon;
-  const isWide = node.colSpan === 3;
-
-  return (
-    <div
-      ref={nodeRef}
-      style={{
-        ...getGridStyle(node),
-        transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
-        transform: visible ? "scale(1)" : "scale(0.85)",
-        opacity: visible ? 1 : 0,
-        zIndex: 10,
-        cursor: node.expandable ? "pointer" : "default",
-        justifySelf: !isWide && node.col === 1 ? "center" : "stretch",
-      }}
-      onClick={node.expandable ? onExpand : undefined}
-    >
-      <Card className={`h-full transition-shadow duration-200 ${
-        node.id === "resumo"
-          ? "shadow-lg border-primary/30 bg-primary/[0.03] ring-1 ring-primary/10"
-          : "shadow-sm border-border/60 bg-card ring-1 ring-black/[0.04]"
-      } ${node.expandable ? "hover:shadow-lg hover:border-primary/40 hover:ring-primary/10 group" : ""}`}>
-        <CardContent className={`px-4 py-3 flex flex-col gap-1 ${isWide ? "items-start" : "items-center text-center"}`}>
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Icon className="h-3.5 w-3.5 text-primary" />
-            </div>
-            <span className={`font-semibold uppercase tracking-wider ${node.id === "resumo" ? "text-xs text-primary" : "text-[11px] text-muted-foreground"}`}>
-              {node.label}
-            </span>
-            {node.expandable && (
-              <ChevronDown className="h-3 w-3 text-muted-foreground/40 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </div>
-          <p
-            className="text-foreground leading-snug"
-            style={{
-              fontSize: node.id === "edital" ? 15 : 13,
-              fontWeight: node.id === "edital" ? 700 : 500,
-              display: "-webkit-box",
-              WebkitLineClamp: isWide ? 3 : 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {node.value}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-// ── Grid Connectors ──
-const GridConnectors = ({ paths }: { paths: ConnectorPath[] }) => {
-  if (paths.length === 0) return null;
-
-  return (
-    <svg className="absolute inset-0 h-full w-full pointer-events-none" aria-hidden="true">
-      {paths.map((path) => (
-        <path
-          key={path.id}
-          d={path.d}
-          fill="none"
-          stroke="hsl(var(--primary) / 0.22)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      ))}
-    </svg>
-  );
-};
-
-// ── ExpandedCard ──
-const ExpandedCard = ({ node, onClose }: { node: FlowNode; onClose: () => void }) => {
-  const Icon = node.icon;
-  const hasPlanilha = node.id === "valor" && node.extraContent && node.extraContent !== "Não disponível no edital";
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-40 animate-fade-in" onClick={onClose} />
-      <div
-        className="fixed z-50 animate-scale-in"
-        style={{
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(95%, 900px)",
-          maxHeight: "80vh",
-        }}
-      >
-        <Card className="border-primary/20 shadow-xl">
-          <CardContent className="p-6 overflow-y-auto" style={{ maxHeight: "80vh" }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <Icon className="h-4 w-4 text-primary" />
-                </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  {node.label}
-                </h3>
-              </div>
-              <Button variant="ghost" size="sm" onClick={onClose} className="gap-1 text-muted-foreground">
-                <ChevronUp className="h-3.5 w-3.5" />
-                Fechar
-              </Button>
-            </div>
-
-            {node.id === "habilitacao" && node.fullValue ? (
-              <div className="space-y-3">
-                {node.fullValue.split('\n').map((item: string) => item.trim()).filter(Boolean).map((item: string, i: number) => {
-                  const emoji = item.match(/^[📜🏦🔧📊📝]/u)?.[0] || '•';
-                  const rest = item.replace(/^[📜🏦🔧📊📝]\s*/, '');
-                  const [title, ...desc] = rest.split(':');
-                  return (
-                    <div key={i} className="flex gap-3 p-3 rounded-lg bg-muted/40 border border-border/50">
-                      <span className="text-lg shrink-0">{emoji}</span>
-                      <div>
-                        <span className="font-semibold text-sm text-foreground">{title?.trim()}</span>
-                        {desc.length > 0 && (
-                          <p className="text-sm text-muted-foreground mt-0.5">{desc.join(':').trim()}</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : node.id === "resumo" && node.fullValue ? (
-              <div className="space-y-8">
-                {node.fullValue.split(/\n\n---\n\n/).map((section: string, si: number) => {
-                  const lines = section.split('\n');
-                  const title = lines[0]?.trim();
-                  const body = lines.slice(1).join('\n').trim();
-                  const isHeader = /^[📋💰🖥️📑📅📝🚨✅🏢⚡🤝🔄🌱🔎🏆🚫📌]/.test(title);
-
-                  return (
-                    <div key={si}>
-                      {si > 0 && <Separator className="mb-6" />}
-                      {isHeader && (
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                          <span className="text-lg">{title.match(/^./u)?.[0]}</span>
-                          <span>{title.replace(/^.\s*/, '')}</span>
-                        </h4>
-                      )}
-                      <div className="text-sm leading-[1.85] text-foreground space-y-3">
-                        {(isHeader ? body : section).split('\n\n').map((para: string, pi: number) => {
-                          if (para.trim().startsWith('>')) {
-                            return (
-                              <blockquote key={pi} className="border-l-3 border-primary/30 pl-4 py-2 bg-primary/[0.03] rounded-r-lg italic text-foreground/90">
-                                {para.replace(/^>\s*/, '').replace(/^"/, '').replace(/"$/, '')}
-                              </blockquote>
-                            );
-                          }
-                          if (/^\d+\.\s/.test(para.trim())) {
-                            return (
-                              <ol key={pi} className="space-y-3 pl-1">
-                                {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
-                                  <li key={ii} className="flex gap-3 text-sm">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold mt-0.5">
-                                      {item.match(/^(\d+)\./)?.[1]}
-                                    </span>
-                                    <span className="flex-1" dangerouslySetInnerHTML={{ __html: formatBold(item.replace(/^\d+\.\s*/, '')) }} />
-                                  </li>
-                                ))}
-                              </ol>
-                            );
-                          }
-                          if (/^[•⚡🤝🔗🔄🌱📋📌📰⚠️❓🏁⏱️🚫🔒📍⏰💳📈📐🧪💻🏗️📜🏦🔧📊💡📝]/.test(para.trim())) {
-                            return (
-                              <ul key={pi} className="space-y-3 pl-1">
-                                {para.split('\n').filter(Boolean).map((item: string, ii: number) => (
-                                  <li key={ii} className="flex gap-3 text-sm">
-                                    <span className="shrink-0 text-base mt-0.5">{item.match(/^[^\s]*/u)?.[0]?.replace(/\*\*/g, '') || '•'}</span>
-                                    <span className="flex-1" dangerouslySetInnerHTML={{ __html: formatBold(item.replace(/^[^\s]*\s*/, '')) }} />
-                                  </li>
-                                ))}
-                              </ul>
-                            );
-                          }
-                          return <p key={pi} className="whitespace-pre-line" dangerouslySetInnerHTML={{ __html: formatBold(para) }} />;
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
-                {node.fullValue}
-              </p>
-            )}
-
-            {hasPlanilha && (
-              <>
-                <Separator className="my-4" />
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-                    <TableProperties className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Planilha Estimativa
-                  </h4>
-                </div>
-                {Array.isArray(node.extraContent) && typeof node.extraContent[0] === "object" ? (
-                  <div className="rounded-lg border border-border">
-                    <table className="w-full text-xs table-fixed">
-                      <thead>
-                        <tr className="bg-muted">
-                          {Object.keys(node.extraContent[0] as Record<string, unknown>).map((h) => (
-                            <th key={h} className="px-2 py-2 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
-                              {h.replace(/_/g, " ")}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(node.extraContent as Array<Record<string, unknown>>).map((row, i) => (
-                          <tr key={i} className={i % 2 === 0 ? "bg-card" : "bg-muted/30"}>
-                            {Object.values(row).map((v, j) => (
-                              <td key={j} className="px-2 py-2 text-foreground text-[11px] break-words">{String(v ?? "")}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-line bg-muted/50 rounded-lg p-4 border border-border">
-                    {typeof node.extraContent === "string" ? node.extraContent : JSON.stringify(node.extraContent, null, 2)}
-                  </div>
+          {/* ━━━━ 1. HERO EXECUTIVO ━━━━ */}
+          <section>
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                  {analysis.numero_edital || "Edital"}
+                </h1>
+                {analysis.orgao && analysis.orgao !== "Não identificado no edital" && (
+                  <p className="text-base text-muted-foreground">{analysis.orgao}</p>
                 )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+              </div>
+
+              {/* Complexity badge */}
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border border-border ${scoreColor.bg}`}>
+                <div className="text-center">
+                  <span className={`text-2xl font-extrabold ${scoreColor.text}`}>{score}</span>
+                  <span className="text-xs text-muted-foreground">/10</span>
+                </div>
+                <div>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${scoreColor.text}`}>{scoreColor.label}</span>
+                  <span className="text-[10px] text-muted-foreground block">Complexidade</span>
+                </div>
+              </div>
+            </div>
+
+            <Separator className="my-5" />
+
+            {/* Metadata grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4">
+              <HeroField icon={Scale} label="Modalidade" value={analysis.modalidade} />
+              <HeroField icon={Calendar} label="Sessão Pública" value={analysis.data_sessao} />
+              <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} />
+              <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} />
+              <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} />
+              <HeroField icon={Users} label="Participação" value={
+                analysis.resumo_simples?.toLowerCase().includes("exclusiv") ? "Exclusiva ME/EPP" :
+                analysis.resumo_simples?.toLowerCase().includes("ampla") ? "Ampla concorrência" : undefined
+              } />
+              <HeroField icon={Hash} label="Unidade da Disputa" value={
+                analysis.resumo_simples?.toLowerCase().includes("por item") ? "Por item" :
+                analysis.resumo_simples?.toLowerCase().includes("por lote") ? "Por lote" :
+                analysis.resumo_simples?.toLowerCase().includes("global") ? "Global" : undefined
+              } />
+              <HeroField icon={Building2} label="Órgão" value={analysis.orgao} />
+            </div>
+
+            {/* Extraction confidence */}
+            <div className="mt-4 flex items-center gap-2">
+              <Info className="h-3 w-3 text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">
+                Análise por extração textual automatizada (regex) — sem custo de IA. Não substitui análise jurídica profissional.
+              </span>
+            </div>
+          </section>
+
+          {/* ━━━━ 2. DIAGNÓSTICO RÁPIDO ━━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Diagnóstico Rápido
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {diagCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <Card key={card.title} className="border-border/60">
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                          <Icon className="h-4.5 w-4.5 text-primary" />
+                        </div>
+                        <h3 className="text-sm font-bold text-foreground flex-1">{card.title}</h3>
+                        <SeverityDot severity={card.severity} />
+                      </div>
+                      <p className="text-sm text-foreground/80 leading-relaxed">{card.content}</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ━━━━ 3. LEITURA EXECUTIVA ━━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Leitura Executiva
+            </h2>
+            <div className="space-y-3">
+              {execPanels.map((panel, i) => (
+                <ExpandableSection
+                  key={panel.title}
+                  title={panel.title}
+                  icon={panel.icon}
+                  defaultOpen={i === 0}
+                >
+                  <RichText text={panel.body} />
+                </ExpandableSection>
+              ))}
+            </div>
+          </section>
+
+          {/* ━━━━ 4. COMPLEXIDADE POR EIXO ━━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Complexidade por Eixo
+            </h2>
+            <Card className="border-border/60">
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {axes.map((axis) => {
+                    const Icon = axis.icon;
+                    const color = getScoreColor(axis.score);
+                    return (
+                      <div key={axis.label} className="flex items-center gap-4">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                          <Icon className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-foreground">{axis.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${color.text}`}>{axis.score}/10</span>
+                              <Badge variant="outline" className={`text-[10px] ${color.text} border-transparent ${color.bg}`}>
+                                {color.label}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${color.bar} transition-all duration-700`}
+                              style={{ width: `${(axis.score / 10) * 100}%` }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">{axis.justification}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Separator className="my-5" />
+
+                {/* Overall */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`text-3xl font-extrabold ${scoreColor.text}`}>{score}</span>
+                    <div>
+                      <span className={`text-sm font-bold ${scoreColor.text}`}>Complexidade {scoreColor.label}</span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        {analysis.score_complexidade?.justificativa || "Baseado na análise textual do edital."}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* ━━━━ 5. CHECKLIST OPERACIONAL ━━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Checklist Operacional
+            </h2>
+            <Card className="border-border/60">
+              <CardContent className="p-5">
+                {checklistBody ? (
+                  <RichText text={checklistBody} />
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    Checklist não identificado de forma expressa na análise. Consulte o edital original.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* ━━━━ 6. EVIDÊNCIAS ━━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Evidências e Seções Completas
+            </h2>
+            <div className="space-y-2">
+              {sections.filter((s) => s.body.length > 20).map((sec, i) => (
+                <ExpandableSection
+                  key={i}
+                  title={sec.number > 0 ? `${sec.number}. ${stripEmoji(sec.title)}` : stripEmoji(sec.title)}
+                  icon={ScrollText}
+                >
+                  <RichText text={sec.body} />
+                </ExpandableSection>
+              ))}
+            </div>
+          </section>
+
+          {/* ━━━━ CONCLUSÃO ━━━━ */}
+          {conclusionBody && (
+            <section className="pb-8">
+              <Card className="border-primary/20 bg-primary/[0.02]">
+                <CardContent className="p-6">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-primary mb-3">
+                    Conclusão Executiva
+                  </h2>
+                  <RichText text={conclusionBody} />
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+        </div>
       </div>
-    </>
+
+      {/* ── Footer ── */}
+      <div className="px-6 py-2 border-t border-border bg-card shrink-0 flex items-center justify-center">
+        <span className="text-[10px] text-muted-foreground">
+          Dossiê gerado por extração textual automatizada — não substitui análise jurídica profissional
+        </span>
+      </div>
+    </div>
   );
 };
 

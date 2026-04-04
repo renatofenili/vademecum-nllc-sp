@@ -128,7 +128,7 @@ function extractUnidadeDisputa(text: string): string {
 // ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
   return firstMatch(text, [
-    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
+    /(?:EDITAL|PREGÃO|CONCORRÊNCIA|TOMADA\s+DE\s+PREÇOS?)\s*(?:ELETRÔNIC[OA]\s*)?(?:\w+\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
     /(?:EDITAL)\s*(?:N[°ºo.]*\s*)?([\w\-]+\/\d{4})/i,
     /(?:PROCESSO\s+(?:LICITATÓRIO\s+)?(?:N[°ºo.]*\s*)?)([\d.\-\/]+\d+)/i,
   ]) || "Não identificado";
@@ -174,8 +174,8 @@ function normalizeModalidade(raw: string): string {
   return raw.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-const INSTITUTION_KEYWORD_REGEX = /\b(prefeitura|munic[ií]pio|secretaria|minist[eé]rio|governo|estado|c[aâ]mara|tribunal|funda[cç][aã]o|autarquia|universidade|instituto|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|ag[eê]ncia|superintend[eê]ncia)\b/i;
-const INSTITUTION_CAPTURE_REGEX = /(?:prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|minist[eé]rio|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio)[^,.;\n]{2,180}/i;
+const INSTITUTION_KEYWORD_REGEX = /\b(prefeitura|munic[ií]pio|secretaria|minist[eé]rio|governo|estado|c[aâ]mara|tribunal|funda[cç][aã]o|autarquia|universidade|instituto|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|ag[eê]ncia|superintend[eê]ncia|banco\s+central|defensoria|procuradoria|controladoria|advocacia[\-\s]geral)\b/i;
+const INSTITUTION_CAPTURE_REGEX = /(?:prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|minist[eé]rio|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|banco\s+central(?:\s+do\s+brasil)?|defensoria|procuradoria|controladoria|advocacia[\-\s]geral)[^,.;\n]{0,180}/i;
 
 function normalizeInstitutionCase(value: string): string {
   const compact = value.replace(/\s+/g, " ").trim();
@@ -228,6 +228,7 @@ function scoreOrgaoCandidate(value: string): number {
 
   const positiveSignals: Array<[RegExp, number]> = [
     [/\bminist[eé]rio\b/i, 14],
+    [/\bbanco\s+central\b/i, 14],
     [/\bsecretaria\b/i, 12],
     [/\btribunal\b/i, 11],
     [/\buniversidade\b/i, 11],
@@ -292,7 +293,7 @@ function extractOrgao(text: string): string {
 
   const labeledPatterns = [
     /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]\s*([^\n]{4,200})/gim,
-    /(?:por\s+interm[eé]dio\s+d[ao]|por\s+meio\s+d[ao]|atrav[ée]s\s+d[ao])\s+((?:minist[eé]rio|secretaria|prefeitura|munic[ií]pio|governo|tribunal|c[aâ]mara|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio)[^,.;\n]{4,180})/gim,
+    /(?:por\s+interm[eé]dio\s+d[ao]|por\s+meio\s+d[ao]|atrav[ée]s\s+d[ao])\s+((?:minist[eé]rio|secretaria|prefeitura|munic[ií]pio|governo|tribunal|c[aâ]mara|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|banco\s+central)[^,.;\n]{4,180})/gim,
   ];
 
   for (const pattern of labeledPatterns) {
@@ -302,7 +303,7 @@ function extractOrgao(text: string): string {
   }
 
   const contextualPatterns = [
-    /(?:^|\n)\s*((?:minist[eé]rio|prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio)[^\n]{0,220})/gim,
+    /(?:^|\n)\s*((?:minist[eé]rio|prefeitura(?:\s+municipal)?|munic[ií]pio\s+de|governo\s+do(?:\s+estado\s+de)?|secretaria(?:\s+(?:municipal|estadual|de\s+estado))?(?:\s+de)?|c[aâ]mara(?:\s+municipal)?|tribunal(?:\s+de\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^,.;\n]{0,60})?|funda[cç][aã]o|autarquia|universidade|instituto|superintend[eê]ncia|ag[eê]ncia|companhia|empresa\s+(?:p[úu]blica|municipal)|departamento|servi[cç]o\s+aut[oô]nomo|cons[oó]rcio|banco\s+central(?:\s+do\s+brasil)?)[^\n]{0,220})/gim,
   ];
 
   for (const pattern of contextualPatterns) {

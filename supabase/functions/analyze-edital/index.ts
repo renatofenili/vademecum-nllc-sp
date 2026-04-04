@@ -850,26 +850,26 @@ function extractDataSessao(text: string): string {
 }
 
 function extractSistema(text: string): string {
-  // Check for explicit platform declarations first
-  const explicit = firstMatch(text, [
-    /(?:plataforma|sistema|endereço\s+eletrônico|sítio|site|portal)\s*[:.\-–—]\s*(?:(?:www\.?|https?:\/\/)?)(compras\.?gov\.?br|comprasnet|licitanet|bllcompras|bll\s+compras|licitações[\-\s]?e|licitacoes[\-\s]?e|bec[\s\-\/]?sp|bolsa\s+eletrônica)/i,
-  ]);
-  if (explicit) {
-    const m = explicit.toLowerCase();
-    if (/compras\.?gov|comprasnet/.test(m)) return "Compras.gov.br";
-    if (/bec|bolsa\s+eletrônica/.test(m)) return "BEC/SP - Bolsa Eletrônica de Compras";
-    if (/licitanet/.test(m)) return "Licitanet";
-    if (/bll/.test(m)) return "BLL Compras";
-    if (/licitações|licitacoes/.test(m)) return "Licitações-e (Banco do Brasil)";
+  // Priority 1: Portal de Compras do Governo Federal / gov.br/compras / compras.gov.br / comprasnet
+  if (/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i.test(text)) {
+    return "Portal de Compras do Governo Federal (gov.br/compras)";
   }
 
-  // Fallback: keyword presence in full text
-  if (/compras\.?gov\.?br|comprasnet/i.test(text)) return "Compras.gov.br";
+  // Priority 2: Other specific platforms
   if (/bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras/i.test(text)) return "BEC/SP - Bolsa Eletrônica de Compras";
   if (/licitanet/i.test(text)) return "Licitanet";
   if (/bll\s+compras|bllcompras/i.test(text)) return "BLL Compras";
-  if (/licitações[\-\s]?e|licitacoes[\-\s]?e/i.test(text)) return "Licitações-e (Banco do Brasil)";
+
+  // Priority 3: Licitações-e — must be an explicit reference to the platform, NOT just the word "licitação/licitações" with "-e" suffix
+  if (/(?:plataforma|sistema|portal|site|sítio|endereço)\s+[^.]{0,40}licitações[\-\s]?e/i.test(text)
+    || /licitações[\-\s]e\s+(?:do\s+)?(?:banco\s+do\s+brasil|bb)/i.test(text)
+    || /www\.licitacoes-e\.com/i.test(text)) {
+    return "Licitações-e (Banco do Brasil)";
+  }
+
+  // Priority 4: Generic portal de compras
   if (/portal\s+de\s+compras/i.test(text)) return "Portal de Compras";
+
   return "Não identificado no edital";
 }
 

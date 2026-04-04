@@ -879,66 +879,69 @@ function extractSistema(text: string): string {
   const candidates: Array<{ value: string; score: number }> = [];
 
   const addCandidate = (value: string, score: number) => {
-    const cleaned = value.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
-    if (cleaned.length >= 3 && cleaned.length <= 120) {
-      candidates.push({ value: cleaned, score });
-    }
+    let cleaned = value.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
+    // Strip leading "endereço eletrônico" or similar labels that leaked in
+    cleaned = cleaned.replace(/^(?:endereço\s+eletrônico|endereco\s+eletronico|sistema\s+eletrônico|sistema\s+eletronico|sítio|sitio|site|portal)\s*[:.\-–—]?\s*/i, "").trim();
+    if (cleaned.length < 3 || cleaned.length > 150) return;
+    // Reject if it's just "www" or a bare partial URL fragment
+    if (/^www\.?$/i.test(cleaned)) return;
+    candidates.push({ value: cleaned, score });
   };
 
-  // Strategy 1: Labeled fields ("Plataforma:", "Sistema eletrônico:", "Endereço eletrônico:", "Sítio:")
+  // Strategy 1: Explicit "será realizado por meio de/no/através de" — highest confidence
+  const realizadoPatterns = [
+    /(?:será|sera)\s+realizad[oa]\s+(?:por\s+meio\s+d[ao]|n[ao]|atrav[ée]s\s+d[ao]|pelo)\s+([^\n,.;]{5,120})/gi,
+    /(?:propostas?\s+(?:deverão|devem|serão)\s+ser\s+(?:enviadas?|encaminhadas?|cadastradas?)\s+(?:por\s+meio|através|no)\s+(?:d[ao]?\s+)?)([^\n,.;]{5,120})/gi,
+    /(?:utilizar[áa]|utilizar)\s+(?:o\s+)?(?:sistema|plataforma|portal)\s+([^\n,.;]{5,120})/gi,
+  ];
+  for (const pattern of realizadoPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      addCandidate(match[1], 35);
+    }
+  }
+
+  // Strategy 2: Labeled fields ("Plataforma:", "Sistema:", "Local da sessão:")
   const labelPatterns = [
-    /(?:plataforma|sistema\s+eletrônico|sistema\s+eletronico|endereço\s+eletrônico|endereco\s+eletronico|sítio|sitio|site|portal)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
+    /(?:plataforma|local\s+da\s+sessão|local\s+da\s+disputa)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
+    /(?:sistema\s+eletrônico|sistema\s+eletronico)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
   ];
   for (const pattern of labelPatterns) {
     for (const match of text.matchAll(pattern)) {
-      const raw = match[1].trim();
-      // Reject if it's just a generic URL or email
-      if (/^https?:\/\//i.test(raw) && raw.length < 40) continue;
-      addCandidate(raw, 30);
+      addCandidate(match[1], 30);
     }
   }
 
-  // Strategy 2: Known platform references found IN THE TEXT
-  // Extract the actual text around these references rather than returning hardcoded strings
-  const platformPatterns: Array<[RegExp, number]> = [
-    [/(?:portal\s+de\s+compras\s+do\s+governo\s+federal|gov\.br\/compras|compras\.?gov\.?br|comprasnet|sistema\s+de\s+compras\s+do\s+governo\s+federal)/i, 25],
-    [/(?:licitações[\-\s]e|licitacoes[\-\s]e|www\.licitacoes-e\.com)/i, 22],
-    [/(?:bec[\s\-\/]?sp|bolsa\s+eletrônica\s+de\s+compras)/i, 22],
-    [/(?:licitanet)/i, 20],
-    [/(?:bll\s+compras|bllcompras)/i, 20],
-    [/(?:portal\s+de\s+compras)/i, 18],
-    [/(?:pregão?\s+eletrônico|pregao\s+eletronico)\s+(?:será|sera)\s+realizad[oa]\s+(?:por\s+meio\s+d[ao]|n[ao]|atrav[ée]s\s+d[ao])\s+([^\n,.;]{5,120})/i, 28],
+  // Strategy 3: Platform names found in the text — extract the actual matched text
+  const platformPatterns: Array<[RegExp, string, number]> = [
+    [/portal\s+de\s+compras\s+do\s+governo\s+federal/i, "Portal de Compras do Governo Federal", 25],
+    [/compras\.?gov\.?br|comprasnet/i, "Comprasnet (compras.gov.br)", 25],
+    [/gov\.br\/compras/i, "gov.br/compras", 24],
+    [/bolsa\s+eletrônica\s+de\s+compras\s+(?:do\s+estado\s+de\s+)?(?:são\s+paulo|sp)|bec[\s\-\/]?sp/i, "BEC/SP - Bolsa Eletrônica de Compras", 24],
+    [/licitações[\-\s]e|licitacoes[\-\s]e|www\.licitacoes-e\.com/i, "Licitações-e (Banco do Brasil)", 22],
+    [/licitanet/i, "Licitanet", 20],
+    [/bll\s+compras|bllcompras/i, "BLL Compras", 20],
+    [/portal\s+de\s+compras/i, "Portal de Compras", 18],
   ];
 
-  for (const [pattern, boost] of platformPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      // Extract surrounding context to get the full platform name
-      const idx = match.index ?? 0;
-      const contextStart = Math.max(0, idx - 50);
-      const contextEnd = Math.min(text.length, idx + match[0].length + 80);
-      const context = text.slice(contextStart, contextEnd);
-
-      // Try to find a clean platform name from the context
-      const platformName = match[1] || match[0];
-      addCandidate(platformName.replace(/\s+/g, " ").trim(), boost);
+  for (const [pattern, label, boost] of platformPatterns) {
+    if (pattern.test(text)) {
+      candidates.push({ value: label, score: boost });
     }
   }
 
-  // Strategy 3: URLs as platform indicators (extract the URL itself)
+  // Strategy 4: URLs near platform keywords
   const urlPatterns = [
-    /(?:plataforma|sistema|portal|realizar|acess)\w*[^.]{0,60}((?:www\.|https?:\/\/)[^\s,;)"']+)/gi,
-    /(?:propostas?\s+(?:deverão|devem|serão)\s+ser\s+(?:enviadas?|encaminhadas?|cadastradas?)\s+(?:por\s+meio|através)\s+d[ao]?\s+)([^\n,.;]{5,120})/gi,
+    /(?:plataforma|sistema|portal|acess)\w*[^.\n]{0,60}((?:www\.\S+|https?:\/\/\S+))/gi,
+    /(?:endereço\s+eletrônico|endereco\s+eletronico|sítio|sitio|site)\s*[:.\-–—]?\s*((?:www\.\S+|https?:\/\/\S+))/gi,
   ];
-
   for (const pattern of urlPatterns) {
     for (const match of text.matchAll(pattern)) {
-      addCandidate(match[1], 15);
+      const url = match[1].replace(/[),;."']+$/, "").trim();
+      if (url.length >= 8) addCandidate(url, 15);
     }
   }
 
   if (candidates.length === 0) return "Não identificado no edital";
-
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0].value;
 }

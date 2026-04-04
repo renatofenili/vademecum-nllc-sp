@@ -691,7 +691,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
             <Card className="border-border/60">
               <CardContent className="p-5">
                 {checklistBody ? (
-                  <RichText text={checklistBody} />
+                  renderWithBullets(checklistBody)
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
                     Checklist não identificado de forma expressa na análise. Consulte o edital original.

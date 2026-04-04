@@ -1365,10 +1365,15 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto|do\s+equipamento)/i, /(?:marca|modelo|fabricante)\s+(?:deverá|deve|será)\s+(?:ser\s+)?(?:indicad|informad)/i],
     []
   );
-  const precoMaximoStatus = truthCheck(fullText,
-    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:máximo|de\s+referência)\s+(?:aceitável|admitido)/i, /não\s+(?:será|serão)\s+aceit\w+\s+(?:proposta|valor|preço)\s+(?:superior|acima)/i],
+  let precoMaximoStatus = truthCheck(fullText,
+    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:máximo|de\s+referência)\s+(?:aceitável|admitido)/i, /não\s+(?:será|serão)\s+aceit\w+\s+(?:proposta|valor|preço)\s+(?:superior|acima)/i,
+     /valor\s+(?:estimado|global|total|orçado|referência|orçament)/i, /preço\s+(?:estimado|de\s+referência|global)/i, /orçamento\s+(?:estimado|previsto|estimativo)/i],
     []
   );
+  // If valor_estimado was extracted, there IS a reference price
+  if (precoMaximoStatus === "nao_identificado" && resultado.valor_estimado && resultado.valor_estimado !== "Não identificado no edital") {
+    precoMaximoStatus = "sim";
+  }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;
   const prazoEntregaVal = feat.prazoEntrega || null;
 

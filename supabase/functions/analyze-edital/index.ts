@@ -1850,6 +1850,8 @@ function analyzeEditalText(text: string) {
   const condicoes_habilitacao = extractHabilitacao(text);
   const planilha_estimada = extractPlanilha(text);
   const timeline = extractTimeline(text);
+  const participacao = extractParticipacao(text);
+  const unidade_disputa = extractUnidadeDisputa(text);
 
   const score_complexidade = calcularComplexidade(text, {
     valor_estimado,

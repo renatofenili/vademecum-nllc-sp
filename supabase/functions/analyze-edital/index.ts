@@ -848,20 +848,32 @@ function extractCriterio(text: string): string {
 }
 
 function extractDataSessao(text: string): string {
-  const match = firstMatch(text, [
-    /(?:sessão\s+pública|abertura\s+d[aoe]s?\s+propostas?|data\s+d[aoe]\s+sessão|abertura\s+d[ao]\s+certame)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})/i,
-    /(?:sessão\s+pública|abertura)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})/i,
-  ], 0);
+  // Strategy 1: Labeled fields
+  const labeledPatterns = [
+    /(?:data\s+(?:e\s+hor[áa]rio?\s+)?(?:da\s+)?sessão\s+pública|data\s+(?:e\s+hor[áa]rio?\s+)?(?:de\s+)?abertura|sessão\s+pública|abertura\s+d[aoe]s?\s+propostas?|abertura\s+d[ao]\s+certame|data\s+d[aoe]\s+sessão|data\s+d[aoe]\s+certame|início\s+da\s+sessão)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
+  ];
 
-  if (match) {
-    // Clean and return the full match context
-    const dateMatch = match.match(/(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/i);
-    if (dateMatch) {
-      const date = dateMatch[1].replace(/\s/g, '');
-      const time = dateMatch[2]?.replace(/\s/g, '') || '';
-      return time ? `${date} às ${time}` : date;
+  for (const pattern of labeledPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const date = match[1]?.replace(/\s/g, '');
+      const time = match[2]?.replace(/\s/g, '') || '';
+      if (date) return time ? `${date} às ${time}` : date;
     }
   }
+
+  // Strategy 2: Date near session keywords
+  const contextPatterns = [
+    /(?:sessão|abertura|certame|disputa)\s+[^.]{0,80}?(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
+  ];
+
+  for (const pattern of contextPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const date = match[1]?.replace(/\s/g, '');
+      const time = match[2]?.replace(/\s/g, '') || '';
+      if (date) return time ? `${date} às ${time}` : date;
+    }
+  }
+
   return "Não identificado";
 }
 

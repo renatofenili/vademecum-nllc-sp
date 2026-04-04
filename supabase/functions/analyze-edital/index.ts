@@ -1371,7 +1371,7 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     []
   );
   // If valor_estimado was extracted, there IS a reference price
-  if (precoMaximoStatus === "nao_identificado" && resultado.valor_estimado && resultado.valor_estimado !== "Não identificado no edital") {
+  if (precoMaximoStatus === "nao_identificado" && valor) {
     precoMaximoStatus = "sim";
   }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;

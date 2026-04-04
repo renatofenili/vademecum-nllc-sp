@@ -1890,6 +1890,8 @@ function analyzeEditalText(text: string) {
     resumo_simples,
     timeline,
     score_complexidade,
+    participacao,
+    unidade_disputa,
   };
 }
 

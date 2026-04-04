@@ -34,6 +34,8 @@ export interface EditalAnalysis {
   numero_edital: string;
   orgao: string;
   resumo_simples: string;
+  participacao?: string;
+  unidade_disputa?: string;
   timeline?: EditalTimeline;
   score_complexidade?: EditalScoreComplexidade;
 }

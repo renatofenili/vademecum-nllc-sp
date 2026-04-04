@@ -134,9 +134,11 @@ const deriveAxes = (analysis: EditalAnalysis, sections: ParsedSection[]): AxisSc
 };
 
 const getScoreColor = (v: number) => {
-  if (v <= 3) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Baixo" };
-  if (v <= 6) return { bg: "bg-amber-500/10", text: "text-amber-600", bar: "bg-amber-500", label: "Médio" };
-  return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Alto" };
+  if (v <= 2) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Muito simples" };
+  if (v <= 4) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Simples" };
+  if (v <= 6) return { bg: "bg-amber-500/10", text: "text-amber-600", bar: "bg-amber-500", label: "Moderado" };
+  if (v <= 8) return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Complexo" };
+  return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Muito complexo" };
 };
 
 /* ────────────────────────────────────────────

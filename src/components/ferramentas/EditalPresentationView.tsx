@@ -459,15 +459,8 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
               <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} />
               <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} />
               <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} />
-              <HeroField icon={Users} label="Participação" value={
-                analysis.resumo_simples?.toLowerCase().includes("exclusiv") ? "Exclusiva ME/EPP" :
-                analysis.resumo_simples?.toLowerCase().includes("ampla") ? "Ampla concorrência" : undefined
-              } />
-              <HeroField icon={Hash} label="Unidade da Disputa" value={
-                analysis.resumo_simples?.toLowerCase().includes("por item") ? "Por item" :
-                analysis.resumo_simples?.toLowerCase().includes("por lote") ? "Por lote" :
-                analysis.resumo_simples?.toLowerCase().includes("global") ? "Global" : undefined
-              } />
+              <HeroField icon={Users} label="Participação" value={analysis.participacao} />
+              <HeroField icon={Hash} label="Unidade da Disputa" value={analysis.unidade_disputa} />
               <HeroField icon={Building2} label="Órgão" value={analysis.orgao} />
             </div>
 

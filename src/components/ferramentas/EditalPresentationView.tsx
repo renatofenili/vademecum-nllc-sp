@@ -475,16 +475,16 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
 
             <Separator className="my-5" />
 
-            {/* Metadata grid */}
+            {/* Metadata grid – each card opens the detail dialog */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4">
-              <HeroField icon={Scale} label="Modalidade" value={analysis.modalidade} />
-              <HeroField icon={Calendar} label="Sessão Pública" value={analysis.data_sessao} />
-              <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} />
-              <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} />
-              <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} />
-              <HeroField icon={Users} label="Participação" value={analysis.participacao} />
-              <HeroField icon={Hash} label="Unidade da Disputa" value={analysis.unidade_disputa} />
-              <HeroField icon={Building2} label="Órgão" value={analysis.orgao} />
+              <HeroField icon={Scale} label="Modalidade" value={analysis.modalidade} onClick={openDetail} />
+              <HeroField icon={Calendar} label="Sessão Pública" value={analysis.data_sessao} onClick={openDetail} />
+              <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} onClick={openDetail} />
+              <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} onClick={openDetail} />
+              <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} onClick={openDetail} />
+              <HeroField icon={Users} label="Participação" value={analysis.participacao} onClick={openDetail} />
+              <HeroField icon={Hash} label="Unidade da Disputa" value={analysis.unidade_disputa} onClick={openDetail} />
+              <HeroField icon={Building2} label="Órgão" value={analysis.orgao} onClick={openDetail} />
             </div>
 
             {/* Extraction confidence */}

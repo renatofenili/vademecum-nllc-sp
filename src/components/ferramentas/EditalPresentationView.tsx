@@ -23,7 +23,8 @@ interface Props {
    Bullet formatter – normalizes inline markers
    into real multi-line bullet text
    ──────────────────────────────────────────── */
-const bulletLineStart = /^(?:•|✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)/;
+const emojiPattern = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}]/u;
+const bulletLineStart = /^(?:•|[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])/u;
 
 const formatBulletLines = (text: string, maxLines?: number) => {
   if (!text) return "";
@@ -33,7 +34,8 @@ const formatBulletLines = (text: string, maxLines?: number) => {
     .replace(/\s*;\s*/g, "\n• ")
     .replace(/\s*[–—]\s+/g, "\n• ")
     .replace(/\s*\d+[\)\.]\s+/g, "\n• ")
-    .replace(/\s*(✅|⚠️|❌|📌|🔒|💳|📈|🏗️|📜|🏦|🔧|📊|📝|⚡|🤝|🔄|🌱|🔎|🏆|🚫|📍|⏰|📐|🧪|💻|💡|📋|📦|🖥️|📑|📅|🚨|🎯|🏁|❓|⏱️|🔗)\s*/g, "\n$1 ")
+    .replace(/\s*([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1FA00}-\u{1FA9F}\u{2700}-\u{27BF}])\s*/gu, "\n$1 ")
+    .replace(/\s*:\s+(?=[A-Z])/g, ":\n• ")
     .replace(/\s*\n+\s*/g, "\n")
     .trim();
 
@@ -190,10 +192,9 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
   const custo = getSectionBody(sections, "custo", "impacto", "financeiro", "caixa");
   const agora = getSectionBody(sections, "fazer agora", "checklist", "antes de participar", "providência");
 
-  const truncBody = (b: string, max = 250) => {
+  const cleanBody = (b: string) => {
     if (!b) return "Informação não identificada de forma expressa no edital.";
-    const clean = b.replace(/^[^\w]*/, "").trim();
-    return clean.length > max ? clean.slice(0, max).replace(/\s+\S*$/, "") + "…" : clean;
+    return b.replace(/^[^\w]*/, "").trim();
   };
 
   const scoreSeverity = (score: number): DiagCard["severity"] =>
@@ -205,25 +206,25 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
     {
       title: "Posso participar?",
       icon: Users,
-      content: truncBody(participacao),
+      content: cleanBody(participacao),
       severity: participacao.toLowerCase().includes("exclusiv") || participacao.toLowerCase().includes("restrit") ? "high" : "low",
     },
     {
       title: "O que pode me eliminar",
       icon: Ban,
-      content: truncBody(eliminar),
+      content: cleanBody(eliminar),
       severity: scoreSeverity(Math.min(base + 1, 10)),
     },
     {
       title: "O que pesa no custo",
       icon: Wallet,
-      content: truncBody(custo),
+      content: cleanBody(custo),
       severity: custo.toLowerCase().includes("garantia") || custo.toLowerCase().includes("caução") ? "high" : "medium",
     },
     {
       title: "O que preciso fazer agora",
       icon: Zap,
-      content: truncBody(agora),
+      content: cleanBody(agora),
       severity: "medium",
     },
   ];

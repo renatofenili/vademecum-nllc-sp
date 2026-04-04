@@ -3,7 +3,7 @@ import {
   X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
   Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,
   CheckCircle2, Ban, Wallet, ListChecks, Eye, Users, FileCheck,
-  Gavel, ScrollText, ClipboardList, BarChart3, Zap,
+  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +13,10 @@ import type { EditalAnalysis } from "./EditalAnalyzer";
 
 interface Props {
   analysis: EditalAnalysis;
-  onClose: () => void;
+  fileName?: string;
+  onBack?: () => void;
+  onClose?: () => void;
+  onNewAnalysis?: () => void;
 }
 
 /* ────────────────────────────────────────────
@@ -364,7 +367,7 @@ const RichText = ({ text }: { text: string }) => {
 /* ────────────────────────────────────────────
    Main Component
    ──────────────────────────────────────────── */
-const EditalPresentationView = ({ analysis, onClose }: Props) => {
+const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnalysis }: Props) => {
   const sections = useMemo(() => parseSections(analysis.resumo_simples || ""), [analysis.resumo_simples]);
   const diagCards = useMemo(() => buildDiagCards(sections, analysis), [sections, analysis]);
   const execPanels = useMemo(() => buildExecPanels(sections), [sections]);
@@ -387,19 +390,25 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-primary-foreground bg-primary">V</div>
-          <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Dossiê Executivo
-          </span>
+          <Button variant="ghost" size="icon" onClick={onBack ?? onClose} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <span className="text-sm font-semibold text-foreground">Dossiê Executivo</span>
+            {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => exportPdf(analysis)} className="gap-1.5 text-muted-foreground">
             <Download className="h-3.5 w-3.5" />
             PDF
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </Button>
+          {onNewAnalysis && (
+            <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-1.5 text-muted-foreground">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Nova análise
+            </Button>
+          )}
         </div>
       </div>
 

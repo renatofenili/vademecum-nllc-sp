@@ -134,9 +134,11 @@ const deriveAxes = (analysis: EditalAnalysis, sections: ParsedSection[]): AxisSc
 };
 
 const getScoreColor = (v: number) => {
-  if (v <= 3) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Baixo" };
-  if (v <= 6) return { bg: "bg-amber-500/10", text: "text-amber-600", bar: "bg-amber-500", label: "Médio" };
-  return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Alto" };
+  if (v <= 2) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Muito simples" };
+  if (v <= 4) return { bg: "bg-emerald-500/10", text: "text-emerald-600", bar: "bg-emerald-500", label: "Simples" };
+  if (v <= 6) return { bg: "bg-amber-500/10", text: "text-amber-600", bar: "bg-amber-500", label: "Moderado" };
+  if (v <= 8) return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Complexo" };
+  return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Muito complexo" };
 };
 
 /* ────────────────────────────────────────────
@@ -424,7 +426,9 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
                   <span className="text-xs text-muted-foreground">/10</span>
                 </div>
                 <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider ${scoreColor.text}`}>{scoreColor.label}</span>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${scoreColor.text}`}>
+                    {analysis.score_complexidade?.faixa || scoreColor.label}
+                  </span>
                   <span className="text-[10px] text-muted-foreground block">Complexidade</span>
                 </div>
               </div>
@@ -547,16 +551,50 @@ const EditalPresentationView = ({ analysis, onClose }: Props) => {
                 <Separator className="my-5" />
 
                 {/* Overall */}
-                <div className="flex items-center justify-between">
+                <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <span className={`text-3xl font-extrabold ${scoreColor.text}`}>{score}</span>
                     <div>
-                      <span className={`text-sm font-bold ${scoreColor.text}`}>Complexidade {scoreColor.label}</span>
-                      <span className="text-[10px] text-muted-foreground block">
-                        {analysis.score_complexidade?.justificativa || "Baseado na análise textual do edital."}
+                      <span className={`text-sm font-bold ${scoreColor.text}`}>
+                        {analysis.score_complexidade?.faixa
+                          ? `Complexidade ${analysis.score_complexidade.faixa}`
+                          : `Complexidade ${scoreColor.label}`}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground block mt-0.5">
+                        {analysis.score_complexidade?.frase_faixa || analysis.score_complexidade?.justificativa || "Baseado na análise textual do edital."}
                       </span>
                     </div>
                   </div>
+
+                  {/* Fatores que elevaram */}
+                  {analysis.score_complexidade?.fatores_elevaram && analysis.score_complexidade.fatores_elevaram.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fatores que elevaram a nota</span>
+                      <ul className="mt-1.5 space-y-1">
+                        {analysis.score_complexidade.fatores_elevaram.map((f, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                            <span className="text-amber-500 mt-0.5 shrink-0">▲</span>
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Fatores que impediram nota maior */}
+                  {analysis.score_complexidade?.fatores_impediram && analysis.score_complexidade.fatores_impediram.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fatores que impediram nota maior</span>
+                      <ul className="mt-1.5 space-y-1">
+                        {analysis.score_complexidade.fatores_impediram.map((f, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-foreground/70">
+                            <span className="text-emerald-500 mt-0.5 shrink-0">▼</span>
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

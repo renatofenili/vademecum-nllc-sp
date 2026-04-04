@@ -15,7 +15,11 @@ export interface EditalTimeline {
 
 export interface EditalScoreComplexidade {
   valor: number;
+  faixa: string;
   justificativa: string;
+  fatores_elevaram: string[];
+  fatores_impediram: string[];
+  frase_faixa: string;
 }
 
 export interface EditalAnalysis {

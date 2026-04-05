@@ -1094,15 +1094,17 @@ function getFaixa(score: number): string {
 function calcularComplexidade(text: string, dados: Record<string, string>): ComplexidadeResult {
   const textLower = text.toLowerCase();
 
-  // ── Detect base profile ──
-  const isPregao = /pregão\s+eletrônico/i.test(text);
+  // ── Detect base profile using the ALREADY EXTRACTED modalidade ──
+  const modalidadeExtraida = (dados.modalidade || "").toLowerCase();
+  const isPregao = /pregão|pregao/.test(modalidadeExtraida);
+  const isConcorrencia = /concorrência|concorrencia/.test(modalidadeExtraida);
   const isBensComuns = /\b(aquisição|fornecimento|compra|material|bens?\s+comun|bens?\s+de\s+consumo|equipamento)\b/i.test(text)
     && !/\b(serviço\s+(?:de\s+natureza\s+)?continu|prestação\s+de\s+serviços?\s+(?:de\s+natureza\s+)?continu|execução\s+de\s+obras?|obra)\b/i.test(text);
   const isMenorPreco = /menor\s+preço/i.test(text);
   const isPregaoBensComuns = isPregao && isBensComuns && isMenorPreco;
 
-  // ── Anchor: pregão de bens comuns starts at 2.5, others at 3 ──
-  let score = isPregaoBensComuns ? 2.5 : 3;
+  // ── Anchor: pregão de bens comuns starts at 2.5, concorrência at 4, others at 3 ──
+  let score = isPregaoBensComuns ? 2.5 : isConcorrencia ? 4 : 3;
 
   const fatoresElevaram: string[] = [];
   const fatoresImpediram: string[] = [];
@@ -1116,8 +1118,19 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
     strongAggravators++;
   };
 
-  // Amostra eliminatória
-  if (/(?:exig|apresent|entreg)\w*\s+(?:de\s+)?amostra/i.test(text) && !/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i.test(text) && !/sem\s+(?:necessidade\s+de\s+)?amostra/i.test(text)) {
+  // Concorrência inherently more complex
+  if (isConcorrencia) {
+    score += 0.5;
+    fatoresElevaram.push("Modalidade concorrência — procedimento mais formal e exigente que pregão");
+    strongAggravators++;
+  }
+
+  // Amostra eliminatória — only if EXPLICITLY mandatory (not generic/conditional mentions)
+  const amostraExplicita = /(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i.test(text)
+    || /amostra\s+(?:será|é)\s+(?:exigid|obrigatóri)/i.test(text)
+    || /(?:obrigatóri\w+\s+(?:a\s+)?(?:apresentação|entrega)\s+(?:de\s+)?amostra)/i.test(text);
+  const amostraNegada = /(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i.test(text) || /sem\s+(?:necessidade\s+de\s+)?amostra/i.test(text);
+  if (amostraExplicita && !amostraNegada) {
     addStrong(1.2, "Amostra exigida — eliminatória se reprovada ou não apresentada");
   }
 
@@ -1198,8 +1211,12 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
   else if (valorNum > 10000000) { score += 0.3; fatoresElevaram.push("Valor acima de R$ 10 milhões"); }
 
   // SRP — NOT a complexity factor, removed
-  // Subcontratação — minor
-  if (/subcontrata/i.test(text) && /(?:autorizada|permitida|prevista)/i.test(text)) {
+  // Subcontratação — only if explicitly ALLOWED (not just mentioned or prohibited)
+  const subcontratacaoPermitida = /subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i.test(text)
+    || /(?:autoriza|permite|admite)[\-\s]se\s+(?:a\s+)?subcontrata/i.test(text);
+  const subcontratacaoVedada = /(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i.test(text)
+    || /subcontrata(?:ção|r)\s+(?:não\s+)?(?:será\s+)?(?:vedad|proibid|não\s+(?:será\s+)?(?:admitid|permitid))/i.test(text);
+  if (subcontratacaoPermitida && !subcontratacaoVedada) {
     score += 0.2;
     fatoresElevaram.push("Prevê subcontratação");
   }

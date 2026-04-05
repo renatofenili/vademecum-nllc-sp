@@ -274,9 +274,9 @@ REGRAS OBRIGATÓRIAS:
 1. NUNCA invente dados. Se não encontrar, use o valor padrão indicado na descrição do campo.
 2. OBJETO: descrição do que é contratado/adquirido. Elimine referências a leis, decretos, atos normativos e normas administrativas. Foque APENAS no bem/serviço/obra. Máximo 500 caracteres.
 3. ÓRGÃO: a entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo, INSS, Ministério da Saúde). NUNCA confunda com a plataforma de compras (ComprasGov, BEC/SP, Licitações-e, etc).
-4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras. NUNCA confunda com o órgão.
+4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras do Governo Federal. Se o texto trouxer apenas palavras genéricas como "sistema", "portal" ou "plataforma", sem nome claro, retorne "Não identificado no edital".
 5. PARTICIPAÇÃO: marque "Exclusiva ME/EPP" SOMENTE se o edital declarar EXPRESSAMENTE a exclusividade. Se disser "EXCLUSIVIDADE ME/EPP/EQUIPARADAS: NÃO" ou similar, marque "Ampla concorrência".
-6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver dúvida, marque "nao_identificado".
+6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver vedação/admissão expressa, respeite literalmente. Se o edital for omisso ou duvidoso, marque "nao_identificado".
 7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
 8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").
 9. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").

@@ -157,50 +157,143 @@ const exportHtml = (a: EditalAnalysisResult) => {
   const resumo = typeof a.resumo_linguagem_simples === "object" ? a.resumo_linguagem_simples : null;
   const resumoStr = typeof a.resumo_linguagem_simples === "string" ? a.resumo_linguagem_simples : "";
 
+  const scoreColor = (s: number) => s <= 3 ? '#16a34a' : s <= 6 ? '#ca8a04' : '#dc2626';
+  const scoreBg = (s: number) => s <= 3 ? '#f0fdf4' : s <= 6 ? '#fefce8' : '#fef2f2';
+  const scoreLabel = (s: number) => s <= 3 ? 'Baixa' : s <= 6 ? 'Moderada' : 'Alta';
+
+  const branchColors = ['#2563eb','#7c3aed','#059669','#ea580c','#dc2626','#0891b2'];
+
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dossiê - ${a.numero_edital}</title>
-<style>body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;max-width:800px;margin:0 auto;padding:40px 20px}
-h1{font-size:22px;color:#991b1b;border-bottom:2px solid #991b1b;padding-bottom:8px}
-h2{font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:2px;margin-top:24px;margin-bottom:4px}
+<style>
+body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;max-width:850px;margin:0 auto;padding:40px 24px;font-size:14px;line-height:1.7}
+h1{font-size:22px;color:#991b1b;border-bottom:2px solid #991b1b;padding-bottom:8px;margin-bottom:24px}
+h2{font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:2px;margin-top:32px;margin-bottom:8px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}
 h3{font-size:14px;color:#374151;margin-top:16px;margin-bottom:4px}
-p{font-size:14px;line-height:1.7;margin:4px 0 16px}
+p{margin:4px 0 16px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px}
 th,td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left}
 th{background:#f9fafb;font-weight:600}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:8px}
+.meta-item{padding:8px 0;border-bottom:1px solid #f3f4f6}
+.meta-label{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px}
+.meta-value{font-size:14px;font-weight:500;color:#111827}
+.mapa-container{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0}
+.mapa-branch{flex:1;min-width:200px;border-radius:8px;padding:12px;border:1px solid #e5e7eb}
+.mapa-branch-title{font-weight:700;font-size:13px;margin-bottom:6px}
+.mapa-branch ul{margin:0;padding-left:18px;font-size:13px;line-height:1.8}
+.bar-container{margin:8px 0}
+.bar-header{display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px}
+.bar-track{width:100%;height:12px;background:#f3f4f6;border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px}
+.bar-just{font-size:12px;color:#6b7280;margin-top:2px;margin-bottom:12px}
+.atencao-item{margin-bottom:12px;padding:8px 12px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0}
+.atencao-fonte{font-size:11px;color:#9ca3af;font-style:italic;margin-top:4px}
 .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
+@media print{body{padding:20px}h2{break-after:avoid}table{break-inside:avoid}}
 </style></head><body>`;
-  html += `<h1>Dossiê — ${a.numero_edital}</h1>`;
-  html += `<h2>ÓRGÃO</h2><p>${a.orgao}</p>`;
-  html += `<h2>OBJETO</h2><p>${a.objeto}</p>`;
-  html += `<h2>VALOR ESTIMADO</h2><p>${a.valor_estimado}</p>`;
-  html += `<h2>MODALIDADE</h2><p>${a.modalidade}</p>`;
-  html += `<h2>SESSÃO PÚBLICA</h2><p>${a.data_sessao}</p>`;
 
+  // Header
+  html += `<h1>Dossiê — ${a.numero_edital}</h1>`;
+
+  // 1. Metadados
+  html += `<h2>📋 METADADOS DO EDITAL</h2>`;
+  html += `<div class="meta-grid">`;
+  const metas = [
+    ['Órgão', a.orgao],
+    ['Modalidade', a.modalidade],
+    ['Objeto', a.objeto],
+    ['Critério de Julgamento', a.criterio_julgamento],
+    ['Valor Estimado', a.valor_estimado],
+    ['Sessão Pública', a.data_sessao],
+    ['Plataforma', a.plataforma],
+    ['Participação', a.participacao],
+  ];
+  metas.forEach(([label, value]) => {
+    if (value) {
+      html += `<div class="meta-item"><div class="meta-label">${label}</div><div class="meta-value">${value}</div></div>`;
+    }
+  });
+  html += `</div>`;
+
+  // 2. Linguagem simples
+  if (resumo) {
+    html += `<h2>📖 EM LINGUAGEM SIMPLES</h2>`;
+    const secoes = [
+      ['Visão Geral', resumo.visao_geral],
+      ['Quem Pode Participar', resumo.quem_pode_participar],
+      ['Documentos Necessários', resumo.documentos_necessarios],
+      ['Como Funciona a Disputa', resumo.como_funciona_disputa],
+      ['Prazos Importantes', resumo.prazos_importantes],
+      ['Dicas Práticas', resumo.dicas_praticas],
+    ];
+    secoes.forEach(([title, text]) => {
+      if (text) html += `<h3>${title}</h3><p>${text}</p>`;
+    });
+  } else if (resumoStr) {
+    html += `<h2>📖 EM LINGUAGEM SIMPLES</h2><div style="white-space:pre-line">${resumoStr}</div>`;
+  }
+
+  // 3. Mapa Mental
+  if (a.mapa_mental && a.mapa_mental.ramos && a.mapa_mental.ramos.length > 0) {
+    html += `<h2>🧠 MAPA MENTAL — ${a.mapa_mental.centro}</h2>`;
+    html += `<div class="mapa-container">`;
+    a.mapa_mental.ramos.forEach((ramo, i) => {
+      const color = branchColors[i % branchColors.length];
+      html += `<div class="mapa-branch" style="border-color:${color}20;background:${color}08">`;
+      html += `<div class="mapa-branch-title" style="color:${color}">${ramo.titulo}</div>`;
+      html += `<ul>`;
+      ramo.itens.forEach(item => { html += `<li>${item}</li>`; });
+      html += `</ul></div>`;
+    });
+    html += `</div>`;
+  }
+
+  // 4. Itens disputados (TODOS)
   if (a.itens && a.itens.length > 0) {
-    html += `<h2>ITENS DISPUTADOS (${a.itens.length})</h2>`;
-    html += `<table><tr><th>#</th><th>Descrição</th><th>Qtd</th><th>Un</th><th>Unit.</th><th>Total</th></tr>`;
+    html += `<h2>🛒 ITENS DISPUTADOS (${a.itens.length})</h2>`;
+    html += `<table><tr><th>#</th><th>Descrição</th><th>Qtd</th><th>Un</th><th>Valor Unit.</th><th>Valor Total</th></tr>`;
     a.itens.forEach(it => {
       html += `<tr><td>${it.numero}</td><td>${it.descricao}</td><td>${it.quantidade}</td><td>${it.unidade}</td><td>${it.valor_unitario}</td><td>${it.valor_total}</td></tr>`;
     });
     html += `</table>`;
   }
 
-  if (resumo) {
-    html += `<h2>EM LINGUAGEM SIMPLES</h2>`;
-    html += `<h3>Visão Geral</h3><p>${resumo.visao_geral}</p>`;
-    html += `<h3>Quem Pode Participar</h3><p>${resumo.quem_pode_participar}</p>`;
-    html += `<h3>Documentos Necessários</h3><p>${resumo.documentos_necessarios}</p>`;
-    html += `<h3>Como Funciona a Disputa</h3><p>${resumo.como_funciona_disputa}</p>`;
-    html += `<h3>Prazos Importantes</h3><p>${resumo.prazos_importantes}</p>`;
-    html += `<h3>Dicas Práticas</h3><p>${resumo.dicas_praticas}</p>`;
-  } else if (resumoStr) {
-    html += `<h2>EM LINGUAGEM SIMPLES</h2><div style="white-space:pre-line;font-size:14px;line-height:1.8">${resumoStr}</div>`;
+  // 5. Pontos de atenção (TODOS, com fonte)
+  html += `<h2>⚠️ PONTOS DE ATENÇÃO (${a.pontos_atencao.length})</h2>`;
+  a.pontos_atencao.forEach(p => {
+    html += `<div class="atencao-item"><div>${p.ponto}</div>`;
+    if (p.trecho_fonte) html += `<div class="atencao-fonte">"${p.trecho_fonte}"</div>`;
+    html += `</div>`;
+  });
+
+  // 6. Complexidade por eixo
+  html += `<h2>📊 ANÁLISE DE COMPLEXIDADE</h2>`;
+  if (a.complexidade_eixos && a.complexidade_eixos.length > 0) {
+    a.complexidade_eixos.forEach(eixo => {
+      const color = scoreColor(eixo.score);
+      html += `<div class="bar-container">`;
+      html += `<div class="bar-header"><span><strong>${eixo.eixo}</strong></span><span style="color:${color};font-weight:600">${eixo.score}/10</span></div>`;
+      html += `<div class="bar-track"><div class="bar-fill" style="width:${eixo.score * 10}%;background:${color}"></div></div>`;
+      html += `<div class="bar-just">${eixo.justificativa}</div>`;
+      html += `</div>`;
+    });
   }
 
-  html += `<h2>PONTOS DE ATENÇÃO</h2><ul>`;
-  a.pontos_atencao.forEach(p => { html += `<li style="margin-bottom:8px">${p.ponto}</li>`; });
-  html += `</ul>`;
-  html += `<h2>COMPLEXIDADE: ${a.complexidade_score}/10</h2><p>${a.complexidade_justificativa}</p>`;
+  // Score geral
+  const gScore = a.complexidade_score ?? 5;
+  html += `<div style="margin-top:16px;padding:16px;background:${scoreBg(gScore)};border:1px solid ${scoreColor(gScore)}30;border-radius:8px;text-align:center">`;
+  html += `<div style="font-size:32px;font-weight:800;color:${scoreColor(gScore)}">${gScore}/10</div>`;
+  html += `<div style="font-size:14px;color:${scoreColor(gScore)};font-weight:600">Complexidade ${scoreLabel(gScore)}</div>`;
+  html += `<p style="font-size:13px;color:#4b5563;margin-top:8px">${a.complexidade_justificativa}</p>`;
+  html += `</div>`;
 
+  if (a.complexidade_fatores && a.complexidade_fatores.length > 0) {
+    html += `<h3 style="margin-top:16px">Fatores que elevaram a complexidade</h3><ul>`;
+    a.complexidade_fatores.forEach(f => { html += `<li style="margin-bottom:4px">${f}</li>`; });
+    html += `</ul>`;
+  }
+
+  // Disclaimer
   html += `<div style="margin-top:32px;padding:16px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;font-size:12px;color:#92400e;line-height:1.6">
     <strong>⚠ VERSÃO BETA</strong><br>
     Este dossiê foi gerado automaticamente por inteligência artificial e tem caráter meramente informativo.

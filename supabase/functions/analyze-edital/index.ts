@@ -1342,6 +1342,9 @@ function detectFeatures(text: string) {
     ]),
     // ── Extended detections ──
     vedacaoConsorcio: /(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i.test(text),
+    vedacaoCooperativas: /(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:sociedades?\s+)?cooperativas?/i.test(text)
+      || /cooperativas?\s+(?:não\s+)?(?:poderão|podem|será|serão)\s+(?:participar)/i.test(text)
+      || /(?:não\s+poderão\s+(?:disputar|participar)[^.]{0,200}cooperativas?)/i.test(text),
     hasSICAF: /sicaf/i.test(text),
     hasCAUFESP: /caufesp/i.test(text),
     hasCadastroPreObrigatorio: /cadastr(?:o|amento)\s+(?:prévio|obrigatório|no\s+(?:sicaf|portal|sistema))/i.test(text),

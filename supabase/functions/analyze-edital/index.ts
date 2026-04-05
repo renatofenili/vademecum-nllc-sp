@@ -540,8 +540,8 @@ function calcularComplexidade(text: string, dados: Record<string, string>, aiTru
 
   const faixa = getFaixa(score);
   const justificativa = fatoresElevaram.length > 0
-    ? `Score ${score}/10 (${faixa}). Fatores que elevaram: ${fatoresElevaram.join("; ")}.`
-    : `Score ${score}/10 (${faixa}). Edital com características padrão, sem agravantes fortes identificados.`;
+    ? `Score ${score}/10 (complexidade ${faixa}). Fatores que elevaram: ${fatoresElevaram.join("; ")}.`
+    : `Score ${score}/10 (complexidade ${faixa}). Edital com características padrão, sem agravantes fortes identificados.`;
 
   const modalidadeLabel = isConcorrencia ? "Concorrência" : isPregao ? "Pregão eletrônico" : (dados.modalidade || "Edital");
   const fraseFaixa = isPregaoBensComuns && score <= 5

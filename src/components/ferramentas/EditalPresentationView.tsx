@@ -591,7 +591,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
             <div className="mt-4 flex items-center gap-2">
               <Info className="h-3 w-3 text-muted-foreground" />
               <span className="text-[10px] text-muted-foreground">
-                Análise por extração textual automatizada (regex) — sem custo de IA. Não substitui análise jurídica profissional.
+                Análise assistida por IA com validações textuais. Não substitui análise jurídica profissional.
               </span>
             </div>
           </section>

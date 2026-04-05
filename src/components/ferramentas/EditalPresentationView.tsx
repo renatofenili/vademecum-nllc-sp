@@ -151,63 +151,78 @@ interface AxisScore {
 
 const deriveAxes = (analysis: EditalAnalysis, sections: ParsedSection[]): AxisScore[] => {
   const base = analysis.score_complexidade?.valor ?? 5;
-  const resumo = analysis.resumo_simples?.toLowerCase() || "";
-  const habBody = getSectionBody(sections, "habilitação", "habilitacao").toLowerCase();
-  const riskBody = getSectionBody(sections, "risco").toLowerCase();
-  const propBody = getSectionBody(sections, "proposta").toLowerCase();
-  const execBody = getSectionBody(sections, "execução", "execucao", "impacto").toLowerCase();
-  const prazoBody = getSectionBody(sections, "prazo").toLowerCase();
-
   const clamp = (v: number) => Math.max(1, Math.min(10, Math.round(v)));
 
-  // Use fatores_elevaram to detect POSITIVE presence of amostra/catálogo (avoids contradiction with "Sem exigência de amostra")
-  const elevaram = (analysis.score_complexidade?.fatores_elevaram || []).map(f => f.toLowerCase()).join(" ");
-  const hasAmostraPositiva = elevaram.includes("amostra");
-  const hasCatalogoPositivo = elevaram.includes("catálogo") || elevaram.includes("catalogo") || elevaram.includes("ficha técnica");
+  // Single source of truth: fatores_elevaram from the backend scoring engine
+  const elevaram = (analysis.score_complexidade?.fatores_elevaram || []).map(f => f.toLowerCase());
+  const impediram = (analysis.score_complexidade?.fatores_impediram || []).map(f => f.toLowerCase());
+
+  // Helper: check if any factor matches keywords
+  const hasElevaram = (...keywords: string[]) => elevaram.some(f => keywords.some(k => f.includes(k)));
+  const hasImpediram = (...keywords: string[]) => impediram.some(f => keywords.some(k => f.includes(k)));
+
+  // ── Eixo 1: Objeto e especificação ──
+  const objAmostra = hasElevaram("amostra");
+  const objCatalogo = hasElevaram("catálogo", "catalogo", "ficha técnica", "laudo");
+  const objDensidade = hasElevaram("densidade técnica", "obra", "composição de custos");
+  const objDelta = (objAmostra ? 1 : 0) + (objCatalogo ? 0.5 : 0) + (objDensidade ? 1.5 : 0);
+  const objJust = objDensidade ? "Forte densidade técnica identificada no objeto."
+    : objAmostra ? "Exigência de amostra eleva a complexidade do objeto."
+    : objCatalogo ? "Exigência de catálogo ou ficha técnica."
+    : "Objeto com especificação padrão.";
+
+  // ── Eixo 2: Habilitação ──
+  const habConselho = hasElevaram("conselho profissional", "registro profissional");
+  const habTecnica = hasElevaram("qualificação técnica", "atestado técnico");
+  const habDelta = (habConselho ? 1 : 0) + (habTecnica ? 1 : 0);
+  const habJust = habConselho ? "Registro em conselho profissional exigido."
+    : habTecnica ? "Qualificação técnica com atestados exigida."
+    : "Habilitação com requisitos padrão.";
+
+  // ── Eixo 3: Proposta e julgamento ──
+  const propTecPreco = hasElevaram("técnica e preço");
+  const propReadequada = hasElevaram("readequada", "ajustada");
+  const propMarca = hasElevaram("marca", "modelo");
+  const propDelta = (propTecPreco ? 2 : 0) + (propReadequada ? 0.5 : 0) + (propMarca ? 0.5 : 0);
+  const propJust = propTecPreco ? "Julgamento por técnica e preço — exige proposta técnica detalhada."
+    : propReadequada ? "Proposta readequada exigida após lances."
+    : propMarca ? "Exigência de marca/modelo na proposta."
+    : "Proposta com formatação padrão.";
+
+  // ── Eixo 4: Execução contratual ──
+  const execGarantia = hasElevaram("garantia de execução", "garantia contratual");
+  const execContinuado = hasElevaram("continuad", "sla", "nível de serviço");
+  const execSubcontrat = hasElevaram("subcontratação");
+  const execDelta = (execGarantia ? 1 : 0) + (execContinuado ? 1 : 0) + (execSubcontrat ? 0.3 : 0);
+  const execJust = execGarantia ? "Garantia de execução exigida — compromete caixa da empresa."
+    : execContinuado ? "Serviço continuado com SLA — execução complexa."
+    : "Execução sem complexidade adicional identificada.";
+
+  // ── Eixo 5: Procedimento e prazos ──
+  const prazVisita = hasElevaram("visita técnica");
+  const prazProva = hasElevaram("prova de conceito");
+  const prazMatriz = hasElevaram("matriz de risco");
+  const prazDelta = (prazVisita ? 1 : 0) + (prazProva ? 1 : 0) + (prazMatriz ? 0.5 : 0);
+  const prazJust = prazVisita ? "Visita técnica obrigatória — eliminatória."
+    : prazProva ? "Prova de conceito exigida."
+    : prazMatriz ? "Licitante deve apresentar matriz de risco."
+    : "Prazos e procedimentos dentro da normalidade.";
+
+  // ── Eixo 6: Risco econômico-sancionatório ──
+  const riskMulta = hasElevaram("multa");
+  const riskValor = hasElevaram("valor acima");
+  const riskDelta = (riskMulta ? 1 : 0) + (riskValor ? 0.5 : 0);
+  const riskJust = riskMulta ? "Multa contratual relevante identificada."
+    : riskValor ? "Valor elevado do edital aumenta exposição financeira."
+    : "Risco econômico-sancionatório padrão.";
 
   return [
-    {
-      label: "Objeto e especificação",
-      icon: FileText,
-      score: clamp(base + (hasAmostraPositiva ? 1 : 0) + (hasCatalogoPositivo ? 1 : 0) - 1),
-      justification: hasAmostraPositiva ? "Exigência de amostra eleva a complexidade do objeto." :
-        hasCatalogoPositivo ? "Exigência de catálogo ou ficha técnica." : "Objeto com especificação padrão.",
-    },
-    {
-      label: "Habilitação",
-      icon: Shield,
-      score: clamp(base + (habBody.includes("técnic") ? 1 : 0) + (habBody.includes("econômico") || habBody.includes("econômic") ? 1 : 0) - 1),
-      justification: habBody.includes("técnic") ? "Qualificação técnica exigida aumenta barreira." :
-        "Habilitação com requisitos padrão.",
-    },
-    {
-      label: "Proposta e julgamento",
-      icon: Scale,
-      score: clamp(base + (propBody.includes("marca") || propBody.includes("modelo") ? 1 : 0) - 1),
-      justification: propBody.includes("marca") ? "Exigência de marca/modelo na proposta." :
-        "Proposta com formatação padrão.",
-    },
-    {
-      label: "Execução contratual",
-      icon: ClipboardList,
-      score: clamp(base + (execBody.includes("garantia") ? 1 : 0) - 1),
-      justification: execBody.includes("garantia") ? "Garantia contratual ou de execução exigida." :
-        "Execução sem complexidade adicional identificada.",
-    },
-    {
-      label: "Procedimento e prazos",
-      icon: Calendar,
-      score: clamp(base + (prazoBody.includes("curto") || prazoBody.includes("imediato") ? 1 : 0) - 1),
-      justification: prazoBody.includes("curto") ? "Prazos curtos exigem ação rápida." :
-        "Prazos dentro da normalidade.",
-    },
-    {
-      label: "Risco econômico-sancionatório",
-      icon: AlertTriangle,
-      score: clamp(base + (riskBody.includes("multa") || riskBody.includes("sanç") ? 1 : 0) + (riskBody.includes("suspens") ? 1 : 0) - 1),
-      justification: riskBody.includes("multa") ? "Sanções com multas relevantes identificadas." :
-        riskBody.includes("sanç") ? "Cláusulas sancionatórias presentes." : "Risco sancionatório padrão.",
-    },
+    { label: "Objeto e especificação", icon: FileText, score: clamp(base + objDelta - 1), justification: objJust },
+    { label: "Habilitação", icon: Shield, score: clamp(base + habDelta - 1), justification: habJust },
+    { label: "Proposta e julgamento", icon: Scale, score: clamp(base + propDelta - 1), justification: propJust },
+    { label: "Execução contratual", icon: ClipboardList, score: clamp(base + execDelta - 1), justification: execJust },
+    { label: "Procedimento e prazos", icon: Calendar, score: clamp(base + prazDelta - 1), justification: prazJust },
+    { label: "Risco econômico-sancionatório", icon: AlertTriangle, score: clamp(base + riskDelta - 1), justification: riskJust },
   ];
 };
 

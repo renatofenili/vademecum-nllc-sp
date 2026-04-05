@@ -308,7 +308,37 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
             </div>
           </section>
 
-          {/* ━━━ 2. ITENS DISPUTADOS ━━━ */}
+          {/* ━━━ 2. LINGUAGEM SIMPLES ━━━ */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+              Edital em Linguagem Simples
+            </h2>
+            <Card className="border-border/60">
+              <CardContent className="p-6 space-y-6">
+                {resumo ? (
+                  <>
+                    <ResumoSection icon={BookOpen} title="Visão Geral" text={resumo.visao_geral} />
+                    <Separator />
+                    <ResumoSection icon={UserCheck} title="Quem Pode Participar" text={resumo.quem_pode_participar} />
+                    <Separator />
+                    <ResumoSection icon={FileCheck} title="Documentos Necessários" text={resumo.documentos_necessarios} />
+                    <Separator />
+                    <ResumoSection icon={Gavel} title="Como Funciona a Disputa" text={resumo.como_funciona_disputa} />
+                    <Separator />
+                    <ResumoSection icon={Clock} title="Prazos Importantes" text={resumo.prazos_importantes} />
+                    <Separator />
+                    <ResumoSection icon={Lightbulb} title="Dicas Práticas" text={resumo.dicas_praticas} />
+                  </>
+                ) : (
+                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+                    {resumoStr || "Resumo não disponível."}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* ━━━ 3. ITENS DISPUTADOS ━━━ */}
           {itens.length > 0 && (
             <section>
               <div className="flex items-center gap-2 mb-4">
@@ -358,36 +388,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
               )}
             </section>
           )}
-
-          {/* ━━━ 3. LINGUAGEM SIMPLES ━━━ */}
-          <section>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
-              Edital em Linguagem Simples
-            </h2>
-            <Card className="border-border/60">
-              <CardContent className="p-6 space-y-6">
-                {resumo ? (
-                  <>
-                    <ResumoSection icon={BookOpen} title="Visão Geral" text={resumo.visao_geral} />
-                    <Separator />
-                    <ResumoSection icon={UserCheck} title="Quem Pode Participar" text={resumo.quem_pode_participar} />
-                    <Separator />
-                    <ResumoSection icon={FileCheck} title="Documentos Necessários" text={resumo.documentos_necessarios} />
-                    <Separator />
-                    <ResumoSection icon={Gavel} title="Como Funciona a Disputa" text={resumo.como_funciona_disputa} />
-                    <Separator />
-                    <ResumoSection icon={Clock} title="Prazos Importantes" text={resumo.prazos_importantes} />
-                    <Separator />
-                    <ResumoSection icon={Lightbulb} title="Dicas Práticas" text={resumo.dicas_praticas} />
-                  </>
-                ) : (
-                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">
-                    {resumoStr || "Resumo não disponível."}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
 
           {/* ━━━ 4. PONTOS DE ATENÇÃO ━━━ */}
           <section>

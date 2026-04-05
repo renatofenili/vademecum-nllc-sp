@@ -78,6 +78,7 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
       const formData = new FormData();
       formData.append("file", file);
 
+      // Step 1: Submit PDF and get job_id
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-edital`,
         {
@@ -94,7 +95,45 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
         throw new Error(err.error || "Erro ao analisar");
       }
 
-      const data: EditalAnalysis = await response.json();
+      const { job_id } = await response.json();
+      if (!job_id) throw new Error("Não foi possível iniciar a análise");
+
+      // Step 2: Poll for result
+      const pollInterval = 2500;
+      const maxPolls = 120; // 5 minutes max
+      let polls = 0;
+
+      const poll = async (): Promise<EditalAnalysis> => {
+        polls++;
+        if (polls > maxPolls) throw new Error("Tempo limite de análise excedido. Tente novamente.");
+
+        const pollResp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-edital?job_id=${job_id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+          }
+        );
+
+        if (!pollResp.ok) throw new Error("Erro ao verificar status da análise");
+
+        const job = await pollResp.json();
+
+        if (job.status === "completed" && job.result) {
+          return job.result as EditalAnalysis;
+        }
+
+        if (job.status === "failed") {
+          throw new Error(job.error || "Falha na análise do edital");
+        }
+
+        // Still processing — wait and poll again
+        await new Promise((r) => setTimeout(r, pollInterval));
+        return poll();
+      };
+
+      const data = await poll();
       setResult(data);
     } catch (error: any) {
       toast({

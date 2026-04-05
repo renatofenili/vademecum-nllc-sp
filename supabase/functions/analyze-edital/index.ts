@@ -4,6 +4,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
 // ── PDF Text Extraction ──
 
 function repairLigatures(text: string): string {
@@ -1386,6 +1388,34 @@ REGRAS DE VALIDAÇÃO:
   };
 }
 
+// ── Supabase admin client for job tracking ──
+function getSupabaseAdmin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+// ── Background processor ──
+async function processJob(jobId: string, text: string) {
+  const sb = getSupabaseAdmin();
+  try {
+    await sb.from("edital_jobs").update({ progress: 10 }).eq("id", jobId);
+    const result = await analyzeEditalText(text);
+    await sb.from("edital_jobs").update({
+      status: "completed",
+      progress: 100,
+      result: result as unknown as Record<string, unknown>,
+    }).eq("id", jobId);
+  } catch (error) {
+    console.error("Job failed:", error);
+    await sb.from("edital_jobs").update({
+      status: "failed",
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    }).eq("id", jobId);
+  }
+}
+
 // ── Main Handler ──
 async function handleAnalyzeEdital(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
@@ -1393,42 +1423,83 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
   }
 
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const url = new URL(req.url);
 
-    if (!file) {
-      return new Response(JSON.stringify({ error: "Nenhum arquivo enviado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (file.type !== "application/pdf") {
-      return new Response(JSON.stringify({ error: "O arquivo deve ser um PDF" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    // ── GET /analyze-edital?job_id=xxx → poll for result ──
+    const jobId = url.searchParams.get("job_id");
+    if (req.method === "GET" && jobId) {
+      const sb = getSupabaseAdmin();
+      const { data, error } = await sb
+        .from("edital_jobs")
+        .select("status, progress, result, error")
+        .eq("id", jobId)
+        .single();
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = new Uint8Array(arrayBuffer);
+      if (error || !data) {
+        return new Response(JSON.stringify({ error: "Job não encontrado" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
 
-    let text: string;
-    try {
-      text = await extractTextFromPdf(buffer);
-    } catch (e) {
-      console.error("PDF extraction failed:", e);
-      return new Response(JSON.stringify({ error: "Não foi possível extrair texto do PDF." }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(data),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (!text || text.trim().length < 100) {
-      return new Response(JSON.stringify({ error: "PDF sem texto suficiente (pode ser imagem escaneada)." }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // ── POST /analyze-edital → submit PDF, return job_id ──
+    if (req.method === "POST") {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+
+      if (!file) {
+        return new Response(JSON.stringify({ error: "Nenhum arquivo enviado" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (file.type !== "application/pdf") {
+        return new Response(JSON.stringify({ error: "O arquivo deve ser um PDF" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+
+      let text: string;
+      try {
+        text = await extractTextFromPdf(buffer);
+      } catch (e) {
+        console.error("PDF extraction failed:", e);
+        return new Response(JSON.stringify({ error: "Não foi possível extrair texto do PDF." }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      if (!text || text.trim().length < 100) {
+        return new Response(JSON.stringify({ error: "PDF sem texto suficiente (pode ser imagem escaneada)." }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Create job record
+      const sb = getSupabaseAdmin();
+      const { data: job, error: jobError } = await sb
+        .from("edital_jobs")
+        .insert({ status: "processing", progress: 5 })
+        .select("id")
+        .single();
+
+      if (jobError || !job) {
+        return new Response(JSON.stringify({ error: "Falha ao criar job de análise" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Process in background — avoids CPU timeout
+      EdgeRuntime.waitUntil(processJob(job.id, text));
+
+      return new Response(JSON.stringify({ job_id: job.id }),
+        { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const result = await analyzeEditalText(text);
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Método não suportado" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("Error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Erro ao analisar o edital" }),
+    return new Response(JSON.stringify({ error: (error as Error).message || "Erro ao analisar o edital" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 }

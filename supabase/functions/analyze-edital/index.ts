@@ -286,7 +286,7 @@ async function extractSemanticFieldsViaAI(text: string): Promise<AIExtractionRes
     return defaultAIResult();
   }
 
-  const truncated = text.slice(0, 30000);
+  const truncated = text.slice(0, 60000);
   const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia TODOS os metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
 
 REGRAS OBRIGATÓRIAS:

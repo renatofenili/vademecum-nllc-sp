@@ -1366,6 +1366,7 @@ async function analyzeEditalText(text: string) {
     _ai_preco_maximo: String(ai.preco_maximo),
     _ai_catalogo: String(ai.catalogo_exigido),
     _ai_marca_modelo: String(ai.marca_modelo_exigido),
+    _ai_modo_disputa: ai.modo_disputa,
   }, timeline);
 
   return {

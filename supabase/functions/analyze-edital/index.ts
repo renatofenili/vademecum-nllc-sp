@@ -182,6 +182,13 @@ interface AIExtractionResult {
   exclusividade_meepp: boolean;
   catalogo_exigido: boolean;
   marca_modelo_exigido: boolean;
+  // Mechanical fields now also extracted by AI
+  numero_edital: string;
+  valor_estimado: string;
+  data_sessao: string;
+  data_publicacao: string | null;
+  prazo_impugnacao: string | null;
+  prazo_esclarecimento: string | null;
 }
 
 function defaultAIResult(): AIExtractionResult {
@@ -204,6 +211,12 @@ function defaultAIResult(): AIExtractionResult {
     exclusividade_meepp: false,
     catalogo_exigido: false,
     marca_modelo_exigido: false,
+    numero_edital: "Não identificado",
+    valor_estimado: "Não informado no edital",
+    data_sessao: "Não identificado",
+    data_publicacao: null,
+    prazo_impugnacao: null,
+    prazo_esclarecimento: null,
   };
 }
 
@@ -233,8 +246,15 @@ const EXTRACTION_TOOL = {
         exclusividade_meepp: { type: "boolean", description: "Participação EXCLUSIVA para ME/EPP? Se 'EXCLUSIVIDADE ME/EPP: NÃO', marque false." },
         catalogo_exigido: { type: "boolean", description: "É exigida apresentação de catálogo, ficha técnica ou laudo?" },
         marca_modelo_exigido: { type: "boolean", description: "É exigida indicação de marca/modelo na proposta?" },
+        // Mechanical fields
+        numero_edital: { type: "string", description: "Número completo do edital ou pregão, incluindo ano. Ex: '90014/2025', 'PE 001/2025', '23/2024'. Buscar no cabeçalho." },
+        valor_estimado: { type: "string", description: "Valor total estimado/global/máximo da licitação no formato brasileiro. Ex: 'R$ 1.234.567,89'. Se sigiloso ou não informado, retorne 'Não informado no edital'." },
+        data_sessao: { type: "string", description: "Data e hora da sessão pública/abertura de propostas. Ex: '15/07/2025 às 09h00'. Se não encontrado, retorne 'Não identificado'." },
+        data_publicacao: { type: ["string", "null"], description: "Data de publicação do edital no Diário Oficial. Ex: '01/07/2025'. Null se não encontrada." },
+        prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
+        prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento"],
       additionalProperties: false,
     },
   },

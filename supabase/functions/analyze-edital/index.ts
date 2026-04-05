@@ -268,17 +268,21 @@ async function extractSemanticFieldsViaAI(text: string): Promise<AIExtractionRes
   }
 
   const truncated = text.slice(0, 30000);
-  const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
+  const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia TODOS os metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
 
 REGRAS OBRIGATÓRIAS:
-1. NUNCA invente dados. Se não encontrar, use "Não identificado no edital".
+1. NUNCA invente dados. Se não encontrar, use o valor padrão indicado na descrição do campo.
 2. OBJETO: descrição do que é contratado/adquirido. Elimine referências a leis, decretos, atos normativos e normas administrativas. Foque APENAS no bem/serviço/obra. Máximo 500 caracteres.
 3. ÓRGÃO: a entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo, INSS, Ministério da Saúde). NUNCA confunda com a plataforma de compras (ComprasGov, BEC/SP, Licitações-e, etc).
 4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras. NUNCA confunda com o órgão.
 5. PARTICIPAÇÃO: marque "Exclusiva ME/EPP" SOMENTE se o edital declarar EXPRESSAMENTE a exclusividade. Se disser "EXCLUSIVIDADE ME/EPP/EQUIPARADAS: NÃO" ou similar, marque "Ampla concorrência".
 6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver dúvida, marque "nao_identificado".
 7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
-8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").`;
+8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").
+9. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").
+10. VALOR ESTIMADO: extraia o valor TOTAL/GLOBAL da licitação no formato brasileiro (R$ X.XXX,XX). Ignore valores unitários ou de itens individuais. Se sigiloso ou não informado, use "Não informado no edital".
+11. DATA DA SESSÃO: extraia a data e hora da sessão pública/abertura de propostas.
+12. TIMELINE: extraia datas de publicação, prazos de impugnação e esclarecimento quando disponíveis.`;
 
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

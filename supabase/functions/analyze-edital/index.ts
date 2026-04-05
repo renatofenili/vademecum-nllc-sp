@@ -270,7 +270,7 @@ const EXTRACTION_TOOL = {
         prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
         prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
       additionalProperties: false,
     },
   },

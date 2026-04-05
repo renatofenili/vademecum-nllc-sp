@@ -1661,6 +1661,10 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (feat.hasCredenciamento) part.push("• É necessário credenciamento prévio na plataforma de disputa.");
     if (feat.hasImpedimentoSancao) part.push("• Empresas impedidas de licitar, suspensas ou declaradas inidôneas estão vedadas.");
     if (feat.hasCotaReservada) part.push("• Há cota reservada para ME/EPP.");
+    if (feat.vedacaoCooperativas) part.push("• Cooperativas: vedadas expressamente pelo edital.");
+    if (subcontratacaoStatus === "nao") part.push("• Subcontratação: vedada expressamente pelo edital.");
+    else if (subcontratacaoStatus === "sim") part.push("• Subcontratação: admitida pelo edital.");
+    else if (feat.hasSubcontratacao) part.push("• Subcontratação: ponto que exige conferência no edital.");
     sections.push(`👥 7. QUEM PODE PARTICIPAR\n\n${part.join("\n")}`);
   }
 

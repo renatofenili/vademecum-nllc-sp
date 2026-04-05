@@ -553,17 +553,17 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
   const simpleLangBody = getSectionBody(sections, "linguagem simples", "em linguagem");
 
   const allFields = [
-    { icon: FileText, label: "Número do Edital", value: analysis.numero_edital },
-    { icon: Building2, label: "Órgão", value: analysis.orgao },
-    { icon: Scale, label: "Modalidade", value: analysis.modalidade },
-    { icon: FileText, label: "Objeto", value: analysis.objeto },
-    { icon: DollarSign, label: "Valor Estimado", value: analysis.valor_estimado },
-    { icon: BarChart3, label: "Critério de Julgamento", value: analysis.criterio_julgamento },
-    { icon: Calendar, label: "Sessão Pública", value: analysis.data_sessao },
-    { icon: Globe, label: "Plataforma", value: analysis.sistema_licitacao },
-    { icon: Users, label: "Participação", value: analysis.participacao },
-    { icon: Hash, label: "Unidade da Disputa", value: analysis.unidade_disputa },
-    { icon: Shield, label: "Habilitação", value: analysis.condicoes_habilitacao },
+    { icon: FileText, label: "Número do Edital", value: analysis.numero_edital, key: "numero_edital" },
+    { icon: Building2, label: "Órgão", value: analysis.orgao, key: "orgao" },
+    { icon: Scale, label: "Modalidade", value: analysis.modalidade, key: "modalidade" },
+    { icon: FileText, label: "Objeto", value: analysis.objeto, key: "objeto" },
+    { icon: DollarSign, label: "Valor Estimado", value: analysis.valor_estimado, key: "valor_estimado" },
+    { icon: BarChart3, label: "Critério de Julgamento", value: analysis.criterio_julgamento, key: "criterio_julgamento" },
+    { icon: Calendar, label: "Sessão Pública", value: analysis.data_sessao, key: "data_sessao" },
+    { icon: Globe, label: "Plataforma", value: analysis.sistema_licitacao, key: "sistema_licitacao" },
+    { icon: Users, label: "Participação", value: analysis.participacao, key: "participacao" },
+    { icon: Hash, label: "Unidade da Disputa", value: analysis.unidade_disputa, key: "unidade_disputa" },
+    { icon: Shield, label: "Habilitação", value: analysis.condicoes_habilitacao, key: "habilitacao" },
   ].filter(f => f.value && f.value !== "Não identificado" && f.value !== "Não identificado no edital");
 
   const openDetail = useCallback(() => setDetailOpen(true), []);
@@ -963,6 +963,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
                     <div className="text-sm font-medium text-foreground">
                       {renderWithBullets(field.value || "")}
                     </div>
+                    <SourceBadge fieldKey={field.key} fontes={fontes} />
                   </div>
                 </div>
               );

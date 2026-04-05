@@ -271,8 +271,11 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportHtml(analysis)} className="gap-1.5">
-            <Download className="h-3.5 w-3.5" /> PDF
+          <Button variant="outline" size="sm" onClick={() => handleSave(analysis)} className="gap-1.5">
+            <Save className="h-3.5 w-3.5" /> Salvar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handlePrint(analysis)} className="gap-1.5">
+            <Download className="h-3.5 w-3.5" /> Imprimir / PDF
           </Button>
           {onNewAnalysis && (
             <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-1.5">

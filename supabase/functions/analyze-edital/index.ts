@@ -1316,6 +1316,10 @@ function detectFeatures(text: string) {
     hasAmostra: /amostra/i.test(text) && !/sem\s+amostra/i.test(text),
     hasConsorcio: /consórcio/i.test(text),
     hasSubcontratacao: /subcontrata/i.test(text),
+    subcontratacaoVedada: /(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i.test(text)
+      || /subcontrata(?:ção|r)\s+(?:não\s+)?(?:será\s+)?(?:vedad|proibid)/i.test(text),
+    subcontratacaoPermitida: /subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i.test(text)
+      || /(?:autoriza|permite|admite)[\-\s]se\s+(?:a\s+)?subcontrata/i.test(text),
     hasSustentabilidade: /sustentabilidade|ambiental|iso\s*14/i.test(text),
     hasProvaConceito: /prova\s+de\s+conceito/i.test(text),
     hasPenalidades: /penalidade|sanç[ãõ][oe]s|multa|impedimento|declaração\s+de\s+inidoneidade/i.test(text),

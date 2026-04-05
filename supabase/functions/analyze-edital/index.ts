@@ -274,9 +274,9 @@ REGRAS OBRIGATÓRIAS:
 1. NUNCA invente dados. Se não encontrar, use o valor padrão indicado na descrição do campo.
 2. OBJETO: descrição do que é contratado/adquirido. Elimine referências a leis, decretos, atos normativos e normas administrativas. Foque APENAS no bem/serviço/obra. Máximo 500 caracteres.
 3. ÓRGÃO: a entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo, INSS, Ministério da Saúde). NUNCA confunda com a plataforma de compras (ComprasGov, BEC/SP, Licitações-e, etc).
-4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras. NUNCA confunda com o órgão.
+4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras do Governo Federal. Se o texto trouxer apenas palavras genéricas como "sistema", "portal" ou "plataforma", sem nome claro, retorne "Não identificado no edital".
 5. PARTICIPAÇÃO: marque "Exclusiva ME/EPP" SOMENTE se o edital declarar EXPRESSAMENTE a exclusividade. Se disser "EXCLUSIVIDADE ME/EPP/EQUIPARADAS: NÃO" ou similar, marque "Ampla concorrência".
-6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver dúvida, marque "nao_identificado".
+6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver vedação/admissão expressa, respeite literalmente. Se o edital for omisso ou duvidoso, marque "nao_identificado".
 7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
 8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").
 9. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").
@@ -702,6 +702,37 @@ function truthCheck(text: string, positivePatterns: RegExp[], negativePatterns: 
   return "nao_identificado";
 }
 
+function resolveAITruth(
+  aiValue: string | undefined,
+  text: string,
+  positivePatterns: RegExp[],
+  negativePatterns: RegExp[],
+): "sim" | "nao" | "nao_identificado" {
+  if (aiValue === "sim" || aiValue === "nao") return aiValue;
+  return truthCheck(text, positivePatterns, negativePatterns);
+}
+
+function normalizeSistemaLicitacao(aiValue: string | undefined, text: string): string {
+  const cleaned = (aiValue || "").trim();
+  const mappings = [
+    { pattern: /compras\.?gov(?:\.br)?|sistema\s+de\s+compras\s+do\s+governo\s+federal|portal\s+de\s+compras\s+do\s+governo\s+federal/i, value: "ComprasGov (compras.gov.br)" },
+    { pattern: /\bbec\s*\/\s*sp\b/i, value: "BEC/SP" },
+    { pattern: /licita(?:ç|c)ões?-e|licitacoes-e/i, value: "Licitações-e" },
+  ] as const;
+
+  const inferredFromText = mappings.find(({ pattern }) => pattern.test(text))?.value;
+
+  if (!cleaned || /^(não|nao)\s+identificado/i.test(cleaned)) {
+    return inferredFromText || "Não identificado no edital";
+  }
+
+  if (/^(sistema|portal|plataforma|site|sítio\s+eletrônico|sitio\s+eletronico)$/i.test(cleaned)) {
+    return inferredFromText || "Não identificado no edital";
+  }
+
+  return mappings.find(({ pattern }) => pattern.test(cleaned))?.value || cleaned;
+}
+
 // ── Resumo em Linguagem Simples (análise holística em 16 seções) ──
 function gerarResumoSimples(dados: Record<string, string>, timeline: Record<string, string | null>): string {
   const fullText = dados._fullText || "";
@@ -714,7 +745,7 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   const criterio = dados.criterio !== "Não identificado" ? dados.criterio : null;
   const valor = dados.valor_estimado !== "Não informado no edital" ? dados.valor_estimado : null;
   const sessao = dados.data_sessao !== "Não identificado" ? dados.data_sessao : timeline.data_abertura;
-  const sistema = dados.sistema !== "Não identificado" ? dados.sistema : null;
+  const sistema = dados.sistema && !/^(não|nao)\s+identificado/i.test(dados.sistema) ? dados.sistema : null;
   const criterioHint = criterio ? buildCriterionHint(criterio) : null;
 
   // ── Truth validations (from AI extraction via dados._ai_* fields) ──
@@ -1228,6 +1259,23 @@ async function analyzeEditalText(text: string) {
   // ── Full AI extraction (all fields via Gemini Flash) ──
   const ai = await extractSemanticFieldsViaAI(text);
 
+  const consorcio = resolveAITruth(ai.consorcio, text,
+    [/(?:será|serão)\s+(?:admitid|permitid|aceit)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i, /admite[\-\s]se\s+consórcio/i],
+    [/(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i]
+  );
+  const subcontratacao = resolveAITruth(ai.subcontratacao, text,
+    [/subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i],
+    [/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i]
+  );
+  const amostra = resolveAITruth(ai.amostra, text,
+    [/(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i],
+    [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i]
+  );
+  const garantia_execucao = resolveAITruth(ai.garantia_execucao, text,
+    [/garantia\s+(?:de\s+)?(?:execução|contratual)\s+(?:será|deverá|é)\s+(?:exigid|apresentad|prestad)/i, /seguro[\-\s]garantia/i],
+    [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i]
+  );
+
   // ── Regex fallbacks for mechanical fields (used only if AI returns defaults) ──
   const numero_edital = (ai.numero_edital && ai.numero_edital !== "Não identificado")
     ? ai.numero_edital : extractNumeroEdital(text);
@@ -1242,7 +1290,7 @@ async function analyzeEditalText(text: string) {
     data_publicacao: ai.data_publicacao || regexTimeline.data_publicacao,
     prazo_impugnacao: ai.prazo_impugnacao || regexTimeline.prazo_impugnacao,
     prazo_esclarecimento: ai.prazo_esclarecimento || regexTimeline.prazo_esclarecimento,
-    data_abertura: regexTimeline.data_abertura, // keep regex for this (derived from sessão)
+    data_abertura: regexTimeline.data_abertura,
   };
 
   const planilha_estimada = extractPlanilha(text);
@@ -1251,7 +1299,7 @@ async function analyzeEditalText(text: string) {
   const orgao = ai.orgao;
   const objeto = ai.objeto;
   const criterio_julgamento = ai.criterio_julgamento;
-  const sistema_licitacao = ai.sistema_licitacao;
+  const sistema_licitacao = normalizeSistemaLicitacao(ai.sistema_licitacao, text);
   const condicoes_habilitacao = ai.habilitacao;
   const participacao = ai.participacao;
   const unidade_disputa = ai.unidade_disputa;
@@ -1278,10 +1326,10 @@ async function analyzeEditalText(text: string) {
     _scoreFraseFaixa: score_complexidade.frase_faixa,
     _scoreFatoresElevaram: score_complexidade.fatores_elevaram.join("; "),
     _scoreFatoresImpediram: score_complexidade.fatores_impediram.join("; "),
-    _ai_consorcio: ai.consorcio,
-    _ai_subcontratacao: ai.subcontratacao,
-    _ai_amostra: ai.amostra,
-    _ai_garantia: ai.garantia_execucao,
+    _ai_consorcio: consorcio,
+    _ai_subcontratacao: subcontratacao,
+    _ai_amostra: amostra,
+    _ai_garantia: garantia_execucao,
     _ai_cooperativas_vedadas: String(ai.cooperativas_vedadas),
     _ai_exclusividade_meepp: String(ai.exclusividade_meepp),
     _ai_srp: String(ai.is_srp),

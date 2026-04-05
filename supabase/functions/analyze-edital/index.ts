@@ -1826,12 +1826,12 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     }
 
     // Execução
-    if (srpStatus === "sim" || feat.isServicoContinuado || feat.hasSubcontratacao) {
+    if (srpStatus === "sim" || feat.isServicoContinuado || subcontratacaoStatus === "sim") {
       prep.push("");
       prep.push("📋 Execução contratual");
       if (srpStatus === "sim") prep.push("Como é registro de preços, mantenha capacidade de fornecimento durante toda a vigência da ata.");
       if (feat.isServicoContinuado) prep.push("Serviço continuado requer estrutura permanente para execução.");
-      if (feat.hasSubcontratacao) prep.push("O edital prevê possibilidade de subcontratação.");
+      if (subcontratacaoStatus === "sim") prep.push("O edital admite subcontratação parcial — verifique os limites e condições.");
     }
 
     sections.push(`📋 12. PONTOS DE PREPARAÇÃO\n\n${prep.join("\n")}`);

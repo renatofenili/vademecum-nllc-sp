@@ -348,7 +348,7 @@ function getFaixa(score: number): string {
   return "muito complexo";
 }
 
-function calcularComplexidade(text: string, dados: Record<string, string>): ComplexidadeResult {
+function calcularComplexidade(text: string, dados: Record<string, string>, aiTruth?: Record<string, string>): ComplexidadeResult {
   const textLower = text.toLowerCase();
 
   // ── Detect base profile using the ALREADY EXTRACTED modalidade ──

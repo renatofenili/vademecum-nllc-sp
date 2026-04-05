@@ -664,21 +664,21 @@ const METADATA_TOOL = {
   type: "function" as const,
   function: {
     name: "extract_metadata",
-    description: "Extrai metadados básicos de um edital de licitação",
+    description: "Extrai metadados básicos de um edital de licitação. Para CADA campo, forneça também o trecho_fonte com a transcrição EXATA do trecho do edital que fundamenta a resposta (max 300 chars).",
     parameters: {
       type: "object",
       properties: {
-        objeto: { type: "string", description: "Descrição do objeto (o que é contratado/adquirido). Elimine referências a leis/decretos. Foque no bem/serviço/obra. Max 500 chars." },
-        orgao: { type: "string", description: "Nome completo do órgão/entidade promotora. NUNCA confunda com plataforma de compras." },
-        modalidade: { type: "string", description: "Modalidade: 'Pregão eletrônico', 'Concorrência eletrônica', etc." },
-        criterio_julgamento: { type: "string", description: "Critério: 'Menor preço por item', 'Menor preço global por lote', etc. Inclua unidade." },
-        sistema_licitacao: { type: "string", description: "Plataforma eletrônica: 'ComprasGov (compras.gov.br)', 'BEC/SP', 'Licitações-e', etc. Se genérico, retorne 'Não identificado no edital'." },
-        participacao: { type: "string", enum: ["Exclusiva ME/EPP", "Ampla concorrência", "Não identificado no edital"] },
-        unidade_disputa: { type: "string", enum: ["Por item", "Por lote", "Global", "Não identificado no edital"] },
-        modo_disputa: { type: "string", enum: ["aberto", "fechado", "aberto e fechado", "nao_identificado"], description: "SOMENTE se expresso no edital." },
-        numero_edital: { type: "string", description: "Número completo com ano. Ex: 'PE 001/2025'." },
-        valor_estimado: { type: "string", description: "Valor TOTAL/GLOBAL no formato R$ X.XXX,XX. Se sigiloso: 'Não informado no edital'." },
-        data_sessao: { type: "string", description: "Data e hora da sessão. Ex: '15/07/2025 às 09h00'." },
+        objeto: { type: "object", properties: { valor: { type: "string", description: "Descrição do objeto. Max 500 chars." }, trecho_fonte: { type: "string", description: "Trecho EXATO do edital. Max 300 chars." } }, required: ["valor", "trecho_fonte"] },
+        orgao: { type: "object", properties: { valor: { type: "string", description: "Nome completo do órgão/entidade promotora. NUNCA confunda com plataforma." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        modalidade: { type: "object", properties: { valor: { type: "string" }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        criterio_julgamento: { type: "object", properties: { valor: { type: "string", description: "Critério: 'Menor preço por item', etc." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        sistema_licitacao: { type: "object", properties: { valor: { type: "string", description: "Plataforma eletrônica. Se genérico, 'Não identificado no edital'." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        participacao: { type: "object", properties: { valor: { type: "string", enum: ["Exclusiva ME/EPP", "Ampla concorrência", "Não identificado no edital"] }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        unidade_disputa: { type: "object", properties: { valor: { type: "string", enum: ["Por item", "Por lote", "Global", "Não identificado no edital"] }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        modo_disputa: { type: "object", properties: { valor: { type: "string", enum: ["aberto", "fechado", "aberto e fechado", "nao_identificado"] }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        numero_edital: { type: "object", properties: { valor: { type: "string", description: "Número completo com ano. Ex: 'PE 001/2025'." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        valor_estimado: { type: "object", properties: { valor: { type: "string", description: "Valor TOTAL/GLOBAL R$ X.XXX,XX ou 'Não informado no edital'." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
+        data_sessao: { type: "object", properties: { valor: { type: "string", description: "Data e hora da sessão." }, trecho_fonte: { type: "string" } }, required: ["valor", "trecho_fonte"] },
         data_publicacao: { type: ["string", "null"] },
         prazo_impugnacao: { type: ["string", "null"] },
         prazo_esclarecimento: { type: ["string", "null"] },
@@ -1476,6 +1476,8 @@ async function analyzeEditalText(text: string) {
   const metadataPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia os metadados do edital.
 REGRAS: NUNCA invente dados. Se não encontrar, use o valor padrão. ÓRGÃO ≠ plataforma. OBJETO: foque no bem/serviço, sem referências a leis.`;
 
+  const metadataUserPrompt = `Extraia os metadados. Para CADA campo principal, forneça o valor E o trecho_fonte (citação EXATA do edital que fundamenta a resposta, max 300 chars). Se não encontrar, coloque "Não localizado" no trecho_fonte:\n\n${truncated}`;
+
   const restrictionsPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia APENAS as restrições e exigências do edital.
 
 REGRAS CRÍTICAS:
@@ -1486,7 +1488,7 @@ REGRAS CRÍTICAS:
 5. HABILITAÇÃO: resuma por categoria com emojis.`;
 
   const [metadataResult, restrictionsResult] = await Promise.all([
-    callAI(apiKey, metadataPrompt, `Extraia os metadados:\n\n${truncated}`, METADATA_TOOL, 4096),
+    callAI(apiKey, metadataPrompt, metadataUserPrompt, METADATA_TOOL, 6144),
     callAI(apiKey, restrictionsPrompt, `Extraia as restrições e exigências:\n\n${truncated}`, RESTRICTIONS_TOOL, 4096),
   ]);
 
@@ -1508,7 +1510,28 @@ REGRAS:
   const rest = restrictionsResult || {} as Record<string, unknown>;
   const plan = planilhaResult || {} as Record<string, unknown>;
 
-  // Extract structured restriction values
+  // ── Helper to read new nested {valor, trecho_fonte} or legacy string fields ──
+  function readMetaField(field: unknown): { valor: string; trecho_fonte: string } {
+    if (typeof field === "object" && field !== null && "valor" in (field as Record<string, unknown>)) {
+      const f = field as Record<string, unknown>;
+      return { valor: String(f.valor ?? ""), trecho_fonte: String(f.trecho_fonte ?? "Não localizado") };
+    }
+    return { valor: typeof field === "string" ? field : "", trecho_fonte: "Não localizado" };
+  }
+
+  const metaObjeto = readMetaField(meta.objeto);
+  const metaOrgao = readMetaField(meta.orgao);
+  const metaModalidade = readMetaField(meta.modalidade);
+  const metaCriterio = readMetaField(meta.criterio_julgamento);
+  const metaSistema = readMetaField(meta.sistema_licitacao);
+  const metaParticipacao = readMetaField(meta.participacao);
+  const metaUnidadeDisputa = readMetaField(meta.unidade_disputa);
+  const metaModoDisputa = readMetaField(meta.modo_disputa);
+  const metaNumeroEdital = readMetaField(meta.numero_edital);
+  const metaValorEstimado = readMetaField(meta.valor_estimado);
+  const metaDataSessao = readMetaField(meta.data_sessao);
+
+  // Extract structured restriction values  
   const consorcioAI = (rest.consorcio as any)?.status || "nao_identificado";
   const cooperativasAI = (rest.cooperativas as any)?.vedacao || "nao_identificado";
   const subcontratacaoAI = (rest.subcontratacao as any)?.status || "nao_identificado";
@@ -1522,9 +1545,9 @@ REGRAS:
     subcontratacao: { status: subcontratacaoAI, trecho: (rest.subcontratacao as any)?.trecho_fonte },
     amostra: { status: amostraAI, trecho: (rest.amostra as any)?.trecho_fonte },
     garantia: { status: garantiaAI, trecho: (rest.garantia_execucao as any)?.trecho_fonte },
-    modo_disputa: meta.modo_disputa,
-    objeto: meta.objeto,
-    orgao: meta.orgao,
+    modo_disputa: metaModoDisputa.valor,
+    objeto: metaObjeto.valor,
+    orgao: metaOrgao.valor,
   });
 
   const validationPrompt = `Você é um auditor de licitações. Valide os dados extraídos abaixo contra o texto do edital.
@@ -1552,14 +1575,14 @@ REGRAS DE VALIDAÇÃO:
   const amostraFinal = (val.amostra_validado as string) || amostraAI;
   const garantiaFinal = (val.garantia_validado as string) || garantiaAI;
   const modoDisputaFinal = (val.modo_disputa_validado as string) || (meta.modo_disputa as string) || "nao_identificado";
-  const objetoFinal = (val.objeto_validado as string) || (meta.objeto as string) || "Não identificado no edital";
-  const orgaoFinal = (val.orgao_validado as string) || (meta.orgao as string) || "Não identificado";
+  const objetoFinal = (val.objeto_validado as string) || metaObjeto.valor || "Não identificado no edital";
+  const orgaoFinal = (val.orgao_validado as string) || metaOrgao.valor || "Não identificado";
 
   // ── Regex fallbacks for mechanical fields ──
-  const numero_edital = (meta.numero_edital && meta.numero_edital !== "Não identificado")
-    ? meta.numero_edital as string : extractNumeroEdital(text);
-  const data_sessao = (meta.data_sessao && meta.data_sessao !== "Não identificado")
-    ? meta.data_sessao as string : extractDataSessao(text);
+  const numero_edital = (metaNumeroEdital.valor && metaNumeroEdital.valor !== "Não identificado")
+    ? metaNumeroEdital.valor : extractNumeroEdital(text);
+  const data_sessao = (metaDataSessao.valor && metaDataSessao.valor !== "Não identificado")
+    ? metaDataSessao.valor : extractDataSessao(text);
 
   const regexTimeline = extractTimeline(text);
   const timeline = {
@@ -1575,14 +1598,14 @@ REGRAS DE VALIDAÇÃO:
   const planilha_estimada = structuredPlanilha && structuredPlanilha.length > 0
     ? structuredPlanilha
     : extractPlanilha(text);
-  const valor_estimado = resolveValorEstimado(text, meta.valor_estimado, structuredPlanilha).value;
+  const valor_estimado = resolveValorEstimado(text, metaValorEstimado.valor, structuredPlanilha).value;
 
-  const modalidade = (meta.modalidade as string) || "Não identificado";
-  const criterio_julgamento = (meta.criterio_julgamento as string) || "Não identificado";
-  const sistema_licitacao = normalizeSistemaLicitacao(meta.sistema_licitacao as string, text);
+  const modalidade = metaModalidade.valor || "Não identificado";
+  const criterio_julgamento = metaCriterio.valor || "Não identificado";
+  const sistema_licitacao = normalizeSistemaLicitacao(metaSistema.valor, text);
   const condicoes_habilitacao = (rest.habilitacao as string) || "Consultar seção de habilitação no edital";
-  const participacao = (meta.participacao as string) || "Não identificado no edital";
-  const unidade_disputa = (meta.unidade_disputa as string) || "Não identificado no edital";
+  const participacao = metaParticipacao.valor || "Não identificado no edital";
+  const unidade_disputa = metaUnidadeDisputa.valor || "Não identificado no edital";
 
   const score_complexidade = calcularComplexidade(text, {
     valor_estimado,
@@ -1617,12 +1640,32 @@ REGRAS DE VALIDAÇÃO:
     _v_garantia: garantiaFinal,
     _v_cooperativas: cooperativasFinal,
     _v_modo_disputa: modoDisputaFinal,
-    _ai_exclusividade_meepp: String(meta.exclusividade_meepp ?? false),
-    _ai_srp: String(meta.is_srp ?? false),
-    _ai_preco_maximo: String(meta.preco_maximo ?? false),
+    _ai_exclusividade_meepp: String((meta as any).exclusividade_meepp ?? false),
+    _ai_srp: String((meta as any).is_srp ?? false),
+    _ai_preco_maximo: String((meta as any).preco_maximo ?? false),
     _ai_catalogo: String(rest.catalogo_exigido ?? false),
     _ai_marca_modelo: String(rest.marca_modelo_exigido ?? false),
   }, timeline);
+
+  // ── Build fontes map (trecho_fonte for every field) ──
+  const fontes: Record<string, string> = {
+    objeto: metaObjeto.trecho_fonte,
+    orgao: metaOrgao.trecho_fonte,
+    modalidade: metaModalidade.trecho_fonte,
+    criterio_julgamento: metaCriterio.trecho_fonte,
+    sistema_licitacao: metaSistema.trecho_fonte,
+    participacao: metaParticipacao.trecho_fonte,
+    unidade_disputa: metaUnidadeDisputa.trecho_fonte,
+    modo_disputa: metaModoDisputa.trecho_fonte,
+    numero_edital: metaNumeroEdital.trecho_fonte,
+    valor_estimado: metaValorEstimado.trecho_fonte,
+    data_sessao: metaDataSessao.trecho_fonte,
+    consorcio: (rest.consorcio as any)?.trecho_fonte || "Não localizado",
+    cooperativas: (rest.cooperativas as any)?.trecho_fonte || "Não localizado",
+    subcontratacao: (rest.subcontratacao as any)?.trecho_fonte || "Não localizado",
+    amostra: (rest.amostra as any)?.trecho_fonte || "Não localizado",
+    garantia_execucao: (rest.garantia_execucao as any)?.trecho_fonte || "Não localizado",
+  };
 
   return {
     numero_edital,
@@ -1640,6 +1683,7 @@ REGRAS DE VALIDAÇÃO:
     score_complexidade,
     participacao,
     unidade_disputa,
+    fontes,
   };
 }
 

@@ -37,6 +37,7 @@ export interface EditalAnalysis {
   unidade_disputa?: string;
   timeline?: EditalTimeline;
   score_complexidade?: EditalScoreComplexidade;
+  fontes?: Record<string, string>;
 }
 
 interface EditalAnalyzerProps {

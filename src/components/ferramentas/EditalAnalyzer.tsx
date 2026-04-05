@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import { Upload, FileText, Loader2, ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import EditalPresentationView from "./EditalPresentationView";
 
@@ -102,6 +101,8 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
       const pollInterval = 2500;
       const maxPolls = 120; // 5 minutes max
       let polls = 0;
+      let stagnantPolls = 0;
+      let lastProgress = -1;
 
       const poll = async (): Promise<EditalAnalysis> => {
         polls++;
@@ -120,12 +121,24 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
 
         const job = await pollResp.json();
 
+        if (typeof job.progress === "number") {
+          if (job.progress === lastProgress) stagnantPolls += 1;
+          else {
+            lastProgress = job.progress;
+            stagnantPolls = 0;
+          }
+        }
+
         if (job.status === "completed" && job.result) {
           return job.result as EditalAnalysis;
         }
 
         if (job.status === "failed") {
           throw new Error(job.error || "Falha na análise do edital");
+        }
+
+        if (stagnantPolls >= 24) {
+          throw new Error("A análise travou sem concluir. Tente novamente.");
         }
 
         // Still processing — wait and poll again

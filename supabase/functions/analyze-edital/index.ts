@@ -57,12 +57,11 @@ function buildContext(text: string, maxChars = 55000): string {
   if (text.length <= maxChars) return text;
   const head = text.slice(0, 18000);
   const tail = text.slice(Math.max(0, text.length - 18000));
-  // Find keyword-rich sections in the middle
-  const anchorRe = /(?:objeto|modalidade|preg[aã]o|crit[eé]rio|sess[aã]o|habilita[cç]|cons[oó]rcio|cooperativa|amostra|garantia|valor\s+(?:estimado|global|m[aá]ximo)|planilha|tabela|anexo)/gi;
+  const anchorRe = /(?:objeto|modalidade|preg[aã]o|crit[eé]rio|sess[aã]o|habilita[cç]|cons[oó]rcio|cooperativa|amostra|garantia|valor\s+(?:estimado|global|m[aá]ximo)|planilha|tabela|anexo|item|lote|unidade|quantidade)/gi;
   const anchors = Array.from(text.matchAll(anchorRe)).map(m => m.index ?? 0);
   const midSections: string[] = [];
   let budget = maxChars - head.length - tail.length - 200;
-  for (const idx of anchors.slice(0, 10)) {
+  for (const idx of anchors.slice(0, 12)) {
     if (idx < 18000 || idx > text.length - 18000) continue;
     const chunk = text.slice(Math.max(0, idx - 400), Math.min(text.length, idx + 3000));
     if (budget - chunk.length < 0) break;
@@ -96,7 +95,6 @@ const ANALYSIS_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        // ── Metadados (cada um com valor + trecho_fonte) ──
         numero_edital: { type: "string", description: "Número completo do edital com ano. Ex: 'Pregão Eletrônico 001/2025'" },
         numero_edital_fonte: { type: "string", description: "Transcrição EXATA do trecho do edital (max 200 chars)" },
         orgao: { type: "string", description: "Nome completo do órgão/entidade PROMOTORA da licitação. NÃO é a plataforma eletrônica." },
@@ -116,10 +114,37 @@ const ANALYSIS_TOOL = {
         participacao: { type: "string", description: "'Exclusiva ME/EPP' ou 'Ampla concorrência' ou 'Não identificado'" },
         participacao_fonte: { type: "string", description: "Trecho EXATO (max 200 chars)" },
 
-        // ── Resumo em linguagem simples ──
-        resumo_linguagem_simples: { type: "string", description: "Explique o edital como se estivesse falando com um empresário leigo. 3-5 parágrafos. Cubra: o que está sendo comprado, quem pode participar, documentos principais, como funciona a disputa e prazos importantes. Seja claro e direto." },
+        itens: {
+          type: "array",
+          description: "Lista de itens ou lotes disputados. Extraia TODOS que encontrar (tabelas, anexos, corpo do texto). Se não houver itens individuais listados, retorne array vazio [].",
+          items: {
+            type: "object",
+            properties: {
+              numero: { type: "string", description: "Número do item/lote. Ex: 'Item 1', 'Lote 3'" },
+              descricao: { type: "string", description: "Descrição do item/lote (max 300 chars)" },
+              quantidade: { type: "string", description: "Quantidade ou 'N/I'" },
+              unidade: { type: "string", description: "Unidade de medida (un, kg, m², serviço, etc.) ou 'N/I'" },
+              valor_unitario: { type: "string", description: "Valor unitário estimado em R$ ou 'N/I'" },
+              valor_total: { type: "string", description: "Valor total estimado do item em R$ ou 'N/I'" },
+            },
+            required: ["numero", "descricao", "quantidade", "unidade", "valor_unitario", "valor_total"],
+          },
+        },
 
-        // ── Pontos de atenção ──
+        resumo_linguagem_simples: {
+          type: "object",
+          description: "Resumo detalhado e didático do edital em seções. Escreva como se explicasse a um empresário que nunca participou de licitação. Use dados concretos do edital (datas, valores, documentos). NÃO use jargão jurídico.",
+          properties: {
+            visao_geral: { type: "string", description: "2-3 parágrafos: O que está sendo comprado/contratado, por quem, e qual o valor. Contextualize o tipo de contratação." },
+            quem_pode_participar: { type: "string", description: "1-2 parágrafos: Quem pode e quem NÃO pode participar. ME/EPP? Consórcio? Cooperativa? Requisitos mínimos." },
+            documentos_necessarios: { type: "string", description: "1-2 parágrafos: Quais documentos o licitante precisa apresentar (habilitação, qualificação técnica, econômica). Seja específico com os nomes dos documentos." },
+            como_funciona_disputa: { type: "string", description: "1-2 parágrafos: Como funciona a disputa (eletrônica/presencial, lances, modo aberto/fechado). Qual plataforma usar e como se cadastrar." },
+            prazos_importantes: { type: "string", description: "1 parágrafo: Datas-chave — sessão, impugnação, esclarecimentos, prazo de entrega/execução." },
+            dicas_praticas: { type: "string", description: "1 parágrafo: Dicas práticas para quem vai participar pela primeira vez neste edital." },
+          },
+          required: ["visao_geral", "quem_pode_participar", "documentos_necessarios", "como_funciona_disputa", "prazos_importantes", "dicas_praticas"],
+        },
+
         pontos_atencao: {
           type: "array",
           description: "Lista de 4-8 pontos que o licitante deve prestar atenção especial",
@@ -133,7 +158,6 @@ const ANALYSIS_TOOL = {
           },
         },
 
-        // ── Complexidade ──
         complexidade_score: { type: "number", description: "Score de 1 a 10 (1=muito simples, 10=muito complexo)" },
         complexidade_justificativa: { type: "string", description: "Justificativa em 2-3 frases explicando o score" },
         complexidade_fatores: {
@@ -152,6 +176,7 @@ const ANALYSIS_TOOL = {
         "data_sessao", "data_sessao_fonte",
         "plataforma", "plataforma_fonte",
         "participacao", "participacao_fonte",
+        "itens",
         "resumo_linguagem_simples",
         "pontos_atencao",
         "complexidade_score", "complexidade_justificativa", "complexidade_fatores",
@@ -169,9 +194,10 @@ REGRAS ABSOLUTAS:
 3. O "orgao" é quem PROMOVE a licitação (Secretaria, Prefeitura, etc.), NUNCA a plataforma eletrônica.
 4. O "valor_estimado" deve ser o valor TOTAL/GLOBAL. Se existem vários itens, some. Se é sigiloso, diga "Não informado no edital (sigiloso)".
 5. Seja preciso nas datas — inclua horário quando disponível.
-6. No resumo em linguagem simples, explique como se estivesse conversando com um empresário que nunca participou de licitação.
-7. Os pontos de atenção devem focar no que pode ELIMINAR o licitante ou gerar CUSTO inesperado.
-8. A complexidade deve refletir a dificuldade REAL de participar e executar.`;
+6. Para os ITENS: extraia cada item/lote listado no edital com seus valores. Se o edital lista itens em tabela, extraia todos. Se não há itens individuais, retorne array vazio.
+7. No resumo em linguagem simples, seja DETALHADO e ESPECÍFICO — cite valores, datas, nomes de documentos e requisitos concretos do edital.
+8. Os pontos de atenção devem focar no que pode ELIMINAR o licitante ou gerar CUSTO inesperado.
+9. A complexidade deve refletir a dificuldade REAL de participar e executar.`;
 
 async function analyzeWithAI(text: string): Promise<Record<string, unknown>> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -181,18 +207,18 @@ async function analyzeWithAI(text: string): Promise<Record<string, unknown>> {
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(120_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
-      max_tokens: 8192,
+      model: "google/gemini-2.5-flash",
+      max_tokens: 12000,
       temperature: 0,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Analise o seguinte edital de licitação e extraia TODAS as informações solicitadas.\n\nTEXTO DO EDITAL:\n\n${context}` },
+        { role: "user", content: `Analise o seguinte edital de licitação e extraia TODAS as informações solicitadas, incluindo a lista completa de itens/lotes com valores.\n\nTEXTO DO EDITAL:\n\n${context}` },
       ],
       tools: [ANALYSIS_TOOL],
       tool_choice: { type: "function", function: { name: "edital_analysis" } },
@@ -223,20 +249,17 @@ async function processJob(jobId: string, storagePath: string) {
   try {
     await sb.from("edital_jobs").update({ progress: 10 }).eq("id", jobId);
 
-    // Download PDF
     const { data: pdfBlob, error: dlErr } = await sb.storage.from(PDF_STORAGE_BUCKET).download(storagePath);
     if (dlErr || !pdfBlob) throw new Error("Não foi possível recuperar o PDF.");
 
     await sb.from("edital_jobs").update({ progress: 25 }).eq("id", jobId);
 
-    // Extract text locally
     const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
     const text = await extractTextFromPdf(pdfBytes);
     if (!text || text.length < 100) throw new Error("Não foi possível extrair texto suficiente do PDF.");
 
     await sb.from("edital_jobs").update({ progress: 50 }).eq("id", jobId);
 
-    // Single AI call
     const result = await analyzeWithAI(text);
 
     await sb.from("edital_jobs").update({
@@ -266,7 +289,6 @@ async function handleRequest(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url);
 
-    // GET — poll job status
     const jobId = url.searchParams.get("job_id");
     if (req.method === "GET" && jobId) {
       const sb = getSupabaseAdmin();
@@ -278,7 +300,6 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ error: "Job não encontrado" }), { status: 404, headers });
       }
 
-      // Stale job detection
       if (data.status === "processing" && isJobStale(data.created_at)) {
         const msg = "A análise excedeu o tempo limite. Tente novamente.";
         await sb.from("edital_jobs").update({ status: "failed", error: msg }).eq("id", jobId);
@@ -290,7 +311,6 @@ async function handleRequest(req: Request): Promise<Response> {
       }), { headers });
     }
 
-    // POST — submit PDF
     if (req.method === "POST") {
       const formData = await req.formData();
       const file = formData.get("file") as File;

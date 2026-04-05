@@ -3,7 +3,7 @@ import {
   X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
   Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,
   CheckCircle2, Ban, Wallet, ListChecks, Eye, Users, FileCheck,
-  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw,
+  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw, TableProperties,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -738,6 +738,95 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
               </CardContent>
             </Card>
           </section>
+
+          {/* ━━━━ 5.5. PLANILHA ESTIMATIVA DE PREÇOS ━━━━ */}
+          {(() => {
+            const planilha = analysis.planilha_estimada;
+            const isStructured = Array.isArray(planilha) && planilha.length > 0 && typeof planilha[0] === "object";
+            const isText = typeof planilha === "string" && planilha !== "Não disponível no edital" && planilha.length > 10;
+            if (!isStructured && !isText) return null;
+
+            const parseNumeric = (v: unknown): number => {
+              if (typeof v === "number") return v;
+              if (typeof v !== "string") return 0;
+              const cleaned = v.replace(/[R$\s.]/g, "").replace(",", ".");
+              const n = parseFloat(cleaned);
+              return isNaN(n) ? 0 : n;
+            };
+
+            const fmtCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+            if (isStructured) {
+              const items = planilha as Array<Record<string, string>>;
+              const grandTotal = items.reduce((s, r) => s + parseNumeric(r.valor_total), 0);
+
+              return (
+                <section>
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                    <TableProperties className="h-4 w-4" />
+                    Planilha Estimativa de Preços
+                  </h2>
+                  <Card className="border-border/60 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted border-b border-border">
+                            <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[5%]">Item</th>
+                            <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[42%]">Descrição</th>
+                            <th className="px-3 py-2.5 text-center font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[8%]">Unid.</th>
+                            <th className="px-3 py-2.5 text-center font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[8%]">Qtd.</th>
+                            <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[17%]">Valor Unit.</th>
+                            <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground uppercase tracking-wider text-[10px] w-[20%]">Valor Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((row, i) => (
+                            <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-card" : "bg-muted/20"}`}>
+                              <td className="px-3 py-2 text-center font-medium text-foreground">{row.item}</td>
+                              <td className="px-3 py-2 text-foreground leading-snug">{row.descricao}</td>
+                              <td className="px-3 py-2 text-center text-muted-foreground">{row.unidade}</td>
+                              <td className="px-3 py-2 text-center text-foreground font-medium">{row.quantidade}</td>
+                              <td className="px-3 py-2 text-right text-foreground tabular-nums">{row.valor_unitario}</td>
+                              <td className="px-3 py-2 text-right text-foreground font-medium tabular-nums">{row.valor_total}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {grandTotal > 0 && (
+                          <tfoot>
+                            <tr className="bg-primary/5 border-t-2 border-primary/20">
+                              <td colSpan={5} className="px-3 py-2.5 text-right font-bold text-foreground uppercase text-[10px] tracking-wider">
+                                Valor Total Estimado
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-bold text-foreground text-sm tabular-nums">
+                                {fmtCurrency(grandTotal)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </Card>
+                </section>
+              );
+            }
+
+            // Fallback: raw text planilha
+            return (
+              <section>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                  <TableProperties className="h-4 w-4" />
+                  Planilha Estimativa de Preços
+                </h2>
+                <Card className="border-border/60">
+                  <CardContent className="p-5">
+                    <pre className="text-xs leading-relaxed text-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4">
+                      {String(planilha)}
+                    </pre>
+                  </CardContent>
+                </Card>
+              </section>
+            );
+          })()}
 
           {/* ━━━━ 6. EVIDÊNCIAS ━━━━ */}
           <section>

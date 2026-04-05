@@ -251,10 +251,26 @@ const EXTRACTION_TOOL = {
         valor_estimado: { type: "string", description: "Valor total estimado/global/máximo da licitação no formato brasileiro. Ex: 'R$ 1.234.567,89'. Se sigiloso ou não informado, retorne 'Não informado no edital'." },
         data_sessao: { type: "string", description: "Data e hora da sessão pública/abertura de propostas. Ex: '15/07/2025 às 09h00'. Se não encontrado, retorne 'Não identificado'." },
         data_publicacao: { type: ["string", "null"], description: "Data de publicação do edital no Diário Oficial. Ex: '01/07/2025'. Null se não encontrada." },
+        planilha_itens: {
+          type: "array",
+          description: "Extraia a planilha/quadro estimativo de preços do edital. Cada item/lote com: numero do item/lote, descrição resumida (max 120 chars), unidade de medida, quantidade, valor unitário estimado e valor total estimado. Se não houver planilha ou tabela de preços, retorne array vazio [].",
+          items: {
+            type: "object",
+            properties: {
+              item: { type: "string", description: "Número do item ou lote. Ex: '1', '01', 'Lote 1'" },
+              descricao: { type: "string", description: "Descrição resumida do item/serviço (max 120 chars)" },
+              unidade: { type: "string", description: "Unidade de medida: 'UN', 'KG', 'M²', 'Serviço', 'Mês', etc." },
+              quantidade: { type: "string", description: "Quantidade. Ex: '100', '12', '1'" },
+              valor_unitario: { type: "string", description: "Valor unitário no formato brasileiro. Ex: 'R$ 1.234,56'. Se não disponível, 'N/D'" },
+              valor_total: { type: "string", description: "Valor total do item no formato brasileiro. Ex: 'R$ 12.345,60'. Se não disponível, 'N/D'" },
+            },
+            required: ["item", "descricao", "unidade", "quantidade", "valor_unitario", "valor_total"],
+          },
+        },
         prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
         prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
       additionalProperties: false,
     },
   },
@@ -1298,7 +1314,9 @@ async function analyzeEditalText(text: string) {
     data_abertura: regexTimeline.data_abertura,
   };
 
-  const planilha_estimada = extractPlanilha(text);
+  // Prefer AI-structured planilha, fallback to regex text extraction
+  const aiPlanilha = Array.isArray(ai.planilha_itens) && ai.planilha_itens.length > 0 ? ai.planilha_itens : null;
+  const planilha_estimada = aiPlanilha || extractPlanilha(text);
 
   const modalidade = ai.modalidade;
   const orgao = ai.orgao;

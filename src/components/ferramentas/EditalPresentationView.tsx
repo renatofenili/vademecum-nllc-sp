@@ -33,13 +33,14 @@ const SourceBadge = ({ trecho, fieldKey, fontes }: { trecho?: string; fieldKey?:
         <button
           type="button"
           className="inline-flex items-center gap-1 text-[10px] font-medium text-primary/70 hover:text-primary transition-colors mt-0.5 group"
+          onClick={(e) => e.stopPropagation()}
           title="Ver trecho-fonte do edital"
         >
           <Quote className="h-3 w-3 group-hover:scale-110 transition-transform" />
           <span className="underline underline-offset-2 decoration-dotted">Fonte</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="max-w-sm w-auto p-0" side="bottom" align="start">
+      <PopoverContent className="max-w-sm w-auto p-0 z-[200]" side="bottom" align="start">
         <div className="px-4 py-3">
           <div className="flex items-center gap-1.5 mb-2">
             <Quote className="h-3.5 w-3.5 text-primary" />
@@ -277,6 +278,7 @@ interface DiagCard {
   icon: React.ElementType;
   content: string;
   severity: "low" | "medium" | "high";
+  fonteKeys: string[];
 }
 
 const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): DiagCard[] => {
@@ -301,24 +303,28 @@ const buildDiagCards = (sections: ParsedSection[], analysis: EditalAnalysis): Di
       icon: Users,
       content: cleanBody(participacao),
       severity: participacao.toLowerCase().includes("exclusiv") || participacao.toLowerCase().includes("restrit") ? "high" : "low",
+      fonteKeys: ["participacao", "consorcio", "cooperativas"],
     },
     {
       title: "O que pode me eliminar",
       icon: Ban,
       content: cleanBody(eliminar),
       severity: scoreSeverity(Math.min(base + 1, 10)),
+      fonteKeys: ["habilitacao", "amostra"],
     },
     {
       title: "O que pesa no custo",
       icon: Wallet,
       content: cleanBody(custo),
       severity: custo.toLowerCase().includes("garantia") || custo.toLowerCase().includes("caução") ? "high" : "medium",
+      fonteKeys: ["garantia_execucao", "amostra", "valor_estimado"],
     },
     {
       title: "O que preciso fazer agora",
       icon: Zap,
       content: cleanBody(agora),
       severity: "medium",
+      fonteKeys: ["data_sessao", "habilitacao"],
     },
   ];
 };
@@ -385,11 +391,13 @@ const SeverityDot = ({ severity }: { severity: "low" | "medium" | "high" }) => {
   return <span className={`inline-block h-2 w-2 rounded-full ${cls} shrink-0`} />;
 };
 
-const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.ElementType }) => {
+const DiagCardExpandable = ({ card, Icon, fontes }: { card: DiagCard; Icon: React.ElementType; fontes?: Record<string, string> }) => {
   const [expanded, setExpanded] = useState(false);
   const plainPreview = card.content.length > 120 ? card.content.slice(0, 120).replace(/\s+\S*$/, "") + "…" : card.content;
   const bulletPreview = formatBulletLines(card.content, 3);
   const preview = bulletPreview === card.content ? plainPreview : bulletPreview;
+
+  const relevantFontes = fontes ? card.fonteKeys.filter(k => fontes[k] && fontes[k] !== "Não localizado") : [];
 
   return (
     <div
@@ -413,6 +421,13 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
       <div className="text-sm text-foreground/80 leading-relaxed">
         {expanded ? renderWithBullets(card.content) : renderWithBullets(preview)}
       </div>
+      {relevantFontes.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {relevantFontes.map(k => (
+            <SourceBadge key={k} fieldKey={k} fontes={fontes} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -672,7 +687,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
               {diagCards.map((card) => {
                 const Icon = card.icon;
                 return (
-                  <DiagCardExpandable key={card.title} card={card} Icon={Icon} />
+                  <DiagCardExpandable key={card.title} card={card} Icon={Icon} fontes={fontes} />
                 );
               })}
             </div>

@@ -5,9 +5,6 @@ import {
   ChevronDown, ChevronUp, ShoppingCart, BookOpen, UserCheck, FileCheck,
   Gavel, Clock, Lightbulb, Package,
 } from "lucide-react";
-  ChevronDown, ChevronUp, ShoppingCart, BookOpen, UserCheck, FileCheck,
-  Gavel, Clock, Lightbulb, Package,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

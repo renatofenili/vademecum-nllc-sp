@@ -158,12 +158,50 @@ const ANALYSIS_TOOL = {
           },
         },
 
-        complexidade_score: { type: "number", description: "Score de 1 a 10 (1=muito simples, 10=muito complexo)" },
-        complexidade_justificativa: { type: "string", description: "Justificativa em 2-3 frases explicando o score" },
+        complexidade_score: { type: "number", description: "Score geral de 1 a 10 (1=muito simples, 10=muito complexo). Ancore em 2.5 para Pregões de bens comuns e 4.0 para Concorrência Eletrônica, teto 5.5 para bens comuns sem agravantes." },
+        complexidade_justificativa: { type: "string", description: "Redação neutra e técnica: 'Este edital aparenta, em termos de complexidade de participação e execução, deter complexidade {faixa} (score {score}/10).' Seguida de 1-2 frases explicando." },
+        complexidade_eixos: {
+          type: "array",
+          description: "Exatamente 6 eixos de complexidade, cada um com score de 0 a 10 e justificativa curta.",
+          items: {
+            type: "object",
+            properties: {
+              eixo: { type: "string", enum: ["Objeto", "Habilitação", "Proposta", "Execução", "Procedimento", "Risco"], description: "Nome do eixo" },
+              score: { type: "number", description: "Score de 0 a 10 para este eixo" },
+              justificativa: { type: "string", description: "1 frase explicando o score deste eixo" },
+            },
+            required: ["eixo", "score", "justificativa"],
+          },
+        },
         complexidade_fatores: {
           type: "array",
           description: "Fatores que elevam ou reduzem a complexidade",
           items: { type: "string" },
+        },
+
+        mapa_mental: {
+          type: "object",
+          description: "Dados para um mapa mental visual do edital. Cada ramo tem um rótulo curto e 2-4 sub-itens com texto curtíssimo (max 60 chars). NÃO repita informações dos metadados — foque em aspectos práticos e operacionais.",
+          properties: {
+            centro: { type: "string", description: "Rótulo central (ex: nome curto do edital, max 40 chars)" },
+            ramos: {
+              type: "array",
+              description: "4-6 ramos do mapa mental",
+              items: {
+                type: "object",
+                properties: {
+                  titulo: { type: "string", description: "Título do ramo (max 25 chars). Ex: 'Quem participa', 'Documentação', 'Disputa', 'Entrega', 'Pagamento', 'Riscos'" },
+                  itens: {
+                    type: "array",
+                    description: "2-4 sub-itens curtíssimos (max 60 chars cada)",
+                    items: { type: "string" },
+                  },
+                },
+                required: ["titulo", "itens"],
+              },
+            },
+          },
+          required: ["centro", "ramos"],
         },
       },
       required: [
@@ -179,7 +217,8 @@ const ANALYSIS_TOOL = {
         "itens",
         "resumo_linguagem_simples",
         "pontos_atencao",
-        "complexidade_score", "complexidade_justificativa", "complexidade_fatores",
+        "complexidade_score", "complexidade_justificativa", "complexidade_eixos", "complexidade_fatores",
+        "mapa_mental",
       ],
       additionalProperties: false,
     },

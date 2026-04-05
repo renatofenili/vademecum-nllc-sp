@@ -182,6 +182,13 @@ interface AIExtractionResult {
   exclusividade_meepp: boolean;
   catalogo_exigido: boolean;
   marca_modelo_exigido: boolean;
+  // Mechanical fields now also extracted by AI
+  numero_edital: string;
+  valor_estimado: string;
+  data_sessao: string;
+  data_publicacao: string | null;
+  prazo_impugnacao: string | null;
+  prazo_esclarecimento: string | null;
 }
 
 function defaultAIResult(): AIExtractionResult {
@@ -204,6 +211,12 @@ function defaultAIResult(): AIExtractionResult {
     exclusividade_meepp: false,
     catalogo_exigido: false,
     marca_modelo_exigido: false,
+    numero_edital: "Não identificado",
+    valor_estimado: "Não informado no edital",
+    data_sessao: "Não identificado",
+    data_publicacao: null,
+    prazo_impugnacao: null,
+    prazo_esclarecimento: null,
   };
 }
 
@@ -233,8 +246,15 @@ const EXTRACTION_TOOL = {
         exclusividade_meepp: { type: "boolean", description: "Participação EXCLUSIVA para ME/EPP? Se 'EXCLUSIVIDADE ME/EPP: NÃO', marque false." },
         catalogo_exigido: { type: "boolean", description: "É exigida apresentação de catálogo, ficha técnica ou laudo?" },
         marca_modelo_exigido: { type: "boolean", description: "É exigida indicação de marca/modelo na proposta?" },
+        // Mechanical fields
+        numero_edital: { type: "string", description: "Número completo do edital ou pregão, incluindo ano. Ex: '90014/2025', 'PE 001/2025', '23/2024'. Buscar no cabeçalho." },
+        valor_estimado: { type: "string", description: "Valor total estimado/global/máximo da licitação no formato brasileiro. Ex: 'R$ 1.234.567,89'. Se sigiloso ou não informado, retorne 'Não informado no edital'." },
+        data_sessao: { type: "string", description: "Data e hora da sessão pública/abertura de propostas. Ex: '15/07/2025 às 09h00'. Se não encontrado, retorne 'Não identificado'." },
+        data_publicacao: { type: ["string", "null"], description: "Data de publicação do edital no Diário Oficial. Ex: '01/07/2025'. Null se não encontrada." },
+        prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
+        prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento"],
       additionalProperties: false,
     },
   },
@@ -248,17 +268,21 @@ async function extractSemanticFieldsViaAI(text: string): Promise<AIExtractionRes
   }
 
   const truncated = text.slice(0, 30000);
-  const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
+  const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia TODOS os metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
 
 REGRAS OBRIGATÓRIAS:
-1. NUNCA invente dados. Se não encontrar, use "Não identificado no edital".
+1. NUNCA invente dados. Se não encontrar, use o valor padrão indicado na descrição do campo.
 2. OBJETO: descrição do que é contratado/adquirido. Elimine referências a leis, decretos, atos normativos e normas administrativas. Foque APENAS no bem/serviço/obra. Máximo 500 caracteres.
 3. ÓRGÃO: a entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo, INSS, Ministério da Saúde). NUNCA confunda com a plataforma de compras (ComprasGov, BEC/SP, Licitações-e, etc).
 4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras. NUNCA confunda com o órgão.
 5. PARTICIPAÇÃO: marque "Exclusiva ME/EPP" SOMENTE se o edital declarar EXPRESSAMENTE a exclusividade. Se disser "EXCLUSIVIDADE ME/EPP/EQUIPARADAS: NÃO" ou similar, marque "Ampla concorrência".
 6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver dúvida, marque "nao_identificado".
 7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
-8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").`;
+8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").
+9. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").
+10. VALOR ESTIMADO: extraia o valor TOTAL/GLOBAL da licitação no formato brasileiro (R$ X.XXX,XX). Ignore valores unitários ou de itens individuais. Se sigiloso ou não informado, use "Não informado no edital".
+11. DATA DA SESSÃO: extraia a data e hora da sessão pública/abertura de propostas.
+12. TIMELINE: extraia datas de publicação, prazos de impugnação e esclarecimento quando disponíveis.`;
 
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -1201,15 +1225,27 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
 }
 
 async function analyzeEditalText(text: string) {
-  // ── Mechanical extraction (regex — deterministic) ──
-  const numero_edital = extractNumeroEdital(text);
-  const valor_estimado = extractValorEstimado(text);
-  const data_sessao = extractDataSessao(text);
-  const timeline = extractTimeline(text);
-  const planilha_estimada = extractPlanilha(text);
-
-  // ── Semantic extraction (AI — Gemini Flash) ──
+  // ── Full AI extraction (all fields via Gemini Flash) ──
   const ai = await extractSemanticFieldsViaAI(text);
+
+  // ── Regex fallbacks for mechanical fields (used only if AI returns defaults) ──
+  const numero_edital = (ai.numero_edital && ai.numero_edital !== "Não identificado")
+    ? ai.numero_edital : extractNumeroEdital(text);
+  const valor_estimado = (ai.valor_estimado && ai.valor_estimado !== "Não informado no edital")
+    ? ai.valor_estimado : extractValorEstimado(text);
+  const data_sessao = (ai.data_sessao && ai.data_sessao !== "Não identificado")
+    ? ai.data_sessao : extractDataSessao(text);
+
+  // Timeline: AI first, regex fallback per field
+  const regexTimeline = extractTimeline(text);
+  const timeline = {
+    data_publicacao: ai.data_publicacao || regexTimeline.data_publicacao,
+    prazo_impugnacao: ai.prazo_impugnacao || regexTimeline.prazo_impugnacao,
+    prazo_esclarecimento: ai.prazo_esclarecimento || regexTimeline.prazo_esclarecimento,
+    data_abertura: regexTimeline.data_abertura, // keep regex for this (derived from sessão)
+  };
+
+  const planilha_estimada = extractPlanilha(text);
 
   const modalidade = ai.modalidade;
   const orgao = ai.orgao;
@@ -1242,7 +1278,6 @@ async function analyzeEditalText(text: string) {
     _scoreFraseFaixa: score_complexidade.frase_faixa,
     _scoreFatoresElevaram: score_complexidade.fatores_elevaram.join("; "),
     _scoreFatoresImpediram: score_complexidade.fatores_impediram.join("; "),
-    // Pass AI truth checks
     _ai_consorcio: ai.consorcio,
     _ai_subcontratacao: ai.subcontratacao,
     _ai_amostra: ai.amostra,

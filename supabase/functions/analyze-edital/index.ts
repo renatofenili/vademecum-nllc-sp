@@ -894,7 +894,7 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     const faixa = dados._scoreFaixa || getFaixa(score);
 
     const diag: string[] = [];
-    diag.push(`Avaliação geral: edital **${faixa}** para participação (score ${score}/10).`);
+    diag.push(`Avaliação geral: este edital aparenta, em termos de complexidade de participação e execução, deter complexidade **${faixa}** (score ${score}/10).`);
 
     const barreiras: string[] = [];
     if (feat.hasAmostra || amostraStatus === "sim") barreiras.push("exigência de amostra");
@@ -1242,7 +1242,7 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     const fatoresElevaram = dados._scoreFatoresElevaram || "";
     const fatoresImpediram = dados._scoreFatoresImpediram || "";
 
-    let conclusao = `Este edital aparenta ser **${faixa}** para participação (score ${score}/10).`;
+    let conclusao = `Este edital aparenta, em termos de complexidade de participação e execução, deter complexidade **${faixa}** (score ${score}/10).`;
     if (fraseFaixa) conclusao += ` ${fraseFaixa}`;
 
     if (fatoresElevaram) {

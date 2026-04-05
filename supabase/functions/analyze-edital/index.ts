@@ -1368,7 +1368,7 @@ async function analyzeEditalText(text: string) {
     _ai_subcontratacao: subcontratacao,
     _ai_amostra: amostra,
     _ai_garantia: garantia_execucao,
-    _ai_cooperativas_vedadas: String(ai.cooperativas_vedadas),
+    _ai_cooperativas_vedacao: ai.cooperativas_vedacao,
     _ai_exclusividade_meepp: String(ai.exclusividade_meepp),
     _ai_srp: String(ai.is_srp),
     _ai_preco_maximo: String(ai.preco_maximo),

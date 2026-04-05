@@ -748,43 +748,48 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   const sistema = dados.sistema && !/^(não|nao)\s+identificado/i.test(dados.sistema) ? dados.sistema : null;
   const criterioHint = criterio ? buildCriterionHint(criterio) : null;
 
-  // ── Truth validations (from AI extraction via dados._ai_* fields) ──
-  const consorcioStatus = (dados._ai_consorcio || truthCheck(fullText,
+  // ── Truth validations (AI value preferred, regex fallback when AI says nao_identificado) ──
+  const consorcioStatus = resolveAITruth(dados._ai_consorcio, fullText,
     [/(?:será|serão)\s+(?:admitid|permitid|aceit)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i, /admite[\-\s]se\s+consórcio/i],
     [/(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i]
-  )) as "sim" | "nao" | "nao_identificado";
-  const exclusividadeMEEPP = (dados._ai_exclusividade_meepp === "true" ? "sim" : dados._ai_exclusividade_meepp === "false" ? "nao_identificado" : truthCheck(fullText,
-    [/(?:participação|licitação|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa|empresa\s+de\s+pequeno\s+porte)/i],
-    []
-  )) as "sim" | "nao" | "nao_identificado";
-  const garantiaExecucao = (dados._ai_garantia || truthCheck(fullText,
+  );
+  const exclusividadeMEEPP = dados._ai_exclusividade_meepp === "true" ? "sim" as const
+    : resolveAITruth(undefined, fullText,
+        [/(?:participação|licitação|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa|empresa\s+de\s+pequeno\s+porte)/i],
+        []
+      );
+  const garantiaExecucao = resolveAITruth(dados._ai_garantia, fullText,
     [/garantia\s+(?:de\s+)?(?:execução|contratual)\s+(?:será|deverá|é)\s+(?:exigid|apresentad|prestad)/i, /seguro[\-\s]garantia/i],
     [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i]
-  )) as "sim" | "nao" | "nao_identificado";
-  const srpStatus = (dados._ai_srp === "true" ? "sim" : dados._ai_srp === "false" ? "nao_identificado" : truthCheck(fullText,
-    [/sistema\s+de\s+registro\s+de\s+preços/i, /ata\s+de\s+registro\s+de\s+preços/i],
-    []
-  )) as "sim" | "nao" | "nao_identificado";
-  const amostraStatus = (dados._ai_amostra || truthCheck(fullText,
+  );
+  const srpStatus = dados._ai_srp === "true" ? "sim" as const
+    : resolveAITruth(undefined, fullText,
+        [/sistema\s+de\s+registro\s+de\s+preços/i, /ata\s+de\s+registro\s+de\s+preços/i],
+        []
+      );
+  const amostraStatus = resolveAITruth(dados._ai_amostra, fullText,
     [/(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i],
     [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i]
-  )) as "sim" | "nao" | "nao_identificado";
-  const subcontratacaoStatus = (dados._ai_subcontratacao || truthCheck(fullText,
+  );
+  const subcontratacaoStatus = resolveAITruth(dados._ai_subcontratacao, fullText,
     [/subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i],
     [/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i]
-  )) as "sim" | "nao" | "nao_identificado";
-  const catalogoStatus = (dados._ai_catalogo === "true" ? "sim" : dados._ai_catalogo === "false" ? "nao_identificado" : truthCheck(fullText,
-    [/(?:exig|apresent)\w*\s+(?:de\s+)?(?:catálogo|ficha\s+técnica|laudo)/i],
-    []
-  )) as "sim" | "nao" | "nao_identificado";
-  const marcaModeloStatus = (dados._ai_marca_modelo === "true" ? "sim" : dados._ai_marca_modelo === "false" ? "nao_identificado" : truthCheck(fullText,
-    [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto)/i],
-    []
-  )) as "sim" | "nao" | "nao_identificado";
-  let precoMaximoStatus: "sim" | "nao" | "nao_identificado" = dados._ai_preco_maximo === "true" ? "sim" : dados._ai_preco_maximo === "false" ? "nao_identificado" : truthCheck(fullText,
-    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:estimado|global|total|orçado|referência)/i],
-    []
-  ) as "sim" | "nao" | "nao_identificado";
+  );
+  const catalogoStatus = dados._ai_catalogo === "true" ? "sim" as const
+    : resolveAITruth(undefined, fullText,
+        [/(?:exig|apresent)\w*\s+(?:de\s+)?(?:catálogo|ficha\s+técnica|laudo)/i],
+        []
+      );
+  const marcaModeloStatus = dados._ai_marca_modelo === "true" ? "sim" as const
+    : resolveAITruth(undefined, fullText,
+        [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto)/i],
+        []
+      );
+  let precoMaximoStatus: "sim" | "nao" | "nao_identificado" = dados._ai_preco_maximo === "true" ? "sim"
+    : resolveAITruth(undefined, fullText,
+        [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:estimado|global|total|orçado|referência)/i],
+        []
+      );
   if (precoMaximoStatus === "nao_identificado" && valor) {
     precoMaximoStatus = "sim";
   }

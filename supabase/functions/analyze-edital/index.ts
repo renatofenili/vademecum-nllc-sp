@@ -1454,8 +1454,18 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     []
   );
   const amostraStatus = truthCheck(fullText,
-    [/(?:exig|apresent|entreg)\w*\s+(?:de\s+)?amostra/i, /amostra\s+(?:deverá|será|deve)\s+(?:ser\s+)?(?:apresentad|entregu|enviad)/i],
+    [/(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i,
+     /amostra\s+(?:será|é)\s+(?:exigid|obrigatóri)/i,
+     /(?:obrigatóri\w+\s+(?:a\s+)?(?:apresentação|entrega)\s+(?:de\s+)?amostra)/i],
     [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i, /sem\s+(?:necessidade\s+de\s+)?amostra/i]
+  );
+  // Subcontratação truth check
+  const subcontratacaoStatus = truthCheck(fullText,
+    [/subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i,
+     /(?:autoriza|permite|admite)[\-\s]se\s+(?:a\s+)?subcontrata/i,
+     /(?:poderá|pode)\s+(?:ser\s+)?subcontratad/i],
+    [/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i,
+     /subcontrata(?:ção|r)\s+(?:não\s+)?(?:será\s+)?(?:vedad|proibid)/i]
   );
   const catalogoStatus = truthCheck(fullText,
     [/(?:exig|apresent)\w*\s+(?:de\s+)?(?:catálogo|ficha\s+técnica|laudo)/i, /(?:catálogo|ficha\s+técnica|laudo)\s+(?:deverá|será|deve)\s+(?:ser\s+)?(?:apresentad|enviad|juntad)/i],

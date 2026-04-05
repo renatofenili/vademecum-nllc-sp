@@ -3,7 +3,7 @@ import {
   X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
   Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,
   CheckCircle2, Ban, Wallet, ListChecks, Eye, Users, FileCheck,
-  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw,
+  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw, TableProperties,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

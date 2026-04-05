@@ -5,8 +5,12 @@ const corsHeaders = {
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/base64.ts";
 
-// ── PDF Text Extraction ──
+const PDF_STORAGE_BUCKET = "normas-pdf";
+const EDITAL_STORAGE_PREFIX = "edital-jobs";
+
+// ── PDF Preparation ──
 
 function repairLigatures(text: string): string {
   let result = text;
@@ -23,11 +27,20 @@ function repairLigatures(text: string): string {
   return result;
 }
 
-async function extractTextFromPdf(buffer: Uint8Array): Promise<string> {
-  const { getDocumentProxy, extractText } = await import("npm:unpdf@0.12.1");
-  const pdf = await getDocumentProxy(buffer);
-  const { text } = await extractText(pdf, { mergePages: true });
-  return repairLigatures(text);
+function sanitizeStorageFileName(fileName: string): string {
+  const normalized = fileName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120);
+
+  return normalized || "edital.pdf";
+}
+
+function buildJobPdfPath(jobId: string, fileName: string): string {
+  return `${EDITAL_STORAGE_PREFIX}/${jobId}/${sanitizeStorageFileName(fileName)}`;
 }
 
 // ── Utility ──
@@ -458,6 +471,89 @@ async function callAI(apiKey: string, systemPrompt: string, userPrompt: string, 
   }
 }
 
+async function callAIWithPdf(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  tool: unknown,
+  base64Pdf: string,
+  maxTokens = 8192,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        max_tokens: maxTokens,
+        temperature: 0,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "file",
+                file: {
+                  filename: "edital.pdf",
+                  file_data: `data:application/pdf;base64,${base64Pdf}`,
+                },
+              },
+              { type: "text", text: userPrompt },
+            ],
+          },
+        ],
+        tools: [tool],
+        tool_choice: { type: "function", function: { name: (tool as any).function.name } },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`AI PDF gateway error ${response.status}: ${errText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) {
+      console.error("No tool call in AI PDF response:", JSON.stringify(data).slice(0, 500));
+      return null;
+    }
+
+    return JSON.parse(toolCall.function.arguments);
+  } catch (e) {
+    console.error("AI PDF call failed:", e);
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── PDF CONTEXT EXTRACTION ──
+// ══════════════════════════════════════════════════════════════
+
+const PDF_CONTEXT_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "extract_pdf_analysis_context",
+    description: "Extrai e consolida os trechos relevantes do PDF do edital para análise posterior",
+    parameters: {
+      type: "object",
+      properties: {
+        texto_para_analise: {
+          type: "string",
+          description: "Trechos fiéis do edital, em ordem de leitura, contendo cabeçalho, objeto, modalidade, critério, datas, participação, habilitação, restrições, valores, planilhas, quadros e anexos relevantes. Preserve linhas de tabelas e mantenha cada item da planilha em sua própria linha. Máximo aproximado de 50000 caracteres.",
+        },
+      },
+      required: ["texto_para_analise"],
+      additionalProperties: false,
+    },
+  },
+};
+
 // ══════════════════════════════════════════════════════════════
 // ── CALL 1: METADATA (objeto, órgão, modalidade, datas, valores) ──
 // ══════════════════════════════════════════════════════════════
@@ -630,6 +726,49 @@ const VALIDATION_TOOL = {
     },
   },
 };
+
+async function extractRelevantTextFromPdfViaGateway(pdfBytes: Uint8Array): Promise<string> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+
+  const systemPrompt = `Você é um extrator de texto especializado em editais de licitação.
+Sua tarefa é LER o PDF e devolver um corpus fiel ao documento, pronto para análise posterior.
+
+REGRAS CRÍTICAS:
+1. Transcreva trechos do PDF; não invente, não resuma, não conclua.
+2. Preserve a ordem do documento.
+3. Inclua obrigatoriamente:
+   - cabeçalho inicial com número do edital, órgão, modalidade, critério, plataforma e data/hora da sessão;
+   - objeto, participação, habilitação e condições comerciais;
+   - todos os trechos sobre consórcio, cooperativas, subcontratação, amostra, garantia, SICAF, CAUFESP, catálogo, marca/modelo, SRP, preço máximo, multas, prazos, entrega, visita técnica e pagamento;
+   - todas as menções a valor estimado, valor global, valor máximo, orçamento e preço de referência;
+   - toda planilha, quadro ou tabela de preços/quantidades/valores, inclusive anexos.
+4. Em tabelas e planilhas, mantenha uma linha por item sempre que possível.
+5. Pode remover apenas cabeçalhos/rodapés repetidos e trechos claramente irrelevantes.
+6. Priorize integralidade das planilhas e anexos de preços.
+7. Limite o texto final a cerca de 50000 caracteres.`;
+
+  const userPrompt = "Leia o PDF do edital e retorne no campo texto_para_analise os trechos relevantes para a análise.";
+
+  const extracted = await callAIWithPdf(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    PDF_CONTEXT_TOOL,
+    base64Encode(pdfBytes),
+    14000,
+  );
+
+  const text = typeof extracted?.texto_para_analise === "string"
+    ? repairLigatures(extracted.texto_para_analise).trim()
+    : "";
+
+  if (!text) {
+    throw new Error("Não foi possível extrair trechos relevantes do PDF.");
+  }
+
+  return text;
+}
 
 // ══════════════════════════════════════════════════════════════
 // ── FEATURE DETECTION (regex-based contextual features) ──
@@ -1397,10 +1536,30 @@ function getSupabaseAdmin() {
 }
 
 // ── Background processor ──
-async function processJob(jobId: string, text: string) {
+async function processJob(jobId: string, storagePath: string) {
   const sb = getSupabaseAdmin();
   try {
     await sb.from("edital_jobs").update({ progress: 10 }).eq("id", jobId);
+
+    const { data: pdfBlob, error: downloadError } = await sb.storage
+      .from(PDF_STORAGE_BUCKET)
+      .download(storagePath);
+
+    if (downloadError || !pdfBlob) {
+      throw new Error("Não foi possível recuperar o PDF enviado para análise.");
+    }
+
+    await sb.from("edital_jobs").update({ progress: 25 }).eq("id", jobId);
+
+    const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+    const text = await extractRelevantTextFromPdfViaGateway(pdfBytes);
+
+    if (!text || text.trim().length < 100) {
+      throw new Error("Não foi possível extrair texto suficiente do PDF.");
+    }
+
+    await sb.from("edital_jobs").update({ progress: 45 }).eq("id", jobId);
+
     const result = await analyzeEditalText(text);
     await sb.from("edital_jobs").update({
       status: "completed",
@@ -1413,6 +1572,14 @@ async function processJob(jobId: string, text: string) {
       status: "failed",
       error: error instanceof Error ? error.message : "Erro desconhecido",
     }).eq("id", jobId);
+  } finally {
+    const { error: cleanupError } = await sb.storage
+      .from(PDF_STORAGE_BUCKET)
+      .remove([storagePath]);
+
+    if (cleanupError) {
+      console.warn("Failed to clean up uploaded PDF:", cleanupError);
+    }
   }
 }
 
@@ -1457,22 +1624,9 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ error: "O arquivo deve ser um PDF" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = new Uint8Array(arrayBuffer);
-
-      let text: string;
-      try {
-        text = await extractTextFromPdf(buffer);
-      } catch (e) {
-        console.error("PDF extraction failed:", e);
-        return new Response(JSON.stringify({ error: "Não foi possível extrair texto do PDF." }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      if (!text || text.trim().length < 100) {
-        return new Response(JSON.stringify({ error: "PDF sem texto suficiente (pode ser imagem escaneada)." }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (file.size > 20 * 1024 * 1024) {
+        return new Response(JSON.stringify({ error: "O arquivo excede o limite de 20 MB" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       // Create job record
@@ -1488,8 +1642,27 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      const storagePath = buildJobPdfPath(job.id, file.name || "edital.pdf");
+      const { error: uploadError } = await sb.storage
+        .from(PDF_STORAGE_BUCKET)
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("PDF upload failed:", uploadError);
+        await sb.from("edital_jobs").update({
+          status: "failed",
+          error: "Falha ao preparar o PDF para análise.",
+        }).eq("id", job.id);
+
+        return new Response(JSON.stringify({ error: "Falha ao preparar o PDF para análise" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       // Process in background — avoids CPU timeout
-      EdgeRuntime.waitUntil(processJob(job.id, text));
+      EdgeRuntime.waitUntil(processJob(job.id, storagePath));
 
       return new Response(JSON.stringify({ job_id: job.id }),
         { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });

@@ -679,9 +679,12 @@ function detectFeatures(text: string) {
     hasNegociacao: /negocia(?:ção|r)/i.test(text),
     hasDesempate: /desempate|empate/i.test(text),
     hasLC123: /lei\s+complementar\s+(?:n[°º.]?\s*)?123/i.test(text),
-    hasMulta: firstMatch(text, [
-      /multa\s+(?:de\s+)?(?:até\s+)?(\d+[,.]?\d*\s*%[^\n]{0,80})/i,
-    ]),
+    hasMulta: (() => {
+      const m = text.match(/multa\s+(?:de\s+)?(?:até\s+)?(\d+[,.]?\d*\s*%\s*\([^)]{0,80}\))/i)
+        || text.match(/multa\s+(?:de\s+)?(?:até\s+)?(\d+[,.]?\d*\s*%)/i);
+      if (!m) return null;
+      return m[1].trim().replace(/\s+/g, ' ');
+    })(),
     hasImpedimentoSancao: /impedid[oa]\s+de\s+licitar|declarad[oa]\s+inid[ôo]ne[oa]|suspens[ãa]o\s+(?:do\s+)?direito\s+de\s+licitar/i.test(text),
     hasCotaReservada: /cota\s+reservada/i.test(text),
     inicioPropostas: firstMatch(text, [

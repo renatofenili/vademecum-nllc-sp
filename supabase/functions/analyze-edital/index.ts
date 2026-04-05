@@ -72,36 +72,286 @@ function extractNumeroEdital(text: string): string {
   return "Não identificado";
 }
 
+type PlanilhaItem = {
+  item: string;
+  descricao: string;
+  unidade: string;
+  quantidade: string;
+  valor_unitario: string;
+  valor_total: string;
+};
+
+function parsePtBrNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+
+  const cleaned = value
+    .replace(/\u00a0/g, " ")
+    .replace(/R\$\s*/gi, "")
+    .replace(/[^\d,.-]/g, "")
+    .trim();
+
+  if (!cleaned) return 0;
+
+  const normalized = cleaned
+    .replace(/\.(?=\d{3}(?:[.,]|$))/g, "")
+    .replace(",", ".");
+
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrencyBRL(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "Não informado no edital";
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\u00a0/g, " ");
+}
+
+function normalizeCurrencyField(value: unknown): string {
+  const amount = parsePtBrNumber(value);
+  return amount > 0 ? formatCurrencyBRL(amount) : "N/D";
+}
+
+function mergeCurrencyTokens(tokens: string[]): string[] {
+  const merged: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === "R$" && tokens[i + 1]) {
+      merged.push(`R$ ${tokens[i + 1]}`);
+      i++;
+      continue;
+    }
+    merged.push(tokens[i]);
+  }
+  return merged;
+}
+
+function looksLikeUnitToken(token: string): boolean {
+  return /^(?:un|und|kit|kg|g|mg|l|ml|m|m2|m²|m3|m³|cm|mm|hora|horas|dia|dias|m[eê]s|meses|ano|anos|serviç?o|serviç?os|lote|pct|pacote|caixa|frasco|metro|metros|par)$/i.test(token.trim());
+}
+
+function normalizePlanilhaItems(items: unknown): PlanilhaItem[] {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as Record<string, unknown>;
+      const item = String(row.item ?? "").trim();
+      const descricao = String(row.descricao ?? "").trim();
+      const unidade = String(row.unidade ?? "N/D").trim() || "N/D";
+      const quantidade = String(row.quantidade ?? "N/D").trim() || "N/D";
+      const valorUnitario = normalizeCurrencyField(row.valor_unitario);
+      const valorTotal = normalizeCurrencyField(row.valor_total);
+
+      if (!item || !descricao) return null;
+      if (parsePtBrNumber(valorUnitario) <= 0 && parsePtBrNumber(valorTotal) <= 0) return null;
+
+      return {
+        item,
+        descricao,
+        unidade,
+        quantidade,
+        valor_unitario: valorUnitario,
+        valor_total: valorTotal,
+      } satisfies PlanilhaItem;
+    })
+    .filter((row): row is PlanilhaItem => Boolean(row));
+}
+
+function sumPlanilhaTotals(items: PlanilhaItem[] | null | undefined): number {
+  if (!items?.length) return 0;
+
+  return items.reduce((sum, item) => {
+    const total = parsePtBrNumber(item.valor_total);
+    if (total > 0) return sum + total;
+
+    const unit = parsePtBrNumber(item.valor_unitario);
+    const qty = parsePtBrNumber(item.quantidade);
+    if (unit > 0 && qty > 0) return sum + (unit * qty);
+
+    return sum;
+  }, 0);
+}
+
+function buildPlanilhaExtractionContext(text: string): string {
+  const norm = text.replace(/\r\n/g, "\n");
+  const anchorPattern = /(?:anexo\s+\d+[^\n]{0,140}(?:planilha|quadro|tabela|orçament|estimativ|preç)|planilha\s+(?:estimativa|de\s+custos|de\s+preços?|orçamentária|orcamentaria)|quadro\s+(?:estimativo|de\s+preços?|de\s+custos?)|tabela\s+(?:de\s+)?(?:preços?|custos?)|preço\s+unitário|preco\s+unitario|valor\s+unitário|valor\s+total)/gi;
+  const anchors = Array.from(norm.matchAll(anchorPattern)).map((match) => match.index ?? 0);
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  for (const index of anchors.slice(0, 8)) {
+    const start = Math.max(0, index - 400);
+    const end = Math.min(norm.length, index + 6000);
+    const last = ranges[ranges.length - 1];
+
+    if (last && start <= last.end + 500) {
+      last.end = Math.max(last.end, end);
+    } else {
+      ranges.push({ start, end });
+    }
+  }
+
+  const sections = ranges.map(({ start, end }) => norm.slice(start, end).trim()).filter(Boolean);
+  const head = norm.slice(0, 3000).trim();
+  const tail = norm.slice(Math.max(0, norm.length - 15000)).trim();
+  const uniqueSections = Array.from(new Set([head, ...sections, tail].filter(Boolean)));
+
+  let combined = "";
+  for (const section of uniqueSections) {
+    const candidate = combined
+      ? `${combined}\n\n--- TRECHO RELEVANTE ---\n\n${section}`
+      : section;
+
+    if (candidate.length > 36000) {
+      const remaining = Math.max(0, 36000 - combined.length - (combined ? "\n\n--- TRECHO RELEVANTE ---\n\n".length : 0));
+      combined = combined
+        ? `${combined}\n\n--- TRECHO RELEVANTE ---\n\n${section.slice(0, remaining)}`
+        : section.slice(0, 36000);
+      break;
+    }
+
+    combined = candidate;
+  }
+
+  return combined || norm.slice(0, 36000);
+}
+
+function extractStructuredPlanilhaRows(text: string): PlanilhaItem[] {
+  const context = buildPlanilhaExtractionContext(text);
+  const lines = context
+    .split(/\n+/)
+    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|│]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const rows: PlanilhaItem[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    if (/^(?:anexo|planilha|quadro|tabela|item\s+local|local\s+unidade|unidade\s+quantidade|preço\s+unitário|preco\s+unitario|preço\s+total|preco\s+total|valor\s+unitário|valor\s+total|banco\s+central|edital\b|p[eé]\s+\d+)/i.test(line)) {
+      continue;
+    }
+
+    const initialMatch = line.match(/^(?:(?:item|lote)\s*)?([A-Za-z]?\d{1,3})\b/i);
+    if (!initialMatch) continue;
+
+    const tokens = mergeCurrencyTokens(line.split(/\s+/).filter(Boolean));
+    const startIndex = /^(item|lote)$/i.test(tokens[0] ?? "") ? 2 : 1;
+    const item = (tokens[startIndex - 1] ?? initialMatch[1] ?? "").replace(/[^\dA-Za-z.-]/g, "");
+    const tail = tokens.slice(startIndex);
+
+    if (tail.length < 4) continue;
+
+    const valorTotalToken = tail.at(-1) ?? "";
+    const valorUnitarioToken = tail.at(-2) ?? "";
+    const quantidadeToken = tail.at(-3) ?? "";
+
+    if (!/^\d/.test(quantidadeToken)) continue;
+    if (parsePtBrNumber(valorTotalToken) <= 0 || parsePtBrNumber(valorUnitarioToken) <= 0) continue;
+
+    const middle = tail.slice(0, -3);
+    if (middle.length === 0) continue;
+
+    let unidade = "N/D";
+    if (middle.length >= 2 && looksLikeUnitToken(middle.at(-1) ?? "")) {
+      unidade = middle.pop() ?? "N/D";
+    }
+
+    const descricao = middle.join(" ").trim();
+    if (!descricao || /^(?:r\$|\d+[.,]\d+)$/i.test(descricao)) continue;
+
+    const row = {
+      item,
+      descricao,
+      unidade,
+      quantidade: quantidadeToken,
+      valor_unitario: formatCurrencyBRL(parsePtBrNumber(valorUnitarioToken)),
+      valor_total: formatCurrencyBRL(parsePtBrNumber(valorTotalToken)),
+    } satisfies PlanilhaItem;
+
+    const key = `${row.item}|${row.descricao}|${row.valor_total}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function rankPlanilhaItems(items: PlanilhaItem[]): number {
+  const pricedRows = items.filter((item) => parsePtBrNumber(item.valor_total) > 0).length;
+  const total = sumPlanilhaTotals(items);
+  return (items.length * 100) + (pricedRows * 20) + Math.round(total / 100000);
+}
+
+function chooseBestPlanilha(aiItems: PlanilhaItem[], regexItems: PlanilhaItem[]): PlanilhaItem[] | null {
+  if (!aiItems.length && !regexItems.length) return null;
+  if (!aiItems.length) return regexItems;
+  if (!regexItems.length) return aiItems;
+  return rankPlanilhaItems(regexItems) > rankPlanilhaItems(aiItems) ? regexItems : aiItems;
+}
+
+function resolveValorEstimado(
+  text: string,
+  aiValue: unknown,
+  planilhaItems: PlanilhaItem[] | null,
+): { value: string; source: "ai" | "regex" | "planilha" | "none" } {
+  const regexValue = extractValorEstimado(text);
+  const regexAmount = parsePtBrNumber(regexValue);
+  const aiAmount = parsePtBrNumber(typeof aiValue === "string" ? aiValue : "");
+  const planilhaAmount = sumPlanilhaTotals(planilhaItems);
+
+  const candidates: Array<{ amount: number; score: number; source: "ai" | "regex" | "planilha" }> = [];
+
+  if (regexAmount > 0) candidates.push({ amount: regexAmount, score: 100, source: "regex" });
+  if (aiAmount > 0) candidates.push({ amount: aiAmount, score: 90, source: "ai" });
+  if (planilhaAmount > 0) candidates.push({ amount: planilhaAmount, score: 94 + Math.min(planilhaItems?.length ?? 0, 6), source: "planilha" });
+
+  for (const candidate of candidates) {
+    if (planilhaAmount > 0 && candidate.source !== "planilha") {
+      const ratio = candidate.amount / planilhaAmount;
+      if (ratio < 0.35) candidate.score -= 40;
+      else if (ratio < 0.75) candidate.score -= 15;
+    }
+
+    if (candidate.source === "planilha" && regexAmount > 0) {
+      const ratio = planilhaAmount / regexAmount;
+      if (ratio < 0.5) candidate.score -= 25;
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score || b.amount - a.amount);
+  const best = candidates[0];
+
+  if (!best) return { value: "Não informado no edital", source: "none" };
+  return { value: formatCurrencyBRL(best.amount), source: best.source };
+}
+
 function extractValorEstimado(text: string): string {
   const norm = text.replace(/\r\n/g, "\n");
-  const candidates: Array<{ value: string; score: number }> = [];
+  const candidates: Array<{ amount: number; score: number }> = [];
+  const moneyCapture = String.raw`((?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2})`;
   const patterns: Array<[RegExp, number]> = [
-    [/(?:valor\s+total\s+(?:da\s+)?(?:contratação|licitação|aquisição|contratacao|licitacao|aquisicao))\s*[:.\-–—]?\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 32],
-    [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 30],
-    [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*[:.]?\s*(R\$\s*[\d.,]+)/gi, 28],
-    [/(?:orçamento\s+(?:estimado|máximo|previsto|sigiloso))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 26],
-    [/(?:preço\s+(?:total\s+)?(?:estimado|máximo|de\s+referência))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+)/gi, 24],
-    [/(?:montante\s+(?:total\s+)?(?:estimado|de|global))\s*(?:é\s+de|de|:)?\s*(R\$\s*[\d.,]+)/gi, 22],
-    [/(?:valor\s+(?:total|estimado|máximo|global))\s*[|:]\s*(R\$\s*[\d.,]+)/gi, 22],
+    [new RegExp(String.raw`(?:valor\s+total\s+(?:da\s+)?(?:contratação|licitação|aquisição|contratacao|licitacao|aquisicao)|valor\s+global\s+da\s+contratação)\s*[:.\-–—]?\s*${moneyCapture}`, "gi"), 34],
+    [new RegExp(String.raw`(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto)|orçamento\s+(?:estimado|máximo|previsto|sigiloso)|valor\s+máximo\s+aceitável)\s*(?:é\s+de|de|:)?\s*${moneyCapture}`, "gi"), 32],
+    [new RegExp(String.raw`(?:total\s+geral|valor\s+total\s+estimado|montante\s+global|valor\s+global)\s*[:.\-–—]?\s*${moneyCapture}`, "gi"), 30],
+    [new RegExp(String.raw`(?:preço\s+(?:total\s+)?(?:estimado|máximo|de\s+referência)|montante\s+(?:total\s+)?(?:estimado|global))\s*(?:é\s+de|de|:)?\s*${moneyCapture}`, "gi"), 24],
     [/(?:no\s+valor\s+(?:total\s+)?de)\s+(R\$\s*[\d.,]+)/gi, 18],
     [/(?:importa(?:ndo)?\s+em)\s+(R\$\s*[\d.,]+)/gi, 16],
     [/(?:(?:total|global|estimad[oa]|máxim[oa]|referência)\s*(?:de|:)?\s*)(R\$\s*[\d.,]+)/gi, 14],
     [/valor[^R]{0,80}(R\$\s*[\d.,]+)/gi, 10],
   ];
+
   for (const [pattern, boost] of patterns) {
     for (const match of norm.matchAll(pattern)) {
       const raw = match[1]?.trim();
-      if (!raw) continue;
-      const numStr = raw.replace(/R\$\s*/i, "").replace(/\./g, "").replace(",", ".").replace(/\s*\(.*$/, "");
-      const num = parseFloat(numStr);
+      const num = parsePtBrNumber(raw);
       if (isNaN(num) || num < 100) continue;
       const valueBoost = num > 1000000 ? 4 : num > 100000 ? 2 : 0;
-      candidates.push({ value: raw.replace(/\s+/g, " "), score: boost + valueBoost });
+      candidates.push({ amount: num, score: boost + valueBoost });
     }
   }
   if (candidates.length === 0) return "Não informado no edital";
   candidates.sort((a, b) => b.score - a.score);
-  return candidates[0].value;
+  return formatCurrencyBRL(candidates[0].amount);
 }
 
 function extractDataSessao(text: string): string {
@@ -119,19 +369,24 @@ function extractDataSessao(text: string): string {
 }
 
 function extractPlanilha(text: string): string {
+  const context = buildPlanilhaExtractionContext(text);
   const section = extractSection(
-    text,
+    context,
     [
-      /(?:PLANILHA|QUADRO|TABELA)\s+(?:DE\s+)?(?:PREÇOS?|ESTIMATIV|QUANTITATIV|ORÇAMENT|ITENS)/i,
-      /(?:ANEXO\s+(?:I{1,3}|[A-Z])\s*[-–—]?\s*(?:PLANILHA|PREÇOS?|ITENS))/i,
+      /(?:PLANILHA|QUADRO|TABELA)\s+(?:DE\s+)?(?:PREÇOS?|ESTIMATIV|QUANTITATIV|ORÇAMENT|ITENS|CUSTOS)/i,
+      /(?:ANEXO\s+(?:\d+|I{1,3}|[A-Z])\s*[-–—]?\s*(?:PLANILHA|PREÇOS?|ITENS|CUSTOS))/i,
     ],
-    [/\n\s*(?:CAPÍTULO|SEÇÃO|\d+[\.\)]\s+(?:D[AO]S?\s+))/i],
-    3000
+    [/\n\s*(?:ANEXO\s+\d+\b|CAPÍTULO|SEÇÃO|\d+[\.\)]\s+(?:D[AO]S?\s+)|--- TRECHO RELEVANTE ---)/i],
+    7000
   );
-  if (section) return section.slice(0, 1500);
-  const itemPattern = /(?:item|lote)\s*(?:n[°º.]?\s*)?\d+\s*[-–:]\s*[^\n]{10,150}\s*R\$\s*[\d.,]+/gi;
-  const items = text.match(itemPattern);
-  if (items && items.length > 0) return items.slice(0, 20).join('\n');
+  if (section) return section.slice(0, 2500);
+
+  const relevantLines = context
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => /(?:^\d{1,3}\b.*(?:\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})$)|(?:planilha|preço\s+unitário|preco\s+unitario|preço\s+total|preco\s+total|quantidade|valor\s+total)/i.test(line));
+
+  if (relevantLines.length > 0) return relevantLines.slice(0, 25).join("\n");
   return "Não disponível no edital";
 }
 

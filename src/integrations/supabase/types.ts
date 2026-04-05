@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      edital_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          progress: number
+          result: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          progress?: number
+          result?: Json | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          progress?: number
+          result?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       jurisprudencia: {
         Row: {
           boletim_referencia: string | null

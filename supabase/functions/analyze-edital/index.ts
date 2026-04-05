@@ -1236,7 +1236,7 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
   }
 
   // ── Factors that PREVENTED higher score ──
-  if (!(/(?:exig|apresent|entreg)\w*\s+(?:de\s+)?amostra/i.test(text) && !/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i.test(text))) {
+  if (!amostraExplicita || amostraNegada) {
     fatoresImpediram.push("Sem exigência de amostra eliminatória");
   }
   if (/(?:não\s+(?:será|é)\s+exigid|dispensad|não\s+(?:haverá|há))\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i.test(text)) {
@@ -1262,9 +1262,10 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
     ? `Score ${score}/10 (${faixa}). Fatores que elevaram: ${fatoresElevaram.join("; ")}.`
     : `Score ${score}/10 (${faixa}). Edital com características padrão, sem agravantes fortes identificados.`;
 
+  const modalidadeLabel = isConcorrencia ? "Concorrência" : isPregao ? "Pregão eletrônico" : (dados.modalidade || "Edital");
   const fraseFaixa = isPregaoBensComuns && score <= 5
     ? `Pregão eletrônico padrão de bens comuns, com habilitação ordinária e disputa por menor preço — classificado como ${faixa}.`
-    : `Edital classificado como ${faixa} com base em ${strongAggravators} agravante(s) forte(s) identificado(s) no texto.`;
+    : `${modalidadeLabel} classificado como ${faixa} com base em ${strongAggravators} agravante(s) forte(s) identificado(s) no texto.`;
 
   return {
     valor: score,

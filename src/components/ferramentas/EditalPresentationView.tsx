@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   FileText, DollarSign, Scale, Calendar, Globe, Building2, Hash,
   AlertTriangle, ArrowLeft, RefreshCw, Download, Quote, Users, Info,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, ShoppingCart, BookOpen, UserCheck, FileCheck,
+  Gavel, Clock, Lightbulb, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,24 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /* ── Types ── */
+interface ItemLote {
+  numero: string;
+  descricao: string;
+  quantidade: string;
+  unidade: string;
+  valor_unitario: string;
+  valor_total: string;
+}
+
+interface ResumoEstruturado {
+  visao_geral: string;
+  quem_pode_participar: string;
+  documentos_necessarios: string;
+  como_funciona_disputa: string;
+  prazos_importantes: string;
+  dicas_praticas: string;
+}
+
 export interface EditalAnalysisResult {
   numero_edital: string;
   numero_edital_fonte: string;
@@ -30,7 +49,8 @@ export interface EditalAnalysisResult {
   plataforma_fonte: string;
   participacao: string;
   participacao_fonte: string;
-  resumo_linguagem_simples: string;
+  itens?: ItemLote[];
+  resumo_linguagem_simples: string | ResumoEstruturado;
   pontos_atencao: Array<{ ponto: string; trecho_fonte: string }>;
   complexidade_score: number;
   complexidade_justificativa: string;
@@ -98,13 +118,37 @@ const getScoreStyle = (v: number) => {
   return { bg: "bg-red-500/10", text: "text-red-600", bar: "bg-red-500", label: "Complexo" };
 };
 
+/* ── Resumo section component ── */
+const ResumoSection = ({ icon: Icon, title, text }: {
+  icon: React.ElementType; title: string; text: string;
+}) => {
+  if (!text) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-primary shrink-0" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground/85 pl-6 whitespace-pre-line">{text}</p>
+    </div>
+  );
+};
+
 /* ── PDF export ── */
 const exportHtml = (a: EditalAnalysisResult) => {
+  const resumo = typeof a.resumo_linguagem_simples === "object" ? a.resumo_linguagem_simples : null;
+  const resumoStr = typeof a.resumo_linguagem_simples === "string" ? a.resumo_linguagem_simples : "";
+
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dossiê - ${a.numero_edital}</title>
 <style>body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;max-width:800px;margin:0 auto;padding:40px 20px}
 h1{font-size:22px;color:#991b1b;border-bottom:2px solid #991b1b;padding-bottom:8px}
 h2{font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:2px;margin-top:24px;margin-bottom:4px}
-p{font-size:14px;line-height:1.7;margin:4px 0 16px}.footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
+h3{font-size:14px;color:#374151;margin-top:16px;margin-bottom:4px}
+p{font-size:14px;line-height:1.7;margin:4px 0 16px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px}
+th,td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left}
+th{background:#f9fafb;font-weight:600}
+.footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
 </style></head><body>`;
   html += `<h1>Dossiê — ${a.numero_edital}</h1>`;
   html += `<h2>ÓRGÃO</h2><p>${a.orgao}</p>`;
@@ -112,7 +156,28 @@ p{font-size:14px;line-height:1.7;margin:4px 0 16px}.footer{margin-top:40px;paddi
   html += `<h2>VALOR ESTIMADO</h2><p>${a.valor_estimado}</p>`;
   html += `<h2>MODALIDADE</h2><p>${a.modalidade}</p>`;
   html += `<h2>SESSÃO PÚBLICA</h2><p>${a.data_sessao}</p>`;
-  html += `<h2>EM LINGUAGEM SIMPLES</h2><div style="white-space:pre-line;font-size:14px;line-height:1.8">${a.resumo_linguagem_simples}</div>`;
+
+  if (a.itens && a.itens.length > 0) {
+    html += `<h2>ITENS DISPUTADOS (${a.itens.length})</h2>`;
+    html += `<table><tr><th>#</th><th>Descrição</th><th>Qtd</th><th>Un</th><th>Unit.</th><th>Total</th></tr>`;
+    a.itens.forEach(it => {
+      html += `<tr><td>${it.numero}</td><td>${it.descricao}</td><td>${it.quantidade}</td><td>${it.unidade}</td><td>${it.valor_unitario}</td><td>${it.valor_total}</td></tr>`;
+    });
+    html += `</table>`;
+  }
+
+  if (resumo) {
+    html += `<h2>EM LINGUAGEM SIMPLES</h2>`;
+    html += `<h3>Visão Geral</h3><p>${resumo.visao_geral}</p>`;
+    html += `<h3>Quem Pode Participar</h3><p>${resumo.quem_pode_participar}</p>`;
+    html += `<h3>Documentos Necessários</h3><p>${resumo.documentos_necessarios}</p>`;
+    html += `<h3>Como Funciona a Disputa</h3><p>${resumo.como_funciona_disputa}</p>`;
+    html += `<h3>Prazos Importantes</h3><p>${resumo.prazos_importantes}</p>`;
+    html += `<h3>Dicas Práticas</h3><p>${resumo.dicas_praticas}</p>`;
+  } else if (resumoStr) {
+    html += `<h2>EM LINGUAGEM SIMPLES</h2><div style="white-space:pre-line;font-size:14px;line-height:1.8">${resumoStr}</div>`;
+  }
+
   html += `<h2>PONTOS DE ATENÇÃO</h2><ul>`;
   a.pontos_atencao.forEach(p => { html += `<li style="margin-bottom:8px">${p.ponto}</li>`; });
   html += `</ul>`;
@@ -130,11 +195,23 @@ p{font-size:14px;line-height:1.7;margin:4px 0 16px}.footer{margin-top:40px;paddi
    ══════════════════════════════════════════════ */
 const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: Props) => {
   const [showAllPontos, setShowAllPontos] = useState(false);
+  const [showAllItens, setShowAllItens] = useState(false);
   const score = analysis.complexidade_score ?? 5;
   const scoreStyle = getScoreStyle(score);
 
   const pontos = analysis.pontos_atencao || [];
   const visiblePontos = showAllPontos ? pontos : pontos.slice(0, 4);
+
+  const itens = analysis.itens || [];
+  const visibleItens = showAllItens ? itens : itens.slice(0, 5);
+
+  // Handle both string (legacy) and object (new) format
+  const resumo = typeof analysis.resumo_linguagem_simples === "object"
+    ? analysis.resumo_linguagem_simples as ResumoEstruturado
+    : null;
+  const resumoStr = typeof analysis.resumo_linguagem_simples === "string"
+    ? analysis.resumo_linguagem_simples
+    : "";
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-background overflow-hidden">
@@ -175,7 +252,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
                 )}
                 <SourceBadge fonte={analysis.orgao_fonte} />
               </div>
-              {/* Complexity badge */}
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border border-border ${scoreStyle.bg}`}>
                 <div className="text-center">
                   <span className={`text-2xl font-extrabold ${scoreStyle.text}`}>{score}</span>
@@ -188,7 +264,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
               </div>
             </div>
 
-            {/* Object */}
             {analysis.objeto && !/não identificado/i.test(analysis.objeto) && (
               <div className="mb-4">
                 <p className="text-xs font-medium text-muted-foreground leading-relaxed">{analysis.objeto}</p>
@@ -198,7 +273,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
 
             <Separator className="my-4" />
 
-            {/* Metadata grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
               <MetaField icon={Scale} label="Modalidade" value={analysis.modalidade} fonte={analysis.modalidade_fonte} />
               <MetaField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} fonte={analysis.valor_estimado_fonte} />
@@ -216,21 +290,88 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
             </div>
           </section>
 
-          {/* ━━━ 2. LINGUAGEM SIMPLES ━━━ */}
+          {/* ━━━ 2. ITENS DISPUTADOS ━━━ */}
+          {itens.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="h-4 w-4 text-primary" />
+                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Itens Disputados ({itens.length})
+                </h2>
+              </div>
+              <Card className="border-border/60 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-20">#</th>
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Descrição</th>
+                        <th className="text-center px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-16">Qtd</th>
+                        <th className="text-center px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-14">Un</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-28">Unit.</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-32">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleItens.map((item, i) => (
+                        <tr key={i} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-2.5 text-xs font-medium text-primary">{item.numero}</td>
+                          <td className="px-4 py-2.5 text-xs text-foreground leading-snug">{item.descricao}</td>
+                          <td className="px-3 py-2.5 text-xs text-center text-foreground/80">{item.quantidade}</td>
+                          <td className="px-3 py-2.5 text-xs text-center text-foreground/80">{item.unidade}</td>
+                          <td className="px-4 py-2.5 text-xs text-right text-foreground/80">{item.valor_unitario}</td>
+                          <td className="px-4 py-2.5 text-xs text-right font-medium text-foreground">{item.valor_total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+              {itens.length > 5 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 w-full text-muted-foreground gap-1"
+                  onClick={() => setShowAllItens(!showAllItens)}
+                >
+                  {showAllItens ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {showAllItens ? "Mostrar menos" : `Ver todos os ${itens.length} itens`}
+                </Button>
+              )}
+            </section>
+          )}
+
+          {/* ━━━ 3. LINGUAGEM SIMPLES ━━━ */}
           <section>
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Edital em Linguagem Simples
             </h2>
             <Card className="border-border/60">
-              <CardContent className="p-6">
-                <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">
-                  {analysis.resumo_linguagem_simples || "Resumo não disponível."}
-                </div>
+              <CardContent className="p-6 space-y-6">
+                {resumo ? (
+                  <>
+                    <ResumoSection icon={BookOpen} title="Visão Geral" text={resumo.visao_geral} />
+                    <Separator />
+                    <ResumoSection icon={UserCheck} title="Quem Pode Participar" text={resumo.quem_pode_participar} />
+                    <Separator />
+                    <ResumoSection icon={FileCheck} title="Documentos Necessários" text={resumo.documentos_necessarios} />
+                    <Separator />
+                    <ResumoSection icon={Gavel} title="Como Funciona a Disputa" text={resumo.como_funciona_disputa} />
+                    <Separator />
+                    <ResumoSection icon={Clock} title="Prazos Importantes" text={resumo.prazos_importantes} />
+                    <Separator />
+                    <ResumoSection icon={Lightbulb} title="Dicas Práticas" text={resumo.dicas_praticas} />
+                  </>
+                ) : (
+                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+                    {resumoStr || "Resumo não disponível."}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </section>
 
-          {/* ━━━ 3. PONTOS DE ATENÇÃO ━━━ */}
+          {/* ━━━ 4. PONTOS DE ATENÇÃO ━━━ */}
           <section>
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Pontos de Atenção
@@ -263,7 +404,7 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
             )}
           </section>
 
-          {/* ━━━ 4. COMPLEXIDADE ━━━ */}
+          {/* ━━━ 5. COMPLEXIDADE ━━━ */}
           <section>
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Análise de Complexidade
@@ -282,7 +423,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
                   </div>
                 </div>
 
-                {/* Score bar */}
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full ${scoreStyle.bar} transition-all duration-700`}
@@ -290,7 +430,6 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
                   />
                 </div>
 
-                {/* Fatores */}
                 {analysis.complexidade_fatores && analysis.complexidade_fatores.length > 0 && (
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fatores</span>

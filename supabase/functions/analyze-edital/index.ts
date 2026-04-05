@@ -171,6 +171,7 @@ interface AIExtractionResult {
   sistema_licitacao: string;
   participacao: string;
   unidade_disputa: string;
+  modo_disputa: "aberto" | "fechado" | "aberto e fechado" | "nao_identificado";
   habilitacao: string;
   consorcio: "sim" | "nao" | "nao_identificado";
   cooperativas_vedadas: boolean;
@@ -200,6 +201,7 @@ function defaultAIResult(): AIExtractionResult {
     sistema_licitacao: "Não identificado no edital",
     participacao: "Não identificado no edital",
     unidade_disputa: "Não identificado no edital",
+    modo_disputa: "nao_identificado",
     habilitacao: "Consultar seção de habilitação no edital",
     consorcio: "nao_identificado",
     cooperativas_vedadas: false,
@@ -235,6 +237,7 @@ const EXTRACTION_TOOL = {
         sistema_licitacao: { type: "string", description: "Plataforma/sistema eletrônico onde ocorre a disputa: 'ComprasGov (compras.gov.br)', 'BEC/SP', 'Licitações-e', 'Portal de Compras do Governo Federal', etc. NUNCA confunda com o órgão." },
         participacao: { type: "string", enum: ["Exclusiva ME/EPP", "Ampla concorrência", "Não identificado no edital"], description: "'Exclusiva ME/EPP' SÓ se EXPRESSAMENTE declarado. Se 'EXCLUSIVIDADE ME/EPP: NÃO', marque 'Ampla concorrência'." },
         unidade_disputa: { type: "string", enum: ["Por item", "Por lote", "Global", "Não identificado no edital"] },
+        modo_disputa: { type: "string", enum: ["aberto", "fechado", "aberto e fechado", "nao_identificado"], description: "Modo de disputa EXPRESSAMENTE previsto no edital. Se houver 'modo de disputa: aberto', retorne 'aberto'. Se houver 'aberto e fechado', retorne exatamente isso. Se não houver declaração clara, retorne 'nao_identificado'." },
         habilitacao: { type: "string", description: "Resumo dos documentos de habilitação por categoria com emojis: 📜 Hab. Jurídica: docs...\n🏦 Regularidade Fiscal/Trabalhista: docs...\n🔧 Qualificação Técnica: docs...\n📊 Qualificação Econômico-Financeira: docs...\n📝 Declarações: docs... Separe categorias com \\n." },
         consorcio: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Consórcio EXPRESSAMENTE admitido ou vedado no texto?" },
         cooperativas_vedadas: { type: "boolean", description: "Cooperativas EXPRESSAMENTE vedadas?" },
@@ -295,8 +298,9 @@ REGRAS OBRIGATÓRIAS:
 6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver vedação/admissão expressa, respeite literalmente. Se o edital for omisso ou duvidoso, marque "nao_identificado".
 7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
 8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").
-9. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").
-10. VALOR ESTIMADO: extraia o valor TOTAL/GLOBAL da licitação no formato brasileiro (R$ X.XXX,XX). Ignore valores unitários ou de itens individuais. Se sigiloso ou não informado, use "Não informado no edital".
+9. MODO DE DISPUTA: extraia SOMENTE se estiver expresso no edital (ex: "modo de disputa: aberto", "aberto e fechado"). Não inferir a partir da modalidade.
+10. NÚMERO DO EDITAL: busque no cabeçalho/preâmbulo. Inclua o identificador completo com ano (ex: "90014/2025", "PE 001/2025").
+11. VALOR ESTIMADO: extraia o valor TOTAL/GLOBAL da licitação no formato brasileiro (R$ X.XXX,XX). Ignore valores unitários ou de itens individuais. Se sigiloso ou não informado, use "Não informado no edital".
 11. DATA DA SESSÃO: extraia a data e hora da sessão pública/abertura de propostas.
 12. TIMELINE: extraia datas de publicação, prazos de impugnação e esclarecimento quando disponíveis.`;
 

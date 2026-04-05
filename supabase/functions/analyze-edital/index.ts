@@ -1225,15 +1225,27 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
 }
 
 async function analyzeEditalText(text: string) {
-  // ── Mechanical extraction (regex — deterministic) ──
-  const numero_edital = extractNumeroEdital(text);
-  const valor_estimado = extractValorEstimado(text);
-  const data_sessao = extractDataSessao(text);
-  const timeline = extractTimeline(text);
-  const planilha_estimada = extractPlanilha(text);
-
-  // ── Semantic extraction (AI — Gemini Flash) ──
+  // ── Full AI extraction (all fields via Gemini Flash) ──
   const ai = await extractSemanticFieldsViaAI(text);
+
+  // ── Regex fallbacks for mechanical fields (used only if AI returns defaults) ──
+  const numero_edital = (ai.numero_edital && ai.numero_edital !== "Não identificado")
+    ? ai.numero_edital : extractNumeroEdital(text);
+  const valor_estimado = (ai.valor_estimado && ai.valor_estimado !== "Não informado no edital")
+    ? ai.valor_estimado : extractValorEstimado(text);
+  const data_sessao = (ai.data_sessao && ai.data_sessao !== "Não identificado")
+    ? ai.data_sessao : extractDataSessao(text);
+
+  // Timeline: AI first, regex fallback per field
+  const regexTimeline = extractTimeline(text);
+  const timeline = {
+    data_publicacao: ai.data_publicacao || regexTimeline.data_publicacao,
+    prazo_impugnacao: ai.prazo_impugnacao || regexTimeline.prazo_impugnacao,
+    prazo_esclarecimento: ai.prazo_esclarecimento || regexTimeline.prazo_esclarecimento,
+    data_abertura: regexTimeline.data_abertura, // keep regex for this (derived from sessão)
+  };
+
+  const planilha_estimada = extractPlanilha(text);
 
   const modalidade = ai.modalidade;
   const orgao = ai.orgao;
@@ -1266,7 +1278,6 @@ async function analyzeEditalText(text: string) {
     _scoreFraseFaixa: score_complexidade.frase_faixa,
     _scoreFatoresElevaram: score_complexidade.fatores_elevaram.join("; "),
     _scoreFatoresImpediram: score_complexidade.fatores_impediram.join("; "),
-    // Pass AI truth checks
     _ai_consorcio: ai.consorcio,
     _ai_subcontratacao: ai.subcontratacao,
     _ai_amostra: ai.amostra,

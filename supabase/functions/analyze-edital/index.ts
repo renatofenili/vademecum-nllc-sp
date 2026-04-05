@@ -1235,11 +1235,16 @@ REGRAS CRÍTICAS:
 
   // ── CALL 3: PLANILHA (separate, focused) ──
   const planilhaPrompt = `Você é um especialista em licitações. Extraia a planilha/quadro estimativo de preços do edital.
-Extraia TODOS os itens com: número, descrição, unidade, quantidade, valor unitário e total.
-Se não houver planilha de preços no edital, retorne array vazio.`;
+REGRAS:
+1. Procure especialmente em anexos, quadros, tabelas e planilhas estimativas.
+2. Extraia TODOS os itens com: número, descrição, unidade, quantidade, valor unitário e total.
+3. NÃO invente itens faltantes.
+4. Se não houver planilha de preços no edital, retorne array vazio.`;
+
+  const planilhaContext = buildPlanilhaExtractionContext(truncated);
 
   const planilhaResult = await callAI(apiKey, planilhaPrompt,
-    `Extraia a planilha de preços deste edital:\n\n${truncated}`, PLANILHA_TOOL, 16384);
+    `Extraia a planilha de preços deste edital a partir dos trechos mais prováveis:\n\n${planilhaContext}`, PLANILHA_TOOL, 12288);
 
   // ── Defaults for missing AI results ──
   const meta = metadataResult || {} as Record<string, unknown>;
@@ -1296,8 +1301,6 @@ REGRAS DE VALIDAÇÃO:
   // ── Regex fallbacks for mechanical fields ──
   const numero_edital = (meta.numero_edital && meta.numero_edital !== "Não identificado")
     ? meta.numero_edital as string : extractNumeroEdital(text);
-  const valor_estimado = (meta.valor_estimado && meta.valor_estimado !== "Não informado no edital")
-    ? meta.valor_estimado as string : extractValorEstimado(text);
   const data_sessao = (meta.data_sessao && meta.data_sessao !== "Não identificado")
     ? meta.data_sessao as string : extractDataSessao(text);
 
@@ -1309,8 +1312,13 @@ REGRAS DE VALIDAÇÃO:
     data_abertura: regexTimeline.data_abertura,
   };
 
-  const aiPlanilha = Array.isArray((plan as any).itens) && (plan as any).itens.length > 0 ? (plan as any).itens : null;
-  const planilha_estimada = aiPlanilha || extractPlanilha(text);
+  const aiPlanilha = normalizePlanilhaItems((plan as any).itens);
+  const regexPlanilha = extractStructuredPlanilhaRows(text);
+  const structuredPlanilha = chooseBestPlanilha(aiPlanilha, regexPlanilha);
+  const planilha_estimada = structuredPlanilha && structuredPlanilha.length > 0
+    ? structuredPlanilha
+    : extractPlanilha(text);
+  const valor_estimado = resolveValorEstimado(text, meta.valor_estimado, structuredPlanilha).value;
 
   const modalidade = (meta.modalidade as string) || "Não identificado";
   const criterio_julgamento = (meta.criterio_julgamento as string) || "Não identificado";

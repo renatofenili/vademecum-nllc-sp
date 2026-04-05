@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   FileText, DollarSign, Scale, Calendar, Globe, Building2, Hash,
-  AlertTriangle, ArrowLeft, RefreshCw, Download, Quote, Users, Info,
+  AlertTriangle, ArrowLeft, RefreshCw, Download, Save, Quote, Users, Info,
   ChevronDown, ChevronUp, ShoppingCart, BookOpen, UserCheck, FileCheck,
   Gavel, Clock, Lightbulb, Package,
 } from "lucide-react";
@@ -200,12 +200,38 @@ th{background:#f9fafb;font-weight:600}
   a.pontos_atencao.forEach(p => { html += `<li style="margin-bottom:8px">${p.ponto}</li>`; });
   html += `</ul>`;
   html += `<h2>COMPLEXIDADE: ${a.complexidade_score}/10</h2><p>${a.complexidade_justificativa}</p>`;
+
+  html += `<div style="margin-top:32px;padding:16px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;font-size:12px;color:#92400e;line-height:1.6">
+    <strong>⚠ VERSÃO BETA</strong><br>
+    Este dossiê foi gerado automaticamente por inteligência artificial e tem caráter meramente informativo.
+    <strong>Não substitui a análise jurídica própria nem o exame completo do edital.</strong>
+    Recomenda-se sempre a leitura integral do instrumento convocatório e a consulta a profissional habilitado.
+  </div>`;
+
   html += `<div class="footer">Gerado por Vade Mecum em Licitações — ${new Date().toLocaleDateString("pt-BR")}</div></body></html>`;
 
+  return html;
+};
+
+const handlePrint = (a: EditalAnalysisResult) => {
+  const html = exportHtml(a);
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
   if (w) w.onload = () => setTimeout(() => w.print(), 500);
+};
+
+const handleSave = (a: EditalAnalysisResult) => {
+  const html = exportHtml(a);
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `dossie-${a.numero_edital?.replace(/[^a-zA-Z0-9]/g, "-") || "edital"}.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 /* ══════════════════════════════════════════════
@@ -245,8 +271,11 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportHtml(analysis)} className="gap-1.5">
-            <Download className="h-3.5 w-3.5" /> PDF
+          <Button variant="outline" size="sm" onClick={() => handleSave(analysis)} className="gap-1.5">
+            <Save className="h-3.5 w-3.5" /> Salvar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handlePrint(analysis)} className="gap-1.5">
+            <Download className="h-3.5 w-3.5" /> Imprimir / PDF
           </Button>
           {onNewAnalysis && (
             <Button variant="outline" size="sm" onClick={onNewAnalysis} className="gap-1.5">

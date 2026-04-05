@@ -3,13 +3,14 @@ import {
   X, Download, ChevronDown, ChevronUp, FileText, DollarSign, Scale,
   Calendar, Shield, Globe, Building2, Hash, Info, AlertTriangle,
   CheckCircle2, Ban, Wallet, ListChecks, Eye, Users, FileCheck,
-  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw, TableProperties,
+  Gavel, ScrollText, ClipboardList, BarChart3, Zap, ArrowLeft, RefreshCw, TableProperties, Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { EditalAnalysis } from "./EditalAnalyzer";
 
 interface Props {
@@ -19,6 +20,40 @@ interface Props {
   onClose?: () => void;
   onNewAnalysis?: () => void;
 }
+/* ────────────────────────────────────────────
+   Source badge – shows the exact PDF excerpt
+   ──────────────────────────────────────────── */
+const SourceBadge = ({ trecho, fieldKey, fontes }: { trecho?: string; fieldKey?: string; fontes?: Record<string, string> }) => {
+  const text = trecho || (fieldKey && fontes?.[fieldKey]) || null;
+  if (!text || text === "Não localizado") return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-primary/70 hover:text-primary transition-colors mt-0.5 group"
+          title="Ver trecho-fonte do edital"
+        >
+          <Quote className="h-3 w-3 group-hover:scale-110 transition-transform" />
+          <span className="underline underline-offset-2 decoration-dotted">Fonte</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="max-w-sm w-auto p-0" side="bottom" align="start">
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Quote className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Trecho do edital</span>
+          </div>
+          <blockquote className="text-xs leading-relaxed text-foreground/90 italic border-l-2 border-primary/30 pl-3 py-1 bg-primary/[0.03] rounded-r-md">
+            "{text}"
+          </blockquote>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 /* ────────────────────────────────────────────
    Bullet formatter – normalizes inline markers
    into real multi-line bullet text
@@ -382,20 +417,23 @@ const DiagCardExpandable = ({ card, Icon }: { card: DiagCard; Icon: React.Elemen
   );
 };
 
-const HeroField = ({ icon: Icon, label, value, onClick }: { icon: React.ElementType; label: string; value: string | undefined; onClick?: () => void }) => {
+const HeroField = ({ icon: Icon, label, value, onClick, fieldKey, fontes }: { icon: React.ElementType; label: string; value: string | undefined; onClick?: () => void; fieldKey?: string; fontes?: Record<string, string> }) => {
   if (!value || value === "Não identificado no edital") return null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-start gap-2.5 text-left rounded-lg p-2 -m-2 transition-colors hover:bg-accent/50 cursor-pointer group"
-    >
-      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+    <div className="flex items-start gap-2.5 rounded-lg p-2 -m-2">
+      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
       <div>
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block">{label}</span>
-        <div className="text-sm font-medium text-foreground">{renderWithBullets(value)}</div>
+        <button
+          type="button"
+          onClick={onClick}
+          className="text-sm font-medium text-foreground text-left hover:text-primary/80 transition-colors cursor-pointer"
+        >
+          {renderWithBullets(value)}
+        </button>
+        <SourceBadge fieldKey={fieldKey} fontes={fontes} />
       </div>
-    </button>
+    </div>
   );
 };
 
@@ -500,6 +538,8 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
 
   const [detailOpen, setDetailOpen] = useState(false);
 
+  const fontes = analysis.fontes;
+
   const score = analysis.score_complexidade?.valor ?? 5;
   const scoreColor = getScoreColor(score);
 
@@ -597,15 +637,22 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
 
             {/* Metadata grid – each card opens the detail dialog */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4">
-              <HeroField icon={Scale} label="Modalidade" value={analysis.modalidade} onClick={openDetail} />
-              <HeroField icon={Calendar} label="Sessão Pública" value={analysis.data_sessao} onClick={openDetail} />
-              <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} onClick={openDetail} />
-              <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} onClick={openDetail} />
-              <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} onClick={openDetail} />
-              <HeroField icon={Users} label="Participação" value={analysis.participacao} onClick={openDetail} />
-              <HeroField icon={Hash} label="Unidade da Disputa" value={analysis.unidade_disputa} onClick={openDetail} />
-              <HeroField icon={Building2} label="Órgão" value={analysis.orgao} onClick={openDetail} />
+              <HeroField icon={Scale} label="Modalidade" value={analysis.modalidade} onClick={openDetail} fieldKey="modalidade" fontes={fontes} />
+              <HeroField icon={Calendar} label="Sessão Pública" value={analysis.data_sessao} onClick={openDetail} fieldKey="data_sessao" fontes={fontes} />
+              <HeroField icon={Globe} label="Plataforma" value={analysis.sistema_licitacao} onClick={openDetail} fieldKey="sistema_licitacao" fontes={fontes} />
+              <HeroField icon={BarChart3} label="Critério" value={analysis.criterio_julgamento} onClick={openDetail} fieldKey="criterio_julgamento" fontes={fontes} />
+              <HeroField icon={DollarSign} label="Valor Estimado" value={analysis.valor_estimado} onClick={openDetail} fieldKey="valor_estimado" fontes={fontes} />
+              <HeroField icon={Users} label="Participação" value={analysis.participacao} onClick={openDetail} fieldKey="participacao" fontes={fontes} />
+              <HeroField icon={Hash} label="Unidade da Disputa" value={analysis.unidade_disputa} onClick={openDetail} fieldKey="unidade_disputa" fontes={fontes} />
+              <HeroField icon={Building2} label="Órgão" value={analysis.orgao} onClick={openDetail} fieldKey="orgao" fontes={fontes} />
             </div>
+
+            {/* Object source */}
+            {analysis.objeto && analysis.objeto !== "Não identificado no edital" && fontes?.objeto && fontes.objeto !== "Não localizado" && (
+              <div className="mt-1">
+                <SourceBadge fieldKey="objeto" fontes={fontes} />
+              </div>
+            )}
 
             {/* Extraction confidence */}
             <div className="mt-4 flex items-center gap-2">

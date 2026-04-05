@@ -830,9 +830,10 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     return null;
   })();
 
-  // Modo de disputa — AI-first, regex fallback
-  const modoDisputa = ai.modo_disputa !== "nao_identificado"
-    ? ai.modo_disputa
+  // Modo de disputa — AI-first (passed via dados), regex fallback
+  const aiModoDisputa = dados._ai_modo_disputa || "nao_identificado";
+  const modoDisputa = aiModoDisputa !== "nao_identificado"
+    ? aiModoDisputa
     : (feat.hasModoAbFechado ? "aberto e fechado" : feat.hasModoDisputaAberto ? "aberto" : feat.hasModoDisputaFechado ? "fechado" : null);
 
   // ── 1. VISÃO GERAL DO EDITAL ──
@@ -1365,6 +1366,7 @@ async function analyzeEditalText(text: string) {
     _ai_preco_maximo: String(ai.preco_maximo),
     _ai_catalogo: String(ai.catalogo_exigido),
     _ai_marca_modelo: String(ai.marca_modelo_exigido),
+    _ai_modo_disputa: ai.modo_disputa,
   }, timeline);
 
   return {

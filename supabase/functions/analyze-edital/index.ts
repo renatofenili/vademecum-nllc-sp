@@ -1314,7 +1314,9 @@ async function analyzeEditalText(text: string) {
     data_abertura: regexTimeline.data_abertura,
   };
 
-  const planilha_estimada = extractPlanilha(text);
+  // Prefer AI-structured planilha, fallback to regex text extraction
+  const aiPlanilha = Array.isArray(ai.planilha_itens) && ai.planilha_itens.length > 0 ? ai.planilha_itens : null;
+  const planilha_estimada = aiPlanilha || extractPlanilha(text);
 
   const modalidade = ai.modalidade;
   const orgao = ai.orgao;

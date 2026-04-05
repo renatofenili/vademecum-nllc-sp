@@ -687,7 +687,7 @@ const EditalPresentationView = ({ analysis, fileName, onClose, onBack, onNewAnal
               {diagCards.map((card) => {
                 const Icon = card.icon;
                 return (
-                  <DiagCardExpandable key={card.title} card={card} Icon={Icon} />
+                  <DiagCardExpandable key={card.title} card={card} Icon={Icon} fontes={fontes} />
                 );
               })}
             </div>

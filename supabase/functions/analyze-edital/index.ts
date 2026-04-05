@@ -1944,6 +1944,7 @@ function analyzeEditalText(text: string) {
   const score_complexidade = calcularComplexidade(text, {
     valor_estimado,
     criterio: criterio_julgamento,
+    modalidade,
   });
 
   const resumo_simples = gerarResumoSimples({

@@ -174,7 +174,7 @@ interface AIExtractionResult {
   modo_disputa: "aberto" | "fechado" | "aberto e fechado" | "nao_identificado";
   habilitacao: string;
   consorcio: "sim" | "nao" | "nao_identificado";
-  cooperativas_vedadas: boolean;
+  cooperativas_vedacao: "todas" | "trabalho" | "nao" | "nao_identificado";
   subcontratacao: "sim" | "nao" | "nao_identificado";
   amostra: "sim" | "nao" | "nao_identificado";
   garantia_execucao: "sim" | "nao" | "nao_identificado";
@@ -204,7 +204,7 @@ function defaultAIResult(): AIExtractionResult {
     modo_disputa: "nao_identificado",
     habilitacao: "Consultar seção de habilitação no edital",
     consorcio: "nao_identificado",
-    cooperativas_vedadas: false,
+    cooperativas_vedacao: "nao_identificado",
     subcontratacao: "nao_identificado",
     amostra: "nao_identificado",
     garantia_execucao: "nao_identificado",
@@ -240,7 +240,7 @@ const EXTRACTION_TOOL = {
         modo_disputa: { type: "string", enum: ["aberto", "fechado", "aberto e fechado", "nao_identificado"], description: "Modo de disputa EXPRESSAMENTE previsto no edital. Se houver 'modo de disputa: aberto', retorne 'aberto'. Se houver 'aberto e fechado', retorne exatamente isso. Se não houver declaração clara, retorne 'nao_identificado'." },
         habilitacao: { type: "string", description: "Resumo dos documentos de habilitação por categoria com emojis: 📜 Hab. Jurídica: docs...\n🏦 Regularidade Fiscal/Trabalhista: docs...\n🔧 Qualificação Técnica: docs...\n📊 Qualificação Econômico-Financeira: docs...\n📝 Declarações: docs... Separe categorias com \\n." },
         consorcio: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Consórcio EXPRESSAMENTE admitido ou vedado no texto?" },
-        cooperativas_vedadas: { type: "boolean", description: "Cooperativas EXPRESSAMENTE vedadas?" },
+        cooperativas_vedacao: { type: "string", enum: ["todas", "trabalho", "nao", "nao_identificado"], description: "Vedação a cooperativas: 'trabalho' se o edital veda APENAS cooperativas de trabalho (ex: 'Cooperativas de Trabalho não poderão participar'), 'todas' se veda TODAS as cooperativas sem distinção, 'nao' se expressamente permite cooperativas, 'nao_identificado' se omisso. ATENÇÃO: 'Cooperativas de Trabalho' é diferente de 'cooperativas' em geral." },
         subcontratacao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Subcontratação EXPRESSAMENTE admitida ou vedada?" },
         amostra: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Amostra OBRIGATORIAMENTE exigida='sim', EXPRESSAMENTE dispensada='nao', ou inconclusiva/não mencionada='nao_identificado'?" },
         garantia_execucao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Garantia de execução/contratual EXPRESSAMENTE exigida ou dispensada?" },
@@ -273,7 +273,7 @@ const EXTRACTION_TOOL = {
         prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
         prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "modo_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "modo_disputa", "habilitacao", "consorcio", "cooperativas_vedacao", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
       additionalProperties: false,
     },
   },
@@ -286,7 +286,7 @@ async function extractSemanticFieldsViaAI(text: string): Promise<AIExtractionRes
     return defaultAIResult();
   }
 
-  const truncated = text.slice(0, 30000);
+  const truncated = text.slice(0, 60000);
   const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia TODOS os metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
 
 REGRAS OBRIGATÓRIAS:
@@ -313,9 +313,10 @@ REGRAS OBRIGATÓRIAS:
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
+        max_tokens: 16384,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Analise este edital e extraia os metadados estruturados:\n\n${truncated}` },
+          { role: "user", content: `Analise este edital e extraia os metadados estruturados. IMPORTANTE: extraia TODOS os itens da planilha/quadro de preços se existir.\n\n${truncated}` },
         ],
         tools: [EXTRACTION_TOOL],
         tool_choice: { type: "function", function: { name: "extract_edital_metadata" } },
@@ -817,7 +818,10 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     precoMaximoStatus = "sim";
   }
   // Override detectFeatures with AI results where available
-  if (dados._ai_cooperativas_vedadas === "true") feat.vedacaoCooperativas = true;
+  // Cooperativas: use AI nuanced result
+  const cooperativasVedacao = dados._ai_cooperativas_vedacao || "nao_identificado";
+  if (cooperativasVedacao === "trabalho") { feat.vedacaoCooperativas = true; }
+  else if (cooperativasVedacao === "todas") { feat.vedacaoCooperativas = true; }
   if (dados._ai_subcontratacao === "sim") { feat.subcontratacaoPermitida = true; feat.subcontratacaoVedada = false; }
   if (dados._ai_subcontratacao === "nao") { feat.subcontratacaoVedada = true; feat.subcontratacaoPermitida = false; }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;
@@ -1000,7 +1004,9 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (feat.hasCredenciamento) part.push("• É necessário credenciamento prévio na plataforma de disputa.");
     if (feat.hasImpedimentoSancao) part.push("• Empresas impedidas de licitar, suspensas ou declaradas inidôneas estão vedadas.");
     if (feat.hasCotaReservada) part.push("• Há cota reservada para ME/EPP.");
-    if (feat.vedacaoCooperativas) part.push("• Cooperativas: vedadas expressamente pelo edital.");
+    if (cooperativasVedacao === "trabalho") part.push("• Cooperativas de trabalho: vedadas expressamente pelo edital.");
+    else if (cooperativasVedacao === "todas") part.push("• Cooperativas: vedadas expressamente pelo edital.");
+    else if (feat.vedacaoCooperativas) part.push("• Cooperativas: vedadas expressamente pelo edital.");
     if (subcontratacaoStatus === "nao") part.push("• Subcontratação: vedada expressamente pelo edital.");
     else if (subcontratacaoStatus === "sim") part.push("• Subcontratação: admitida pelo edital.");
     else if (feat.hasSubcontratacao) part.push("• Subcontratação: ponto que exige conferência no edital.");
@@ -1363,7 +1369,7 @@ async function analyzeEditalText(text: string) {
     _ai_subcontratacao: subcontratacao,
     _ai_amostra: amostra,
     _ai_garantia: garantia_execucao,
-    _ai_cooperativas_vedadas: String(ai.cooperativas_vedadas),
+    _ai_cooperativas_vedacao: ai.cooperativas_vedacao,
     _ai_exclusividade_meepp: String(ai.exclusividade_meepp),
     _ai_srp: String(ai.is_srp),
     _ai_preco_maximo: String(ai.preco_maximo),

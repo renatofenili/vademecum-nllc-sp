@@ -30,6 +30,22 @@ interface ResumoEstruturado {
   dicas_praticas: string;
 }
 
+interface ComplexidadeEixo {
+  eixo: string;
+  score: number;
+  justificativa: string;
+}
+
+interface MapaMentalRamo {
+  titulo: string;
+  itens: string[];
+}
+
+interface MapaMental {
+  centro: string;
+  ramos: MapaMentalRamo[];
+}
+
 export interface EditalAnalysisResult {
   numero_edital: string;
   numero_edital_fonte: string;
@@ -54,7 +70,9 @@ export interface EditalAnalysisResult {
   pontos_atencao: Array<{ ponto: string; trecho_fonte: string }>;
   complexidade_score: number;
   complexidade_justificativa: string;
+  complexidade_eixos?: ComplexidadeEixo[];
   complexidade_fatores: string[];
+  mapa_mental?: MapaMental;
 }
 
 interface Props {
@@ -404,18 +422,64 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
             )}
           </section>
 
-          {/* ━━━ 5. COMPLEXIDADE ━━━ */}
+          {/* ━━━ 5. MAPA MENTAL ━━━ */}
+          {analysis.mapa_mental && analysis.mapa_mental.ramos?.length > 0 && (
+            <section>
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
+                Mapa Mental do Edital
+              </h2>
+              <Card className="border-border/60">
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-center">
+                    {/* Centro */}
+                    <div className="bg-primary text-primary-foreground rounded-xl px-5 py-3 text-sm font-bold text-center max-w-[250px] shadow-md">
+                      {analysis.mapa_mental.centro}
+                    </div>
+                    {/* Ramos */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6 w-full">
+                      {analysis.mapa_mental.ramos.map((ramo, i) => {
+                        const colors = [
+                          "border-l-primary bg-primary/5",
+                          "border-l-amber-500 bg-amber-500/5",
+                          "border-l-emerald-500 bg-emerald-500/5",
+                          "border-l-violet-500 bg-violet-500/5",
+                          "border-l-rose-500 bg-rose-500/5",
+                          "border-l-sky-500 bg-sky-500/5",
+                        ];
+                        return (
+                          <div key={i} className={`border-l-4 rounded-lg p-3 ${colors[i % colors.length]}`}>
+                            <span className="text-xs font-bold text-foreground block mb-1.5">{ramo.titulo}</span>
+                            <ul className="space-y-1">
+                              {ramo.itens.map((item, j) => (
+                                <li key={j} className="text-[11px] text-foreground/75 flex items-start gap-1.5">
+                                  <span className="text-muted-foreground shrink-0 mt-px">›</span>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {/* ━━━ 6. COMPLEXIDADE ━━━ */}
           <section>
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
               Análise de Complexidade
             </h2>
             <Card className="border-border/60">
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-6 space-y-5">
+                {/* Score geral */}
                 <div className="flex items-center gap-4">
                   <div className={`flex items-center justify-center w-16 h-16 rounded-xl ${scoreStyle.bg}`}>
                     <span className={`text-2xl font-extrabold ${scoreStyle.text}`}>{score}</span>
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <Badge variant="outline" className={`${scoreStyle.text} border-transparent ${scoreStyle.bg} mb-1`}>
                       {scoreStyle.label}
                     </Badge>
@@ -423,15 +487,36 @@ const EditalPresentationView = ({ analysis, fileName, onBack, onNewAnalysis }: P
                   </div>
                 </div>
 
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${scoreStyle.bar} transition-all duration-700`}
-                    style={{ width: `${(score / 10) * 100}%` }}
-                  />
-                </div>
+                {/* Barras por eixo */}
+                {analysis.complexidade_eixos && analysis.complexidade_eixos.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Complexidade por eixo</span>
+                    {analysis.complexidade_eixos.map((eixo, i) => {
+                      const eixoStyle = getScoreStyle(eixo.score);
+                      return (
+                        <div key={i} className="group">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-foreground">{eixo.eixo}</span>
+                            <span className={`text-xs font-bold ${eixoStyle.text}`}>{eixo.score}/10</span>
+                          </div>
+                          <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${eixoStyle.bar} transition-all duration-700`}
+                              style={{ width: `${(eixo.score / 10) * 100}%` }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {eixo.justificativa}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
+                {/* Fatores */}
                 {analysis.complexidade_fatores && analysis.complexidade_fatores.length > 0 && (
-                  <div>
+                  <div className="pt-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fatores</span>
                     <ul className="mt-1.5 space-y-1">
                       {analysis.complexidade_fatores.map((f, i) => (

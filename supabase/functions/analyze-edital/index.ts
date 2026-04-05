@@ -6,9 +6,15 @@ const corsHeaders = {
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/base64.ts";
+import { getDocument } from "https://esm.sh/pdfjs-serverless@0.3.2";
 
 const PDF_STORAGE_BUCKET = "normas-pdf";
 const EDITAL_STORAGE_PREFIX = "edital-jobs";
+const AI_REQUEST_TIMEOUT_MS = 45_000;
+const AI_PDF_REQUEST_TIMEOUT_MS = 70_000;
+const JOB_STALE_AFTER_MS = 4 * 60 * 1000;
+const MAX_LOCAL_PDF_PAGES = 250;
+const MIN_LOCAL_TEXT_LENGTH = 1200;
 
 declare const EdgeRuntime: {
   waitUntil(promise: Promise<unknown>): void;
@@ -45,6 +51,95 @@ function sanitizeStorageFileName(fileName: string): string {
 
 function buildJobPdfPath(jobId: string, fileName: string): string {
   return `${EDITAL_STORAGE_PREFIX}/${jobId}/${sanitizeStorageFileName(fileName)}`;
+}
+
+function isJobStale(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const createdAtMs = Date.parse(createdAt);
+  return Number.isFinite(createdAtMs) && (Date.now() - createdAtMs) > JOB_STALE_AFTER_MS;
+}
+
+function normalizePdfExtractedText(value: string): string {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/[ ]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function textContentToPlainText(textContent: { items?: Array<{ str?: string; hasEOL?: boolean }> } | null | undefined): string {
+  const items = Array.isArray(textContent?.items) ? textContent.items : [];
+  const parts: string[] = [];
+
+  for (const item of items) {
+    const chunk = typeof item?.str === "string" ? item.str : "";
+    if (!chunk) continue;
+    parts.push(chunk);
+    parts.push(item?.hasEOL ? "\n" : " ");
+  }
+
+  return parts.join("");
+}
+
+async function extractTextFromPdfLocally(pdfBytes: Uint8Array): Promise<string> {
+  const doc = await getDocument({ data: pdfBytes, useSystemFonts: true } as never).promise;
+  const totalPages = Math.min(doc.numPages || 0, MAX_LOCAL_PDF_PAGES);
+  const parts: string[] = [];
+
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageText = textContentToPlainText(textContent as { items?: Array<{ str?: string; hasEOL?: boolean }> });
+    if (pageText.trim()) parts.push(pageText);
+  }
+
+  return normalizePdfExtractedText(parts.join("\n\n"));
+}
+
+function buildAnalysisContext(text: string, maxChars = 60000): string {
+  const norm = normalizePdfExtractedText(text);
+  const head = norm.slice(0, 12000).trim();
+  const tail = norm.slice(Math.max(0, norm.length - 22000)).trim();
+  const anchorPattern = /(?:objeto|modalidade|preg[aã]o|concorr[eê]ncia|crit[eé]rio\s+de\s+julgamento|sess[aã]o\s+p[úu]blica|abertura\s+d[aoe]s?\s+propostas?|participa[cç][aã]o|habilita[cç][aã]o|cons[oó]rcio|cooperativas?|subcontrata[cç][aã]o|amostra|garantia|sicaf|caufesp|registro\s+de\s+pre[cç]os|srp|valor\s+(?:estimado|global|m[aá]ximo|de\s+refer[êe]ncia)|or[cç]amento|planilha|quadro|tabela|anexo)/gi;
+  const anchors = Array.from(norm.matchAll(anchorPattern)).map((match) => match.index ?? 0);
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  for (const index of anchors.slice(0, 12)) {
+    const start = Math.max(0, index - 500);
+    const end = Math.min(norm.length, index + 4500);
+    const last = ranges[ranges.length - 1];
+
+    if (last && start <= last.end + 600) {
+      last.end = Math.max(last.end, end);
+    } else {
+      ranges.push({ start, end });
+    }
+  }
+
+  const sections = ranges.map(({ start, end }) => norm.slice(start, end).trim()).filter(Boolean);
+  const uniqueSections = Array.from(new Set([head, ...sections, tail].filter(Boolean)));
+
+  let combined = "";
+  for (const section of uniqueSections) {
+    const candidate = combined
+      ? `${combined}\n\n--- TRECHO RELEVANTE ---\n\n${section}`
+      : section;
+
+    if (candidate.length > maxChars) {
+      const separator = combined ? "\n\n--- TRECHO RELEVANTE ---\n\n".length : 0;
+      const remaining = Math.max(0, maxChars - combined.length - separator);
+      combined = combined
+        ? `${combined}\n\n--- TRECHO RELEVANTE ---\n\n${section.slice(0, remaining)}`
+        : section.slice(0, maxChars);
+      break;
+    }
+
+    combined = candidate;
+  }
+
+  return combined || norm.slice(0, maxChars);
 }
 
 // ── Utility ──
@@ -435,10 +530,11 @@ function extractTimeline(text: string) {
 // ── AI GATEWAY HELPER ──
 // ══════════════════════════════════════════════════════════════
 
-async function callAI(apiKey: string, systemPrompt: string, userPrompt: string, tool: unknown, maxTokens = 8192): Promise<Record<string, unknown> | null> {
+async function callAI(apiKey: string, systemPrompt: string, userPrompt: string, tool: unknown, maxTokens = 8192, timeoutMs = AI_REQUEST_TIMEOUT_MS): Promise<Record<string, unknown> | null> {
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -482,10 +578,12 @@ async function callAIWithPdf(
   tool: unknown,
   base64Pdf: string,
   maxTokens = 8192,
+  timeoutMs = AI_PDF_REQUEST_TIMEOUT_MS,
 ): Promise<Record<string, unknown> | null> {
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -772,6 +870,20 @@ REGRAS CRÍTICAS:
   }
 
   return text;
+}
+
+async function extractRelevantTextFromPdf(pdfBytes: Uint8Array): Promise<string> {
+  try {
+    const localText = await extractTextFromPdfLocally(pdfBytes);
+    if (localText.length >= MIN_LOCAL_TEXT_LENGTH) {
+      return localText;
+    }
+    console.warn("Local PDF extraction returned too little text; falling back to AI PDF extraction.", { length: localText.length });
+  } catch (error) {
+    console.warn("Local PDF extraction failed; falling back to AI PDF extraction.", error);
+  }
+
+  return await extractRelevantTextFromPdfViaGateway(pdfBytes);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1358,7 +1470,7 @@ async function analyzeEditalText(text: string) {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
 
-  const truncated = text.slice(0, 60000);
+  const truncated = buildAnalysisContext(text, 60000);
 
   // ── CALL 1 + CALL 2 in parallel ──
   const metadataPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia os metadados do edital.
@@ -1556,13 +1668,14 @@ async function processJob(jobId: string, storagePath: string) {
     await sb.from("edital_jobs").update({ progress: 25 }).eq("id", jobId);
 
     const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
-    const text = await extractRelevantTextFromPdfViaGateway(pdfBytes);
+    await sb.from("edital_jobs").update({ progress: 35 }).eq("id", jobId);
+    const text = await extractRelevantTextFromPdf(pdfBytes);
 
     if (!text || text.trim().length < 100) {
       throw new Error("Não foi possível extrair texto suficiente do PDF.");
     }
 
-    await sb.from("edital_jobs").update({ progress: 45 }).eq("id", jobId);
+    await sb.from("edital_jobs").update({ progress: 60 }).eq("id", jobId);
 
     const result = await analyzeEditalText(text);
     await sb.from("edital_jobs").update({
@@ -1602,7 +1715,7 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
       const sb = getSupabaseAdmin();
       const { data, error } = await sb
         .from("edital_jobs")
-        .select("status, progress, result, error")
+        .select("status, progress, result, error, created_at")
         .eq("id", jobId)
         .single();
 
@@ -1611,7 +1724,27 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      return new Response(JSON.stringify(data),
+      if (data.status === "processing" && isJobStale(data.created_at)) {
+        const staleError = "A análise excedeu o tempo limite de processamento e foi interrompida. Tente novamente.";
+        await sb.from("edital_jobs").update({
+          status: "failed",
+          error: staleError,
+        }).eq("id", jobId).eq("status", "processing");
+
+        return new Response(JSON.stringify({
+          status: "failed",
+          progress: data.progress,
+          result: null,
+          error: staleError,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      return new Response(JSON.stringify({
+        status: data.status,
+        progress: data.progress,
+        result: data.result,
+        error: data.error,
+      }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

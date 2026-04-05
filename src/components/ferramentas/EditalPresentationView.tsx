@@ -160,13 +160,18 @@ const deriveAxes = (analysis: EditalAnalysis, sections: ParsedSection[]): AxisSc
 
   const clamp = (v: number) => Math.max(1, Math.min(10, Math.round(v)));
 
+  // Use fatores_elevaram to detect POSITIVE presence of amostra/catálogo (avoids contradiction with "Sem exigência de amostra")
+  const elevaram = (analysis.score_complexidade?.fatores_elevaram || []).map(f => f.toLowerCase()).join(" ");
+  const hasAmostraPositiva = elevaram.includes("amostra");
+  const hasCatalogoPositivo = elevaram.includes("catálogo") || elevaram.includes("catalogo") || elevaram.includes("ficha técnica");
+
   return [
     {
       label: "Objeto e especificação",
       icon: FileText,
-      score: clamp(base + (resumo.includes("amostra") ? 1 : 0) + (resumo.includes("catálogo") || resumo.includes("catalogo") ? 1 : 0) - 1),
-      justification: resumo.includes("amostra") ? "Exigência de amostra eleva a complexidade do objeto." :
-        resumo.includes("catálogo") ? "Exigência de catálogo ou ficha técnica." : "Objeto com especificação padrão.",
+      score: clamp(base + (hasAmostraPositiva ? 1 : 0) + (hasCatalogoPositivo ? 1 : 0) - 1),
+      justification: hasAmostraPositiva ? "Exigência de amostra eleva a complexidade do objeto." :
+        hasCatalogoPositivo ? "Exigência de catálogo ou ficha técnica." : "Objeto com especificação padrão.",
     },
     {
       label: "Habilitação",

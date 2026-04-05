@@ -10,6 +10,10 @@ import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/b
 const PDF_STORAGE_BUCKET = "normas-pdf";
 const EDITAL_STORAGE_PREFIX = "edital-jobs";
 
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 // ── PDF Preparation ──
 
 function repairLigatures(text: string): string {

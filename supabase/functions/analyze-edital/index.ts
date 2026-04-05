@@ -85,774 +85,62 @@ function extractSection(text: string, startPatterns: RegExp[], endPatterns: RegE
   return null;
 }
 
-// ── Participação e Unidade de Disputa ──
-function extractParticipacao(text: string): string {
-  const header = text.slice(0, 8000);
-  // Exclusiva ME/EPP
-  if (/(?:exclusiv[oa](?:mente)?\s+(?:para\s+)?(?:(?:micro\s*empresa|me)\s*(?:\/|e)\s*(?:empresa\s+de\s+pequeno\s+porte|epp)))/i.test(header)
-    || /(?:participação|licitação|certame|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa)/i.test(header)
-    || /exclusiv[oa]\s+(?:para\s+)?(?:beneficiári[oa]s?\s+d[ao]\s+)?(?:lei\s+complementar\s+(?:n[°ºo.]*\s*)?123|lc\s*123)/i.test(header)) {
-    return "Exclusiva ME/EPP";
-  }
-  if (/ampla\s+(?:concorrência|participação|disputa|competição)/i.test(header)) {
-    return "Ampla concorrência";
-  }
-  if (/(?:participação|licitação)\s+(?:é\s+)?(?:aberta|ampla)/i.test(header)) {
-    return "Ampla concorrência";
-  }
-  return "Não identificado no edital";
-}
+// ── Field Extractors (mechanical — regex-based) ──
 
-function extractUnidadeDisputa(text: string): string {
-  const header = text.slice(0, 10000);
-  // Explicit declarations
-  const explicit = firstMatch(header, [
-    /(?:modo\s+de\s+disputa|critério\s+de\s+julgamento|julgamento)\s*[:.\-–—]?\s*(?:menor\s+preço\s+)?(por\s+item|por\s+lote|global|por\s+grupo)/i,
-    /(?:tipo|forma)\s+(?:de\s+)?(?:julgamento|adjudicação|disputa)\s*[:.\-–—]?\s*(?:menor\s+preço\s+)?(por\s+item|por\s+lote|global|por\s+grupo)/i,
-  ]);
-  if (explicit) {
-    const m = explicit.toLowerCase().trim();
-    if (/por\s+item/.test(m)) return "Por item";
-    if (/por\s+lote|por\s+grupo/.test(m)) return "Por lote";
-    if (/global/.test(m)) return "Global";
-  }
-  // Keyword search
-  if (/(?:menor\s+preço|julgamento)\s+global/i.test(header) || /(?:preço|valor)\s+global/i.test(header)) return "Global";
-  if (/(?:disputa|adjudicação|julgamento)\s+por\s+item/i.test(header)) return "Por item";
-  if (/(?:disputa|adjudicação|julgamento)\s+por\s+(?:lote|grupo)/i.test(header)) return "Por lote";
-  // Look for lote references
-  if (/\blote\s+(?:único|[0-9])/i.test(header) && !/\bpor\s+item\b/i.test(header)) return "Por lote";
-  return "Não identificado no edital";
-}
-
-// ── Field Extractors ──
 function extractNumeroEdital(text: string): string {
   const header = text.slice(0, 8000);
-
-  // Strategy 1: Labeled field ("Edital nº", "Pregão Eletrônico DEMAP nº")
   const labeled = firstMatch(header, [
     /(?:EDITAL|PREGÃO|PREGAO|CONCORRÊNCIA|CONCORRENCIA|TOMADA\s+DE\s+PREÇOS?|DISPENSA|INEXIGIBILIDADE|LEILÃO|CONVITE|DIÁLOGO\s+COMPETITIVO)\s*(?:ELETRÔNIC[OA]\s*)?(?:[A-Z][A-Za-z]*\s+)?(?:N[°ºo.]*\s*)?([\d]+[\d.\-\/]+\d+)/i,
     /(?:EDITAL)\s*(?:N[°ºo.]*\s*)?([\w\-]+\/\d{4})/i,
   ]);
   if (labeled) return labeled;
-
-  // Strategy 2: Process number
   const processo = firstMatch(header, [
     /(?:PROCESSO\s+(?:LICITATÓRIO\s+)?(?:N[°ºo.]*\s*)?)([\d.\-\/]+\d+)/i,
   ]);
   if (processo) return processo;
-
-  // Strategy 3: Any "nº XX/YYYY" pattern near relevant keywords
   const generic = firstMatch(header, [
     /(?:n[°ºo.]+)\s*([\d]+[\d.\-\/]*\/\d{4})/i,
   ]);
   if (generic) return generic;
-
   return "Não identificado";
-}
-
-function extractModalidade(text: string): string {
-  const header = text.slice(0, 6000);
-
-  // Strategy 1: Labeled field ("Modalidade: ...")
-  const labeled = firstMatch(header, [
-    /modalidade\s*[:.\-–—]\s*([^\n]{5,80})/i,
-  ]);
-  if (labeled) {
-    const cleaned = labeled.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
-    if (cleaned.length >= 5) return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-  }
-
-  // Strategy 2: Structural patterns in the text — extract the actual words
-  const structuralPatterns = [
-    /((?:concorrência|pregão|pregao|tomada\s+de\s+preços?|dispensa|inexigibilidade|leilão|leilao|convite|diálogo\s+competitivo)\s*(?:eletrônic[oa]|eletronico|presencial|públic[oa]|internacional|de\s+licitação)?)/gi,
-  ];
-
-  // Scan header first, then full text
-  for (const source of [header, text]) {
-    for (const pattern of structuralPatterns) {
-      for (const match of source.matchAll(pattern)) {
-        const raw = match[1].replace(/\s+/g, " ").trim();
-        if (raw.length >= 5) return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-      }
-    }
-    if (source === header) continue;
-  }
-
-  return "Não identificado";
-}
-
-// normalizeModalidade removed — extractModalidade now handles normalization inline
-
-function normalizeInstitutionCase(value: string): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  if (!compact) return "";
-
-  if (compact === compact.toUpperCase() && /[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ]/.test(compact)) {
-    const smallWords = new Set(["de", "da", "do", "das", "dos", "e"]);
-    return compact
-      .toLowerCase()
-      .split(" ")
-      .map((word, index) => {
-        if (index > 0 && smallWords.has(word)) return word;
-        if (/^[ivxlcdm]+$/i.test(word)) return word.toUpperCase();
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(" ");
-  }
-
-  return compact.charAt(0).toUpperCase() + compact.slice(1);
-}
-
-/**
- * Structure-based organ extraction.
- * Instead of relying on a vocabulary of institution types, this extracts
- * the organ from the document structure:
- *   1. Labeled fields ("Órgão:", "Contratante:", "Unidade Gestora:")
- *   2. Preamble patterns ("por intermédio de/do/da ...")
- *   3. Header lines before "EDITAL" (typically the institution name in all-caps)
- *   4. CNPJ-adjacent lines (institution name usually precedes its CNPJ)
- */
-function cleanOrgaoCandidate(raw: string): string {
-  let value = raw.replace(/\s+/g, " ").trim();
-
-  // Strip common label prefixes
-  value = value
-    .replace(/^\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora|secretaria\s+requisitante)\s*[:.]?\s*/i, "")
-    .replace(/^\s*(?:a|o)\s+/i, "")
-    .trim();
-
-  // Strip address/contact tails
-  value = value
-    .replace(/\s+(?:esplanada|rua|avenida|av\.?|praça|travessa|rodovia|bairro|cep|telefone|fone|site|e-?mail|http|www\.|bloco\b|anexo\b|sala\b|andar\b|setor\b|quadra\b|lote\b)\s*[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:publicad[ao]|realizar[áa]|promover[áa]|instaurar[áa]?|torna\s+p[úu]blico|situad[ao]|inscrit[ao]|cadastrad[ao]|representad[ao]|neste\s+ato)\b[\s\S]*$/i, "")
-    .replace(/\s+(?:por\s+meio|por\s+interm[eé]dio|atrav[ée]s)\s+d[ao]\b[\s\S]*$/i, "")
-    .replace(/\s*[-–—:]\s*(?:cnpj|uasg|ug|processo|preg[ãa]o|pregao|concorr[êe]ncia|edital|código)\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:no|na)\s+(?:d\.o\.[ue]\.?|imprensa\s+oficial|forma\s+eletr[ôo]nica)\b[\s\S]*$/i, "")
-    .replace(/[;:,\-–—]+$/, "")
-    .trim();
-
-  if (!value || value.length < 4 || value.length > 160) return "";
-  // Reject lines that are clearly procedural, not an institution name
-  if (/\b(realizar[áa]|licitaç[ãa]o|preg[ãa]o|pregao|concorr[êe]ncia|objeto|publicad[ao]|sess[ãa]o|proposta|fornecimento|contrataç[ãa]o|crit[ée]rio|d\.o\.[ue]|habilitaç[ãa]o)\b/i.test(value)) return "";
-  // Reject platform/system names — these are not institutions
-  if (/\b(sistema\s+(?:bec|compras|licitac|eletr[oô]nic)|plataforma|comprasnet|compras\.?gov|licitações[\-\s]e|licitacoes[\-\s]e|bec[\s\-\/]?sp|bolsa\s+eletr[oô]nica|portal\s+de\s+compras|licitanet|bll\s+compras)\b/i.test(value)) return "";
-  // Reject if it's just numbers/dates
-  if (/^\d[\d.\/\-\s]+$/.test(value)) return "";
-  // Reject state abbreviation + number (e.g. "PE 98972")
-  if (/^(?:PE|PI|PA|RJ|SP|MG|BA|PR|RS|SC|GO|CE|MA|MT|MS|AM|RN|PB|AL|SE|RO|AC|AP|RR|TO|DF|ES)\s+\d/i.test(value)) return "";
-  // Reject address fragments
-  if (/^(?:esplanada|rua|avenida|av\.?|praça|travessa|rodovia|setor|quadra|lote)\b/i.test(value)) return "";
-  return normalizeInstitutionCase(value);
-}
-
-function scoreOrgaoCandidateStructural(value: string, source: string, positionRatio: number): number {
-  let score = 0;
-
-  // Source-based scoring (most important)
-  if (source === "label") score += 50;       // "Órgão: X" — highest confidence
-  if (source === "preamble") score += 40;    // "por intermédio do X"
-  if (source === "cnpj_adjacent") score += 35; // Line right before CNPJ
-  if (source === "header_line") score += 30; // ALL-CAPS line before EDITAL
-  if (source === "header_line_mixed") score += 20; // Mixed-case line before EDITAL
-
-  // Position: earlier in document = more likely to be the organ
-  if (positionRatio < 0.05) score += 10;
-  else if (positionRatio < 0.15) score += 5;
-  else if (positionRatio > 0.5) score -= 10;
-
-  // All-caps bonus (institutions often appear in all-caps in headers)
-  if (value === value.toUpperCase() && /[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ]/.test(value)) score += 5;
-
-  // Length penalty — very long values are often full sentences, not names
-  if (value.length > 80) score -= 5;
-  if (value.length > 120) score -= 10;
-
-  // Negative: reject noise
-  if (/\b(edital|pregão|pregao|processo|licitação)\b/i.test(value)) score -= 30;
-
-  return score;
-}
-
-function extractOrgao(text: string): string {
-  const header = text.replace(/\r\n/g, "\n").slice(0, 12000);
-  const headerLen = header.length;
-  const preEditalBlock = header.split(/\bEDITAL\b/i)[0] || header.slice(0, 2500);
-  const candidates: Array<{ value: string; score: number }> = [];
-
-  const addCandidate = (raw: string | null | undefined, source: string, index: number) => {
-    if (!raw) return;
-    const cleaned = cleanOrgaoCandidate(raw);
-    if (!cleaned) return;
-    const positionRatio = headerLen > 0 ? index / headerLen : 0;
-    const score = scoreOrgaoCandidateStructural(cleaned, source, positionRatio);
-    if (score > 0) candidates.push({ value: cleaned, score });
-  };
-
-  // ── Strategy 1: Labeled fields (highest confidence) ──
-  const labelPatterns = [
-    /(?:^|\n)\s*(?:órgão(?:\s+gerenciador|\s+licitante|\s+responsável)?|entidade|contratante|unidade\s+gestora)\s*[:.]\s*([^\n]{4,200})/gim,
-  ];
-  for (const pattern of labelPatterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1], "label", match.index ?? 0);
-    }
-  }
-
-  // ── Strategy 2: Preamble patterns ("por intermédio de/do/da ...") ──
-  const preamblePatterns = [
-    /(?:por\s+interm[eé]dio\s+d[ao]|por\s+meio\s+d[ao]|atrav[ée]s\s+d[ao])\s+([^\n,.;]{4,180})/gim,
-    /(?:a\s+uni[ãa]o,?\s+(?:por\s+interm[eé]dio|por\s+meio|representad[ao]\s+pel[ao])\s+(?:d[ao]\s+)?)([^\n,.;]{4,180})/gim,
-  ];
-  for (const pattern of preamblePatterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1], "preamble", match.index ?? 0);
-    }
-  }
-
-  // ── Strategy 3: CNPJ-adjacent lines ──
-  // The institution name almost always appears in the line(s) just before its CNPJ
-  const cnpjMatch = header.match(/CNPJ\s*[:.]?\s*[\d.\/-]+/i);
-  if (cnpjMatch && cnpjMatch.index !== undefined) {
-    const beforeCnpj = header.slice(Math.max(0, cnpjMatch.index - 400), cnpjMatch.index);
-    const linesBefore = beforeCnpj.split("\n").map(l => l.trim()).filter(Boolean);
-    // Take the last non-empty line(s) before CNPJ
-    for (let i = linesBefore.length - 1; i >= Math.max(0, linesBefore.length - 3); i--) {
-      const line = linesBefore[i];
-      if (line && line.length >= 4 && !/\b(cnpj|telefone|fone|fax|e-?mail|cep)\b/i.test(line)) {
-        addCandidate(line, "cnpj_adjacent", Math.max(0, cnpjMatch.index - 200));
-      }
-    }
-  }
-
-  // ── Strategy 4: Header lines before "EDITAL" ──
-  // Editals typically start with the institution name in the first lines
-  const preLines = preEditalBlock
-    .split("\n")
-    .map(l => l.replace(/\s+/g, " ").trim())
-    .filter(l => l.length >= 4);
-
-  for (const line of preLines.slice(0, 30)) {
-    // Skip lines that are clearly page numbers, dates, process numbers
-    if (/^\d+$/.test(line)) continue;
-    if (/^(PE|processo|página|pág|folha)\s/i.test(line)) continue;
-    if (/^\d{1,3}[\/.]\d/.test(line) && line.length < 20) continue;
-
-    const isAllCaps = line === line.toUpperCase() && /[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ]{3,}/.test(line);
-    const source = isAllCaps ? "header_line" : "header_line_mixed";
-    addCandidate(line, source, header.indexOf(line));
-  }
-
-  // Deduplicate and sort by score
-  const unique = Array.from(
-    new Map(
-      candidates
-        .sort((a, b) => b.score - a.score)
-        .map(item => [item.value.toLowerCase(), item])
-    ).values()
-  ).sort((a, b) => b.score - a.score);
-
-  return unique[0]?.value || "Não identificado";
-}
-
-function extractObjeto(text: string): string {
-  const norm = text.replace(/\r\n/g, "\n");
-  const candidates: Array<{ value: string; score: number; index: number }> = [];
-
-  const addCandidate = (raw: string, boost = 0, context = "", index = 0) => {
-    const cleaned = cleanObjetoText(raw);
-    if (!cleaned || cleaned.length < 20 || isLikelyNonObjetoClause(cleaned)) return;
-
-    const score = scoreObjetoCandidate(cleaned) + boost - scoreObjetoContextPenalty(context, index, norm.length);
-    if (score >= 6) {
-      candidates.push({ value: cleaned, score, index });
-    }
-  };
-
-  for (const section of extractObjetoSectionCandidates(norm)) {
-    const context = norm.slice(Math.max(0, section.index - 500), section.index);
-    const primarySectionCandidate = extractPrimaryObjetoFromSection(section.content);
-
-    if (primarySectionCandidate) addCandidate(primarySectionCandidate, 36, context, section.index);
-
-    const explicitSentence = firstMatch(section.content.replace(/\n+/g, " "), [
-      /(?:descri(?:ção|cao)\s*[:.\-–—]?\s*)?(?:o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)|constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)|a\s+presente\s+(?:licitação|contratação)\s+tem\s+por\s+objeto)\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^.]{20,700})/i,
-    ]);
-    if (explicitSentence) addCandidate(explicitSentence, 24, context, section.index);
-
-    addCandidate(section.content, 10, context, section.index);
-  }
-
-  const header = norm.slice(0, Math.min(norm.length, 16000));
-  const inlinePatterns = [
-    /(?:tem\s+por\s+objeto|tem\s+como\s+objeto|cujo\s+objeto\s+[ée]|visa|destina(?:[\-\s]?se)?\s+a)\s+(?:a\s+)?((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^\n.;]{20,500})/gi,
-    /objeto\s*[:]\s*((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)[^\n]{20,500})/gi,
-    /((?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\s+(?:de|para)\s+[^\n]{20,500})/gi,
-  ];
-
-  for (const pattern of inlinePatterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1] || match[0], 12, "", match.index ?? 0);
-    }
-  }
-
-  const ementa = firstMatch(header, [/(?:ementa|súmula)\s*[:.]?\s*([^\n]{20,500})/i]);
-  if (ementa) addCandidate(ementa, 4, "", 0);
-
-  if (candidates.length === 0) return "Não identificado no edital";
-
-  const unique = Array.from(
-    new Map(
-      candidates
-        .sort((a, b) => b.score - a.score || a.index - b.index || a.value.length - b.value.length)
-        .map((item) => [item.value.toLowerCase(), item])
-    ).values()
-  ).sort((a, b) => b.score - a.score || a.index - b.index || a.value.length - b.value.length);
-
-  return unique[0].value;
-}
-
-function extractObjetoSectionCandidates(text: string): Array<{ content: string; index: number }> {
-  const headingPatterns = [
-    /(?:^|\n)\s*(?:\d+(?:\.\d+){0,4}[\.\)]?\s*[-–—:]?\s*)?(?:do\s+)?objeto(?:\s+(?:da|do)\s+(?:licitação|contratação|pregão|edital|certame|contrato))?\s*(?::|\n)/gim,
-    /(?:^|\n)\s*(?:cláusula|cap[íi]tulo|seção)\s+[^\n]{0,60}\bobjeto\b[^\n]*?(?::|\n)/gim,
-  ];
-
-  const starts: Array<{ index: number; end: number }> = [];
-  for (const pattern of headingPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      starts.push({ index: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
-    }
-  }
-
-  const deduped = starts
-    .sort((a, b) => a.index - b.index)
-    .filter((item, index, arr) => index === 0 || item.index - arr[index - 1].index > 8);
-
-  return deduped
-    .map((item) => {
-      const slice = text.slice(item.end, item.end + 5000);
-      const boundary = slice.match(
-        /(?:^|\n)\s*(?:(?:\d+(?:\.\d+){0,4}|[IVXLCDM]+)[\.\)]?\s*[-–—:]?\s*)?(?:(?:DA|DO|DAS|DOS)\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][^\n]{3,140}|(?:CAP[ÍI]TULO|SEÇÃO|TÍTULO|CLÁUSULA|ANEXO)\b[^\n]{0,140})/im
-      );
-
-      return {
-        content: (boundary ? slice.slice(0, boundary.index) : slice).trim(),
-        index: item.index,
-      };
-    })
-    .filter((item) => item.content.length > 0);
-}
-
-function stripObjetoNumbering(line: string): string {
-  return line
-    .replace(/^(?:item\s*)?(?:\d+(?:\.\d+){0,5}|[ivxlcdm]+|[a-z])(?:[\.\)\-–—:]+)?\s+/i, "")
-    .replace(/^\(?\d+\)\s*/i, "")
-    .trim();
-}
-
-function stripObjetoLabel(text: string): string {
-  return text
-    .replace(/^(?:descri(?:ção|cao)(?:\s+do\s+objeto)?|objeto|do\s+objeto|finalidade|especifica(?:ção|cao))\s*[:.\-–—]?\s*/i, "")
-    .trim();
-}
-
-function shouldMergeObjetoLines(current: string, next: string): boolean {
-  const upcoming = next.trim();
-  if (!upcoming) return false;
-
-  if (/^(?:cap[íi]tulo|seção|título|cláusula|anexo)\b/i.test(upcoming)) return false;
-  if (/^(?:\d+(?:\.\d+){0,5}|[ivxlcdm]+)[\.\)]\s+(?:do|da|dos|das|cap[íi]tulo|seção|título|cláusula|anexo)\b/i.test(upcoming)) return false;
-  if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s\-\/]{5,}$/.test(upcoming)) return false;
-
-  if (/^(?:descri(?:ção|cao)|objeto|do\s+objeto|finalidade|especifica(?:ção|cao))\b[:.\-–—]?\s*$/i.test(current)) return true;
-  if (/[,;:\-–—]\s*$/.test(current)) return true;
-  if (/^[a-zà-ÿ(]/.test(upcoming)) return true;
-
-  if (/[.!?]\s*$/.test(current) && !/^(?:e|ou|com|para|por|sem|de|da|do|das|dos)\b/i.test(upcoming.toLowerCase())) {
-    return false;
-  }
-
-  return hasStrongObjetoSignal(current) && current.length < 180 && upcoming.length < 180;
-}
-
-function buildObjetoLineWindows(raw: string): string[] {
-  const lines = raw
-    .split("\n")
-    .map((line) => stripObjetoNumbering(line).replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-
-  const windows: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    let combined = lines[i];
-    windows.push(combined);
-
-    for (let j = i + 1; j < Math.min(lines.length, i + 4); j++) {
-      if (!shouldMergeObjetoLines(combined, lines[j])) break;
-      combined = `${combined} ${lines[j]}`.replace(/\s+/g, " ").trim();
-      windows.push(combined);
-      if (combined.length > 600) break;
-    }
-  }
-
-  return Array.from(new Set(windows));
-}
-
-function stripObjetoLeadIn(text: string): string {
-  return text
-    .replace(/^o\s+(?:presente\s+)?(?:edital|pregão|certame|licitação|instrumento\s+convocatório|contrato|termo\s+de\s+referência)\s+tem\s+(?:por|como)\s+(?:finalidade|objetivo|objeto)\s*/i, "")
-    .replace(/^a\s+presente\s+(?:licitação|contratação)\s+tem\s+por\s+objeto\s*/i, "")
-    .replace(/^o\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo\s+de\s+referência|contrato)\s+(?:é|consiste\s+em|tem\s+por\s+(?:finalidade|objetivo)|visa|destina(?:[\-\s]?se)?\s+a)\s*/i, "")
-    .replace(/^constitui\s+objeto\s+(?:do\s+presente\s+)?(?:edital|pregão|certame|licitação|contratação|termo|contrato)\s*/i, "")
-    .replace(/^[:.\-\s]+/, "")
-    .trim();
-}
-
-function stripObjetoTail(text: string): string {
-  let result = text
-    // Truncate at next numbered clause (e.g. "1.2.", "1.3.", "2.1.")
-    .replace(/\s+\d+\.\d+[\.\)]\s[\s\S]*$/, "")
-    .replace(/\s*,?\s*conforme\s+(?:as?\s+)?(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?|quantitativos?)\s+(?:técnicas?\s+)?(?:constantes?\s+)?(?:do|da|de)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|instrumento\s+convocatório|projeto\s+básico|estudo\s+técnico\s+preliminar|planilha|memorial)\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:na\s+forma|nos\s+termos|de\s+acordo)\s+(?:do|da|dos|das)\s+(?:termo\s+de\s+referência|anexo(?:s)?(?:\s*[a-z0-9ivxlcdm\-]+)?|instrumento\s+convocatório|projeto\s+básico)\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*que\s+integra\s+(?:este|o)?\s*edital\b[\s\S]*$/i, "")
-    .replace(/\s*,?\s*(?:observadas?|obedecidas?)\s+as?\s+(?:especifica(?:ç|c)[õo]es?|condiç(?:õ|o)es?)\b[\s\S]*$/i, "")
-    .trim();
-  return result;
-}
-
-function normalizeObjetoCandidate(text: string): string {
-  let value = text.replace(/\s+/g, " ").trim();
-  value = stripObjetoLabel(value);
-  value = stripObjetoLeadIn(value);
-
-  const action = value.match(/\b(contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i);
-  if (action && typeof action.index === "number" && action.index > 0 && action.index < 140) {
-    value = value.slice(action.index);
-  }
-
-  value = stripObjetoTail(value)
-    .replace(/^[:.\-\s]+/, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[;:,\.\-–—]+$/, "")
-    .trim();
-
-  return value;
-}
-
-function extractPrimaryObjetoFromSection(section: string): string | null {
-  const leadingBlock = section
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 10)
-    .join("\n");
-
-  const ranked = buildObjetoLineWindows(leadingBlock)
-    .map((raw) => {
-      const cleaned = normalizeObjetoCandidate(raw);
-      if (!cleaned || cleaned.length < 20 || !hasStrongObjetoSignal(cleaned) || isLikelyNonObjetoClause(cleaned)) {
-        return null;
-      }
-
-      let score = scoreObjetoCandidate(cleaned);
-      if (/^(?:descri(?:ção|cao)|objeto|do\s+objeto)\b/i.test(raw)) score += 12;
-      if (/^(?:contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i.test(cleaned)) {
-        score += 10;
-      }
-
-      return { value: cleaned, score };
-    })
-    .filter((item): item is { value: string; score: number } => item !== null)
-    .sort((a, b) => b.score - a.score || a.value.length - b.value.length);
-
-  return ranked[0]?.value ?? null;
-}
-
-function startsWithNonObjetoClause(text: string): boolean {
-  return /^(?:o|a|os|as)?\s*(pagamentos?|vig[êe]ncia|reajuste|repactua(?:ção|ções)|sanç(?:ão|ões)|penalidades?|multas?|dotaç(?:ão|ões)|nota\s+fiscal|faturamento|recebimento|fiscaliza(?:ção|ções)|habilita(?:ção|ções)|impugna(?:ção|ções)|esclarecimentos?|recurso(?:s)?|proposta(?:s)?|sessão\s+pública|garantia)\b/i.test(
-    text.trim().toLowerCase()
-  );
-}
-
-function hasStrongObjetoSignal(text: string): boolean {
-  return /\b(contratação|aquisição|fornecimento|prestação(?:\s+de\s+serviços?)?|execução(?:\s+de\s+obras?)?|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i.test(text);
-}
-
-function isLikelyNonObjetoClause(text: string): boolean {
-  const value = text.toLowerCase();
-  const negativePattern = /\b(pagamento|pagamentos|vig[êe]ncia|reajuste|repactua(?:ção|ções)|sanç(?:ão|ões)|penalidades?|multa|dotaç(?:ão|ões)|nota\s+fiscal|faturamento|recebimento|fiscaliza(?:ção|ções)|habilita(?:ção|ções)|impugna(?:ção|ções)|esclarecimentos?|recurso(?:s)?|proposta(?:s)?|sessão\s+pública|garantia)\b/i;
-
-  if (startsWithNonObjetoClause(text)) return true;
-  return negativePattern.test(value) && !hasStrongObjetoSignal(value);
-}
-
-function scoreObjetoContextPenalty(context: string, index: number, totalLength: number): number {
-  const value = context.toLowerCase();
-  let penalty = 0;
-
-  if (/\banexo\b/.test(value)) penalty += 5;
-  if (/\bminuta\b/.test(value)) penalty += 6;
-  if (/\btermo\s+de\s+contrato\b/.test(value)) penalty += 7;
-  if (/\bcontrato\b/.test(value) && /\bcláusula\b/.test(value)) penalty += 5;
-  if (index > totalLength * 0.55) penalty += 2;
-  if (index > totalLength * 0.75) penalty += 3;
-
-  return penalty;
-}
-
-function scoreObjetoCandidate(text: string): number {
-  const value = text.toLowerCase();
-  let score = 0;
-
-  const positiveSignals: Array<[RegExp, number]> = [
-    [/\bcontratação\b/i, 9],
-    [/\baquisição\b/i, 9],
-    [/\bfornecimento\b/i, 8],
-    [/\bprestação\s+de\s+serviços?\b/i, 8],
-    [/\bexecução\s+de\s+obras?\b/i, 8],
-    [/\bregistro\s+de\s+preços\b/i, 9],
-    [/\blocação\b/i, 7],
-    [/\bcredenciamento\b/i, 7],
-    [/\bseleção\s+da\s+proposta(?:\s+mais\s+vantajosa)?\b/i, 7],
-    [/\bconcessão\b/i, 6],
-    [/\bpermissão\b/i, 6],
-    [/\balienação\b/i, 6],
-    [/\bcessão\b/i, 6],
-    [/\bchamamento\s+público\b/i, 6],
-    [/\bparceria\b/i, 5],
-    [/\bimplantação\b/i, 5],
-    [/\breforma\b/i, 5],
-    [/\bampliação\b/i, 5],
-    [/\bempresa\s+especializada\b/i, 4],
-    [/\bserviços?\b/i, 2],
-    [/\bobra(?:s)?\b/i, 2],
-    [/\bequipamentos?\b/i, 2],
-    [/\bmateriais?\b/i, 2],
-    [/\bsolução\b/i, 2],
-    [/\bsistema\b/i, 2],
-  ];
-  const negativeSignals: Array<[RegExp, number]> = [
-    [/\bpagamentos?\b/i, 14],
-    [/\bvig[êe]ncia\b/i, 10],
-    [/\breajuste\b/i, 10],
-    [/\bsanç(?:ão|ões)\b/i, 10],
-    [/\bpenalidades?\b/i, 10],
-    [/\bmulta\b/i, 8],
-    [/\bdotaç(?:ão|ões)\b/i, 8],
-    [/\bnota\s+fiscal\b/i, 8],
-    [/\bfaturamento\b/i, 8],
-    [/\brecebimento\b/i, 7],
-    [/\bfiscaliza(?:ção|ções)\b/i, 7],
-    [/\bhabilita(?:ção|ções)\b/i, 8],
-    [/\bimpugna(?:ção|ções)\b/i, 8],
-    [/\besclarecimentos?\b/i, 8],
-    [/\brecursos?\b/i, 6],
-    [/\bpropostas?\b/i, 6],
-    [/\bsessão\s+pública\b/i, 6],
-  ];
-
-  for (const [pattern, points] of positiveSignals) {
-    if (pattern.test(value)) score += points;
-  }
-  for (const [pattern, points] of negativeSignals) {
-    if (pattern.test(value)) score -= points;
-  }
-
-  if (startsWithNonObjetoClause(text)) score -= 18;
-  if (/r\$\s*[\d.,]+/i.test(value)) score -= 5;
-  if (/\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4}/.test(value)) score -= 4;
-  if (value.length < 25) score -= 8;
-  if (value.length > 550) score -= 4;
-  if (/^(contratação|aquisição|fornecimento|prestação|execução|registro\s+de\s+preços|locação|credenciamento|seleção\s+da\s+proposta|concessão|permissão|alienação|cessão|chamamento\s+público|parceria|implantação|reforma|ampliação)\b/i.test(text)) score += 6;
-
-  return score;
-}
-
-function cleanObjetoText(raw: string): string {
-  const normalized = buildObjetoLineWindows(raw)
-    .map((line) => normalizeObjetoCandidate(line))
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter((line) => {
-      if (line.length < 20) return false;
-      if (/^(objeto|descri(?:ção|cao)|cláusula|cap[íi]tulo|seção|anexo)\b/i.test(line) && line.length < 60) return false;
-      return true;
-    });
-
-  if (normalized.length === 0) return "";
-
-  const strongCandidates = normalized
-    .filter((line) => hasStrongObjetoSignal(line) && !isLikelyNonObjetoClause(line))
-    .map((line) => ({ line, score: scoreObjetoCandidate(line) }))
-    .sort((a, b) => b.score - a.score || a.line.length - b.line.length);
-
-  const best = strongCandidates[0];
-  if (!best || best.score < 6) return "";
-
-  let result = best.line
-    .replace(/^[:.\-\s]+/, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[;:,\.\-–—]+$/, "")
-    .trim();
-
-  if (!result || isLikelyNonObjetoClause(result)) return "";
-
-  return result.charAt(0).toUpperCase() + result.slice(1, 800);
 }
 
 function extractValorEstimado(text: string): string {
   const norm = text.replace(/\r\n/g, "\n");
   const candidates: Array<{ value: string; score: number }> = [];
-
   const patterns: Array<[RegExp, number]> = [
-    // Explicit labeled patterns (highest priority)
+    [/(?:valor\s+total\s+(?:da\s+)?(?:contratação|licitação|aquisição|contratacao|licitacao|aquisicao))\s*[:.\-–—]?\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 32],
     [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 30],
     [/(?:valor\s+(?:total\s+)?(?:estimado|máximo|global|de\s+referência|referencial|previsto))\s*[:.]?\s*(R\$\s*[\d.,]+)/gi, 28],
     [/(?:orçamento\s+(?:estimado|máximo|previsto|sigiloso))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+(?:\s*\([^)]{0,200}\))?)/gi, 26],
     [/(?:preço\s+(?:total\s+)?(?:estimado|máximo|de\s+referência))\s*(?:é\s+de|de|:)\s*(R\$\s*[\d.,]+)/gi, 24],
     [/(?:montante\s+(?:total\s+)?(?:estimado|de|global))\s*(?:é\s+de|de|:)?\s*(R\$\s*[\d.,]+)/gi, 22],
-    // Table-style: "Valor Total | R$ xxx" or "VALOR ESTIMADO R$ xxx"
     [/(?:valor\s+(?:total|estimado|máximo|global))\s*[|:]\s*(R\$\s*[\d.,]+)/gi, 22],
-    // "no valor de R$"
     [/(?:no\s+valor\s+(?:total\s+)?de)\s+(R\$\s*[\d.,]+)/gi, 18],
-    // "importa em R$"
     [/(?:importa(?:ndo)?\s+em)\s+(R\$\s*[\d.,]+)/gi, 16],
-    // Standalone R$ with contextual keywords nearby
     [/(?:(?:total|global|estimad[oa]|máxim[oa]|referência)\s*(?:de|:)?\s*)(R\$\s*[\d.,]+)/gi, 14],
-    // Broad: just R$ values near "valor" keyword within 200 chars
     [/valor[^R]{0,80}(R\$\s*[\d.,]+)/gi, 10],
   ];
-
   for (const [pattern, boost] of patterns) {
     for (const match of norm.matchAll(pattern)) {
       const raw = match[1]?.trim();
       if (!raw) continue;
-      // Parse numeric value to filter out tiny amounts (likely unit prices)
       const numStr = raw.replace(/R\$\s*/i, "").replace(/\./g, "").replace(",", ".").replace(/\s*\(.*$/, "");
       const num = parseFloat(numStr);
-      // Skip values less than R$ 100 (likely unit prices or percentages)
       if (isNaN(num) || num < 100) continue;
-      // Boost higher values (more likely to be the total)
       const valueBoost = num > 1000000 ? 4 : num > 100000 ? 2 : 0;
       candidates.push({ value: raw.replace(/\s+/g, " "), score: boost + valueBoost });
     }
   }
-
   if (candidates.length === 0) return "Não informado no edital";
-
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0].value;
 }
 
-const CRITERIO_BASE_REGEX = /\b(menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico)\b/i;
-
-function normalizeCriterio(raw: string): string {
-  let value = raw.replace(/\s+/g, " ").trim();
-
-  value = value
-    .replace(/^(?:crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento))\s*[:.\-–—]?\s*/i, "")
-    .replace(/^(?:o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de|as\s+propostas?\s+ser[aã]o\s+julgadas?\s+pelo?\s+crit[ée]rio\s+de)\s*/i, "")
-    .replace(/\s*,?\s*(?:conforme|observadas?|nos\s+termos|para\s+fins|na\s+forma|previsto)\b[\s\S]*$/i, "")
-    .replace(/\s+(?:modo\s+de\s+disputa|disputa\s+(?:aberto|fechado))\b[\s\S]*$/i, "")
-    .replace(/[;:,\.\-–—]+$/, "")
-    .trim();
-
-  const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const byItem = /por\s+itens?|item(?:ns)?/.test(plain);
-  const byLote = /por\s+lotes?|lote(?:s)?/.test(plain);
-  const byGrupo = /por\s+grupos?|grupo(?:s)?/.test(plain);
-  const global = /\bglobal\b/.test(plain);
-
-  if (/menor\s+preco/.test(plain)) {
-    if (global) return "Menor preço global";
-    if (byItem) return "Menor preço por item";
-    if (byLote) return "Menor preço por lote";
-    if (byGrupo) return "Menor preço por grupo";
-    return "Menor preço";
-  }
-
-  if (/maior\s+desconto/.test(plain)) return "Maior desconto";
-  if (/tecnica\s+e\s+preco/.test(plain)) return "Técnica e preço";
-  if (/melhor\s+tecnica/.test(plain)) return "Melhor técnica";
-  if (/maior\s+oferta/.test(plain)) return "Maior oferta";
-  if (/maior\s+lance/.test(plain)) return "Maior lance";
-  if (/maior\s+retorno\s+economico/.test(plain)) return "Maior retorno econômico";
-
-  return "";
-}
-
-function scoreCriterioCandidate(raw: string, cleaned: string): number {
-  let score = 0;
-  const value = raw.toLowerCase();
-
-  if (/crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento)/i.test(value)) score += 18;
-  if (/o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de/i.test(value)) score += 14;
-  if (CRITERIO_BASE_REGEX.test(value)) score += 16;
-  if (/\bglobal\b|por\s+item|por\s+lote|por\s+grupo/i.test(value)) score += 4;
-  if (/modo\s+de\s+disputa|disputa\s+(?:aberto|fechado)/i.test(value)) score -= 12;
-  if (/sess[ãa]o|habilita|objeto/i.test(value) && !/crit[ée]rio|julgamento/i.test(value)) score -= 6;
-  if (!cleaned) score -= 20;
-  if (value.length > 120) score -= 4;
-
-  return score;
-}
-
-function extractCriterio(text: string): string {
-  const norm = text.replace(/\r\n/g, "\n");
-  const header = norm.slice(0, 20000);
-  const candidates: Array<{ value: string; score: number; index: number }> = [];
-
-  const addCandidate = (raw: string | null | undefined, boost = 0, index = 0) => {
-    if (!raw) return;
-    const cleaned = normalizeCriterio(raw);
-    const score = scoreCriterioCandidate(raw, cleaned) + boost - (index > header.length * 0.7 ? 2 : 0);
-    if (cleaned && score >= 12) {
-      candidates.push({ value: cleaned, score, index });
-    }
-  };
-
-  const patterns = [
-    /(?:crit[ée]rio\s+de\s+julgamento|tipo\s+de\s+(?:licita(?:ç|c)[ãa]o|julgamento))\s*[:.\-–—]?\s*([^\n.;]{8,120})/gi,
-    /(?:o\s+julgamento\s+será\s+o\s+de|ser[áa]\s+adotado\s+o\s+crit[ée]rio\s+de|adotar-se-á\s+o\s+crit[ée]rio\s+de|as\s+propostas?\s+ser[aã]o\s+julgadas?\s+pelo?\s+crit[ée]rio\s+de)\s+([^\n.;]{8,120})/gi,
-    /((?:menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico)(?:\s+(?:global|por\s+item|por\s+lote|por\s+grupo|por\s+itens|por\s+lotes|por\s+grupos))?)/gi,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of header.matchAll(pattern)) {
-      addCandidate(match[1] || match[0], 12, match.index ?? 0);
-    }
-  }
-
-  const lines = header
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    if (/crit[ée]rio|julgamento|menor\s+preço|maior\s+desconto|técnica\s+e\s+preço|tecnica\s+e\s+preco|melhor\s+técnica|melhor\s+tecnica|maior\s+oferta|maior\s+lance|maior\s+retorno\s+econômico/i.test(line)) {
-      addCandidate(line, 8, header.indexOf(line));
-    }
-  }
-
-  const unique = Array.from(
-    new Map(
-      candidates
-        .sort((a, b) => b.score - a.score || a.index - b.index)
-        .map((item) => [item.value.toLowerCase(), item])
-    ).values()
-  ).sort((a, b) => b.score - a.score || a.index - b.index);
-
-  return unique[0]?.value || "Não identificado";
-}
-
 function extractDataSessao(text: string): string {
-  // Strategy 1: Labeled fields
   const labeledPatterns = [
     /(?:data\s+(?:e\s+hor[áa]rio?\s+)?(?:da\s+)?sessão\s+pública|data\s+(?:e\s+hor[áa]rio?\s+)?(?:de\s+)?abertura|sessão\s+pública|abertura\s+d[aoe]s?\s+propostas?|abertura\s+d[ao]\s+certame|data\s+d[aoe]\s+sessão|data\s+d[aoe]\s+certame|início\s+da\s+sessão)\s*[:.]?\s*(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
   ];
-
   for (const pattern of labeledPatterns) {
     for (const match of text.matchAll(pattern)) {
       const date = match[1]?.replace(/\s/g, '');
@@ -860,12 +148,9 @@ function extractDataSessao(text: string): string {
       if (date) return time ? `${date} às ${time}` : date;
     }
   }
-
-  // Strategy 2: Date near session keywords
   const contextPatterns = [
     /(?:sessão|abertura|certame|disputa)\s+[^.]{0,80}?(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\s*[,;]?\s*(?:às?|a\s+partir\s+de)?\s*(\d{1,2}\s*[h:]\s*\d{0,2})?/gi,
   ];
-
   for (const pattern of contextPatterns) {
     for (const match of text.matchAll(pattern)) {
       const date = match[1]?.replace(/\s/g, '');
@@ -873,173 +158,145 @@ function extractDataSessao(text: string): string {
       if (date) return time ? `${date} às ${time}` : date;
     }
   }
-
   return "Não identificado";
 }
 
-function extractSistema(text: string): string {
-  const candidates: Array<{ value: string; score: number }> = [];
+// ── AI Extraction for Semantic Fields ──
 
-  const addCandidate = (value: string, score: number) => {
-    let cleaned = value.replace(/\s+/g, " ").trim().replace(/[;:,.\-–—]+$/, "").trim();
-    // Strip leading "endereço eletrônico" or similar labels that leaked in
-    cleaned = cleaned.replace(/^(?:endereço\s+eletrônico|endereco\s+eletronico|sistema\s+eletrônico|sistema\s+eletronico|sítio|sitio|site|portal)\s*[:.\-–—]?\s*/i, "").trim();
-    if (cleaned.length < 3 || cleaned.length > 150) return;
-    // Reject if it's just "www" or a bare partial URL fragment
-    if (/^www\.?$/i.test(cleaned)) return;
-    candidates.push({ value: cleaned, score });
-  };
-
-  // Strategy 1: Explicit "será realizado por meio de/no/através de" — highest confidence
-  const realizadoPatterns = [
-    /(?:será|sera)\s+realizad[oa]\s+(?:por\s+meio\s+d[ao]|n[ao]|atrav[ée]s\s+d[ao]|pelo)\s+([^\n,.;]{5,120})/gi,
-    /(?:propostas?\s+(?:deverão|devem|serão)\s+ser\s+(?:enviadas?|encaminhadas?|cadastradas?)\s+(?:por\s+meio|através|no)\s+(?:d[ao]?\s+)?)([^\n,.;]{5,120})/gi,
-    /(?:utilizar[áa]|utilizar)\s+(?:o\s+)?(?:sistema|plataforma|portal)\s+([^\n,.;]{5,120})/gi,
-  ];
-  for (const pattern of realizadoPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      addCandidate(match[1], 35);
-    }
-  }
-
-  // Strategy 2: Labeled fields ("Plataforma:", "Sistema:", "Local da sessão:")
-  const labelPatterns = [
-    /(?:plataforma|local\s+da\s+sessão|local\s+da\s+disputa)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
-    /(?:sistema\s+eletrônico|sistema\s+eletronico)\s*[:.\-–—]\s*([^\n]{5,150})/gi,
-  ];
-  for (const pattern of labelPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      addCandidate(match[1], 30);
-    }
-  }
-
-  // Strategy 3: Platform names found in the text — extract the actual matched text
-  const platformPatterns: Array<[RegExp, string, number]> = [
-    [/portal\s+de\s+compras\s+do\s+governo\s+federal/i, "Portal de Compras do Governo Federal", 25],
-    [/compras\.?gov\.?br|comprasnet/i, "Comprasnet (compras.gov.br)", 25],
-    [/gov\.br\/compras/i, "gov.br/compras", 24],
-    [/bolsa\s+eletrônica\s+de\s+compras\s+(?:do\s+estado\s+de\s+)?(?:são\s+paulo|sp)|bec[\s\-\/]?sp/i, "BEC/SP - Bolsa Eletrônica de Compras", 24],
-    [/licitações[\-\s]e|licitacoes[\-\s]e|www\.licitacoes-e\.com/i, "Licitações-e (Banco do Brasil)", 22],
-    [/licitanet/i, "Licitanet", 20],
-    [/bll\s+compras|bllcompras/i, "BLL Compras", 20],
-    [/portal\s+de\s+compras/i, "Portal de Compras", 18],
-  ];
-
-  for (const [pattern, label, boost] of platformPatterns) {
-    if (pattern.test(text)) {
-      candidates.push({ value: label, score: boost });
-    }
-  }
-
-  // Strategy 4: URLs near platform keywords
-  const urlPatterns = [
-    /(?:plataforma|sistema|portal|acess)\w*[^.\n]{0,60}((?:www\.\S+|https?:\/\/\S+))/gi,
-    /(?:endereço\s+eletrônico|endereco\s+eletronico|sítio|sitio|site)\s*[:.\-–—]?\s*((?:www\.\S+|https?:\/\/\S+))/gi,
-  ];
-  for (const pattern of urlPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      const url = match[1].replace(/[),;."']+$/, "").trim();
-      if (url.length >= 8) addCandidate(url, 15);
-    }
-  }
-
-  if (candidates.length === 0) return "Não identificado no edital";
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0].value;
+interface AIExtractionResult {
+  objeto: string;
+  orgao: string;
+  modalidade: string;
+  criterio_julgamento: string;
+  sistema_licitacao: string;
+  participacao: string;
+  unidade_disputa: string;
+  habilitacao: string;
+  consorcio: "sim" | "nao" | "nao_identificado";
+  cooperativas_vedadas: boolean;
+  subcontratacao: "sim" | "nao" | "nao_identificado";
+  amostra: "sim" | "nao" | "nao_identificado";
+  garantia_execucao: "sim" | "nao" | "nao_identificado";
+  is_srp: boolean;
+  preco_maximo: boolean;
+  exclusividade_meepp: boolean;
+  catalogo_exigido: boolean;
+  marca_modelo_exigido: boolean;
 }
 
-function extractHabilitacao(text: string): string {
-  const section = extractSection(
-    text,
-    [
-      /(?:^|\n)\s*(?:\d+[\.\)]?\s*)?(?:D[AO]S?\s+)?(?:CONDIÇÕES\s+DE\s+)?HABILITAÇÃO\s*[:.\n]/im,
-      /(?:^|\n)\s*(?:\d+[\.\)]?\s*)?DOCUMENTOS?\s+(?:DE|PARA)\s+HABILITAÇÃO\s*[:.\n]/im,
-    ],
-    [
-      /\n\s*(?:\d+[\.\)]|CAPÍTULO|SEÇÃO)\s+(?:D[AO]S?\s+)?(?:PROPOSTA|JULGAMENTO|RECURSO|IMPUGNAÇÃO|CONTRATO|SANÇÕES)/i,
-    ],
-    6000
-  );
+function defaultAIResult(): AIExtractionResult {
+  return {
+    objeto: "Não identificado no edital",
+    orgao: "Não identificado",
+    modalidade: "Não identificado",
+    criterio_julgamento: "Não identificado",
+    sistema_licitacao: "Não identificado no edital",
+    participacao: "Não identificado no edital",
+    unidade_disputa: "Não identificado no edital",
+    habilitacao: "Consultar seção de habilitação no edital",
+    consorcio: "nao_identificado",
+    cooperativas_vedadas: false,
+    subcontratacao: "nao_identificado",
+    amostra: "nao_identificado",
+    garantia_execucao: "nao_identificado",
+    is_srp: false,
+    preco_maximo: false,
+    exclusividade_meepp: false,
+    catalogo_exigido: false,
+    marca_modelo_exigido: false,
+  };
+}
 
-  const src = section || text;
-  const summary: string[] = [];
+const EXTRACTION_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "extract_edital_metadata",
+    description: "Extrai metadados estruturados de um edital de licitação brasileiro",
+    parameters: {
+      type: "object",
+      properties: {
+        objeto: { type: "string", description: "Descrição do objeto (o que é contratado/adquirido). Elimine referências a leis/decretos/normas administrativas. Foque no bem/serviço/obra. Max 500 chars." },
+        orgao: { type: "string", description: "Nome completo do órgão/entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo). NUNCA confunda com plataforma de compras." },
+        modalidade: { type: "string", description: "Modalidade: 'Pregão eletrônico', 'Concorrência eletrônica', 'Tomada de preços', 'Dispensa', etc." },
+        criterio_julgamento: { type: "string", description: "Critério: 'Menor preço por item', 'Menor preço global por lote', 'Maior desconto', 'Técnica e preço', etc. Inclua a unidade (por item/lote/global) se identificada." },
+        sistema_licitacao: { type: "string", description: "Plataforma/sistema eletrônico onde ocorre a disputa: 'ComprasGov (compras.gov.br)', 'BEC/SP', 'Licitações-e', 'Portal de Compras do Governo Federal', etc. NUNCA confunda com o órgão." },
+        participacao: { type: "string", enum: ["Exclusiva ME/EPP", "Ampla concorrência", "Não identificado no edital"], description: "'Exclusiva ME/EPP' SÓ se EXPRESSAMENTE declarado. Se 'EXCLUSIVIDADE ME/EPP: NÃO', marque 'Ampla concorrência'." },
+        unidade_disputa: { type: "string", enum: ["Por item", "Por lote", "Global", "Não identificado no edital"] },
+        habilitacao: { type: "string", description: "Resumo dos documentos de habilitação por categoria com emojis: 📜 Hab. Jurídica: docs...\n🏦 Regularidade Fiscal/Trabalhista: docs...\n🔧 Qualificação Técnica: docs...\n📊 Qualificação Econômico-Financeira: docs...\n📝 Declarações: docs... Separe categorias com \\n." },
+        consorcio: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Consórcio EXPRESSAMENTE admitido ou vedado no texto?" },
+        cooperativas_vedadas: { type: "boolean", description: "Cooperativas EXPRESSAMENTE vedadas?" },
+        subcontratacao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Subcontratação EXPRESSAMENTE admitida ou vedada?" },
+        amostra: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Amostra OBRIGATORIAMENTE exigida='sim', EXPRESSAMENTE dispensada='nao', ou inconclusiva/não mencionada='nao_identificado'?" },
+        garantia_execucao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Garantia de execução/contratual EXPRESSAMENTE exigida ou dispensada?" },
+        is_srp: { type: "boolean", description: "É Sistema de Registro de Preços (SRP)?" },
+        preco_maximo: { type: "boolean", description: "Há preço máximo ou valor estimado de referência declarado?" },
+        exclusividade_meepp: { type: "boolean", description: "Participação EXCLUSIVA para ME/EPP? Se 'EXCLUSIVIDADE ME/EPP: NÃO', marque false." },
+        catalogo_exigido: { type: "boolean", description: "É exigida apresentação de catálogo, ficha técnica ou laudo?" },
+        marca_modelo_exigido: { type: "boolean", description: "É exigida indicação de marca/modelo na proposta?" },
+      },
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido"],
+      additionalProperties: false,
+    },
+  },
+};
 
-  // ── Habilitação Jurídica ──
-  if (/(?:habilitação\s+)?jurídica|ato\s+constitutivo|contrato\s+social|registro\s+comercial/i.test(src)) {
-    const docs: string[] = [];
-    if (/ato\s+constitutivo|contrato\s+social|estatuto/i.test(src)) docs.push("contrato social/estatuto");
-    if (/cnpj/i.test(src)) docs.push("CNPJ");
-    if (/registro\s+comercial/i.test(src)) docs.push("registro comercial");
-    if (/decreto\s+de\s+autorização/i.test(src)) docs.push("decreto de autorização");
-    summary.push(`📜 Habilitação Jurídica: ${docs.length > 0 ? docs.join(', ') : 'documentos constitutivos da empresa'}`);
+async function extractSemanticFieldsViaAI(text: string): Promise<AIExtractionResult> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.error("LOVABLE_API_KEY not configured, falling back to defaults");
+    return defaultAIResult();
   }
 
-  // ── Regularidade Fiscal e Trabalhista ──
-  if (/regularidade\s+fiscal|certidão|fgts|inss|cndt|fazenda|tribut/i.test(src)) {
-    const docs: string[] = [];
-    if (/(?:certidão|cnd).*(?:federal|união|receita\s+federal|pgfn)/i.test(src) || /débitos?\s+(?:relativos\s+a\s+)?(?:créditos?\s+)?tributários?\s+federai/i.test(src)) docs.push("CND Federal/PGFN");
-    if (/(?:certidão|cnd).*estadual|fazenda\s+estadual|icms/i.test(src)) docs.push("CND Estadual");
-    if (/(?:certidão|cnd).*municipal|iss|fazenda\s+municipal|tributos?\s+municipai/i.test(src)) docs.push("CND Municipal");
-    if (/fgts|crf/i.test(src)) docs.push("CRF/FGTS");
-    if (/inss|previdenciári/i.test(src)) docs.push("CND Previdenciária");
-    if (/cndt|trabalhista/i.test(src)) docs.push("CNDT Trabalhista");
-    if (/sicaf/i.test(src)) docs.push("SICAF");
-    summary.push(`🏦 Regularidade Fiscal/Trabalhista: ${docs.length > 0 ? docs.join(', ') : 'certidões fiscais e trabalhistas'}`);
-  }
+  const truncated = text.slice(0, 30000);
+  const systemPrompt = `Você é um especialista em licitações públicas brasileiras. Extraia metadados do edital usando EXCLUSIVAMENTE o texto fornecido.
 
-  // ── Qualificação Técnica ──
-  if (/qualificação\s+técnica|atestado|acervo|capacidade\s+técnica|crea|cau|registro\s+profissional/i.test(src)) {
-    const docs: string[] = [];
-    if (/atestado/i.test(src)) docs.push("atestado(s) de capacidade técnica");
-    if (/acervo/i.test(src)) docs.push("certidão de acervo técnico");
-    if (/crea|cau|registro\s+(?:no\s+)?conselho/i.test(src)) docs.push("registro em conselho profissional");
-    if (/equipe\s+técnica|profissional|responsável\s+técnico/i.test(src)) docs.push("equipe técnica qualificada");
+REGRAS OBRIGATÓRIAS:
+1. NUNCA invente dados. Se não encontrar, use "Não identificado no edital".
+2. OBJETO: descrição do que é contratado/adquirido. Elimine referências a leis, decretos, atos normativos e normas administrativas. Foque APENAS no bem/serviço/obra. Máximo 500 caracteres.
+3. ÓRGÃO: a entidade que promove a licitação (ex: Defensoria Pública do Estado de São Paulo, INSS, Ministério da Saúde). NUNCA confunda com a plataforma de compras (ComprasGov, BEC/SP, Licitações-e, etc).
+4. PLATAFORMA/SISTEMA: onde ocorre a disputa eletrônica. Exemplos: ComprasGov (compras.gov.br), BEC/SP, Licitações-e, Portal de Compras. NUNCA confunda com o órgão.
+5. PARTICIPAÇÃO: marque "Exclusiva ME/EPP" SOMENTE se o edital declarar EXPRESSAMENTE a exclusividade. Se disser "EXCLUSIVIDADE ME/EPP/EQUIPARADAS: NÃO" ou similar, marque "Ampla concorrência".
+6. Para campos de verdade (consórcio, subcontratação, amostra, garantia, cooperativas): marque "sim"/"nao" SOMENTE com declaração EXPLÍCITA e inequívoca. Se houver dúvida, marque "nao_identificado".
+7. HABILITAÇÃO: resuma por categoria com emojis (📜 Jurídica, 🏦 Fiscal/Trabalhista, 🔧 Técnica, 📊 Econômica, 📝 Declarações). Cada categoria em linha separada.
+8. CRITÉRIO: inclua a unidade de disputa quando identificada (ex: "Menor preço global por lote", "Menor preço por item").`;
 
-    // Try to extract minimum quantities from atestados
-    const qtdMatch = src.match(/atestado[^.]{0,200}(?:comprovan|demonstran)[^.]{0,200}(?:no\s+mínimo|pelo\s+menos|mínimo\s+de)\s*(\d+[%]?)/i);
-    const qtdInfo = qtdMatch ? ` (mínimo: ${qtdMatch[1]})` : '';
-    summary.push(`🔧 Qualificação Técnica: ${docs.length > 0 ? docs.join(', ') : 'comprovação de experiência'}${qtdInfo}`);
-  }
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Analise este edital e extraia os metadados estruturados:\n\n${truncated}` },
+        ],
+        tools: [EXTRACTION_TOOL],
+        tool_choice: { type: "function", function: { name: "extract_edital_metadata" } },
+      }),
+    });
 
-  // ── Qualificação Econômico-Financeira ──
-  if (/qualificação\s+econômico|balanço|capital\s+social|patrimônio\s+líquido|índice|certidão.*falência/i.test(src)) {
-    const docs: string[] = [];
-    if (/balanço\s+patrimonial/i.test(src)) docs.push("balanço patrimonial");
-    if (/capital\s+social/i.test(src)) {
-      const capMatch = src.match(/capital\s+social\s+(?:mínimo\s+(?:de\s+)?)?(?:de\s+)?(R\$\s*[\d.,]+)/i);
-      docs.push(capMatch ? `capital social mínimo de ${capMatch[1]}` : "capital social mínimo");
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`AI gateway error ${response.status}: ${errText}`);
+      return defaultAIResult();
     }
-    if (/patrimônio\s+líquido/i.test(src)) {
-      const plMatch = src.match(/patrimônio\s+líquido\s+(?:mínimo\s+(?:de\s+)?)?(?:de\s+)?(R\$\s*[\d.,]+|\d+[%])/i);
-      docs.push(plMatch ? `patrimônio líquido mínimo de ${plMatch[1]}` : "patrimônio líquido");
+
+    const data = await response.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) {
+      console.error("No tool call in AI response:", JSON.stringify(data).slice(0, 500));
+      return defaultAIResult();
     }
-    if (/(?:índice|indicador).*(?:liquidez|solvência|endividamento)/i.test(src)) {
-      const indices: string[] = [];
-      if (/liquidez\s+(?:geral|lg)/i.test(src)) indices.push("LG");
-      if (/liquidez\s+(?:corrente|lc)/i.test(src)) indices.push("LC");
-      if (/solvência|sg/i.test(src)) indices.push("SG");
-      if (indices.length > 0) docs.push(`índices contábeis (${indices.join(', ')} ≥ 1)`);
-    }
-    if (/certidão.*falência|recuperação\s+judicial/i.test(src)) docs.push("certidão negativa de falência");
-    if (/seguro[\-\s]?garantia|garantia.*proposta/i.test(src)) docs.push("garantia da proposta");
-    summary.push(`📊 Qualificação Econômico-Financeira: ${docs.length > 0 ? docs.join(', ') : 'comprovação de saúde financeira'}`);
-  }
 
-  // ── Declarações ──
-  const decls: string[] = [];
-  if (/menor\s+(?:de\s+)?(?:18|dezoito)|trabalho\s+(?:infantil|de\s+menor)/i.test(src)) decls.push("inexistência de trabalho de menor");
-  if (/declaração.*(?:impedimento|inidoneidade|suspens)/i.test(src)) decls.push("inexistência de impedimentos");
-  if (/declaração.*(?:fato\s+superveniente|impeditivo)/i.test(src)) decls.push("fato superveniente");
-  if (/me[\s\/]epp|microempresa|empresa\s+de\s+pequeno/i.test(src)) decls.push("enquadramento ME/EPP (se aplicável)");
-  if (decls.length > 0) {
-    summary.push(`📝 Declarações: ${decls.join(', ')}`);
+    const parsed = JSON.parse(toolCall.function.arguments);
+    return { ...defaultAIResult(), ...parsed };
+  } catch (e) {
+    console.error("AI extraction failed:", e);
+    return defaultAIResult();
   }
-
-  if (summary.length > 0) {
-    return summary.join('\n');
-  }
-
-  return "Consultar seção de habilitação no edital";
 }
 
 // ── Timeline ──
@@ -1211,12 +468,12 @@ function calcularComplexidade(text: string, dados: Record<string, string>): Comp
   else if (valorNum > 10000000) { score += 0.3; fatoresElevaram.push("Valor acima de R$ 10 milhões"); }
 
   // SRP — NOT a complexity factor, removed
-  // Subcontratação — only if explicitly ALLOWED (not just mentioned or prohibited)
-  const subcontratacaoPermitida = /subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i.test(text)
-    || /(?:autoriza|permite|admite)[\-\s]se\s+(?:a\s+)?subcontrata/i.test(text);
-  const subcontratacaoVedada = /(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i.test(text)
-    || /subcontrata(?:ção|r)\s+(?:não\s+)?(?:será\s+)?(?:vedad|proibid|não\s+(?:será\s+)?(?:admitid|permitid))/i.test(text);
-  if (subcontratacaoPermitida && !subcontratacaoVedada) {
+  // Subcontratação — use AI result if available
+  const subcontratacaoPermitida = aiTruth ? aiTruth.subcontratacao === "sim" : (
+    /subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i.test(text)
+    && !/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i.test(text)
+  );
+  if (subcontratacaoPermitida) {
     score += 0.2;
     fatoresElevaram.push("Prevê subcontratação");
   }
@@ -1436,54 +693,50 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   const sistema = dados.sistema !== "Não identificado" ? dados.sistema : null;
   const criterioHint = criterio ? buildCriterionHint(criterio) : null;
 
-  // ── Truth validations (mandatory before generating output) ──
-  const consorcioStatus = truthCheck(fullText,
-    [/(?:será|serão)\s+(?:admitid|permitid|aceit)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i, /admite[\-\s]se\s+consórcio/i, /consórcio\s+(?:será|é)\s+admitido/i],
+  // ── Truth validations (from AI extraction via dados._ai_* fields) ──
+  const consorcioStatus = (dados._ai_consorcio || truthCheck(fullText,
+    [/(?:será|serão)\s+(?:admitid|permitid|aceit)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i, /admite[\-\s]se\s+consórcio/i],
     [/(?:não\s+(?:será|serão)\s+(?:admitid|permitid|aceit)|veda(?:da|do)|proibid)\w*\s+(?:a\s+)?(?:participação\s+(?:de\s+)?)?(?:empresas?\s+)?(?:em\s+)?consórcio/i]
-  );
-  const exclusividadeMEEPP = truthCheck(fullText,
-    [/(?:participação|licitação|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa|empresa\s+de\s+pequeno\s+porte)/i, /exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa)/i],
+  )) as "sim" | "nao" | "nao_identificado";
+  const exclusividadeMEEPP = (dados._ai_exclusividade_meepp === "true" ? "sim" : dados._ai_exclusividade_meepp === "false" ? "nao_identificado" : truthCheck(fullText,
+    [/(?:participação|licitação|disputa)\s+(?:é\s+)?exclusiv[oa]\s+(?:para\s+)?(?:me|epp|microempresa|empresa\s+de\s+pequeno\s+porte)/i],
     []
-  );
-  const garantiaExecucao = truthCheck(fullText,
-    [/garantia\s+(?:de\s+)?(?:execução|contratual)\s+(?:será|deverá|é)\s+(?:exigid|apresentad|prestad)/i, /exig(?:e|ir)\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i, /seguro[\-\s]garantia/i],
-    [/(?:não\s+(?:será|é)\s+exigid|dispensad|não\s+(?:haverá|há))\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i, /garantia\s+(?:de\s+)?execução[^.]{0,30}(?:dispensad|não\s+(?:será|é)\s+exigid)/i]
-  );
-  const srpStatus = truthCheck(fullText,
-    [/sistema\s+de\s+registro\s+de\s+preços/i, /ata\s+de\s+registro\s+de\s+preços/i, /registro\s+de\s+preços\s+para/i],
+  )) as "sim" | "nao" | "nao_identificado";
+  const garantiaExecucao = (dados._ai_garantia || truthCheck(fullText,
+    [/garantia\s+(?:de\s+)?(?:execução|contratual)\s+(?:será|deverá|é)\s+(?:exigid|apresentad|prestad)/i, /seguro[\-\s]garantia/i],
+    [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+garantia\s+(?:de\s+)?(?:execução|contratual)/i]
+  )) as "sim" | "nao" | "nao_identificado";
+  const srpStatus = (dados._ai_srp === "true" ? "sim" : dados._ai_srp === "false" ? "nao_identificado" : truthCheck(fullText,
+    [/sistema\s+de\s+registro\s+de\s+preços/i, /ata\s+de\s+registro\s+de\s+preços/i],
     []
-  );
-  const amostraStatus = truthCheck(fullText,
-    [/(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i,
-     /amostra\s+(?:será|é)\s+(?:exigid|obrigatóri)/i,
-     /(?:obrigatóri\w+\s+(?:a\s+)?(?:apresentação|entrega)\s+(?:de\s+)?amostra)/i],
-    [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i, /sem\s+(?:necessidade\s+de\s+)?amostra/i]
-  );
-  // Subcontratação truth check
-  const subcontratacaoStatus = truthCheck(fullText,
-    [/subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i,
-     /(?:autoriza|permite|admite)[\-\s]se\s+(?:a\s+)?subcontrata/i,
-     /(?:poderá|pode)\s+(?:ser\s+)?subcontratad/i],
-    [/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i,
-     /subcontrata(?:ção|r)\s+(?:não\s+)?(?:será\s+)?(?:vedad|proibid)/i]
-  );
-  const catalogoStatus = truthCheck(fullText,
-    [/(?:exig|apresent)\w*\s+(?:de\s+)?(?:catálogo|ficha\s+técnica|laudo)/i, /(?:catálogo|ficha\s+técnica|laudo)\s+(?:deverá|será|deve)\s+(?:ser\s+)?(?:apresentad|enviad|juntad)/i],
+  )) as "sim" | "nao" | "nao_identificado";
+  const amostraStatus = (dados._ai_amostra || truthCheck(fullText,
+    [/(?:deverá|deve|será\s+(?:obrigatóri|exigid))\w*\s+(?:a?\s+)?(?:apresent|entreg)\w*\s+(?:de\s+)?amostra/i],
+    [/(?:não\s+(?:será|é)\s+exigid|dispensad)\w*\s+(?:a?\s+)?amostra/i]
+  )) as "sim" | "nao" | "nao_identificado";
+  const subcontratacaoStatus = (dados._ai_subcontratacao || truthCheck(fullText,
+    [/subcontrata(?:ção|r)\s+(?:será\s+)?(?:autorizada|permitida|admitida|prevista)/i],
+    [/(?:não\s+(?:será|é|serão)\s+(?:admitid|permitid|autorizada|aceit)|veda(?:da|do|r)|proibid)\w*\s+(?:a\s+)?subcontrata/i]
+  )) as "sim" | "nao" | "nao_identificado";
+  const catalogoStatus = (dados._ai_catalogo === "true" ? "sim" : dados._ai_catalogo === "false" ? "nao_identificado" : truthCheck(fullText,
+    [/(?:exig|apresent)\w*\s+(?:de\s+)?(?:catálogo|ficha\s+técnica|laudo)/i],
     []
-  );
-  const marcaModeloStatus = truthCheck(fullText,
-    [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto|do\s+equipamento)/i, /(?:marca|modelo|fabricante)\s+(?:deverá|deve|será)\s+(?:ser\s+)?(?:indicad|informad)/i],
+  )) as "sim" | "nao" | "nao_identificado";
+  const marcaModeloStatus = (dados._ai_marca_modelo === "true" ? "sim" : dados._ai_marca_modelo === "false" ? "nao_identificado" : truthCheck(fullText,
+    [/(?:indicar|informar|constar)\s+(?:a?\s+)?(?:marca|modelo|fabricante)\s+(?:na\s+proposta|do\s+produto)/i],
     []
-  );
-  let precoMaximoStatus = truthCheck(fullText,
-    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:máximo|de\s+referência)\s+(?:aceitável|admitido)/i, /não\s+(?:será|serão)\s+aceit\w+\s+(?:proposta|valor|preço)\s+(?:superior|acima)/i,
-     /valor\s+(?:estimado|global|total|orçado|referência|orçament)/i, /preço\s+(?:estimado|de\s+referência|global)/i, /orçamento\s+(?:estimado|previsto|estimativo)/i],
+  )) as "sim" | "nao" | "nao_identificado";
+  let precoMaximoStatus: "sim" | "nao" | "nao_identificado" = dados._ai_preco_maximo === "true" ? "sim" : dados._ai_preco_maximo === "false" ? "nao_identificado" : truthCheck(fullText,
+    [/preço\s+(?:máximo|unitário\s+máximo)\s+(?:aceitável|admitido|de\s+referência)/i, /valor\s+(?:estimado|global|total|orçado|referência)/i],
     []
-  );
-  // If valor_estimado was extracted, there IS a reference price
+  ) as "sim" | "nao" | "nao_identificado";
   if (precoMaximoStatus === "nao_identificado" && valor) {
     precoMaximoStatus = "sim";
   }
+  // Override detectFeatures with AI results where available
+  if (dados._ai_cooperativas_vedadas === "true") feat.vedacaoCooperativas = true;
+  if (dados._ai_subcontratacao === "sim") { feat.subcontratacaoPermitida = true; feat.subcontratacaoVedada = false; }
+  if (dados._ai_subcontratacao === "nao") { feat.subcontratacaoVedada = true; feat.subcontratacaoPermitida = false; }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;
   const prazoEntregaVal = feat.prazoEntrega || null;
 
@@ -1947,26 +1200,31 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
   return sections.join("\n\n---\n\n");
 }
 
-function analyzeEditalText(text: string) {
+async function analyzeEditalText(text: string) {
+  // ── Mechanical extraction (regex — deterministic) ──
   const numero_edital = extractNumeroEdital(text);
-  const modalidade = extractModalidade(text);
-  const orgao = extractOrgao(text);
-  const objeto = extractObjeto(text);
   const valor_estimado = extractValorEstimado(text);
-  const criterio_julgamento = extractCriterio(text);
   const data_sessao = extractDataSessao(text);
-  const sistema_licitacao = extractSistema(text);
-  const condicoes_habilitacao = extractHabilitacao(text);
-  const planilha_estimada = extractPlanilha(text);
   const timeline = extractTimeline(text);
-  const participacao = extractParticipacao(text);
-  const unidade_disputa = extractUnidadeDisputa(text);
+  const planilha_estimada = extractPlanilha(text);
+
+  // ── Semantic extraction (AI — Gemini Flash) ──
+  const ai = await extractSemanticFieldsViaAI(text);
+
+  const modalidade = ai.modalidade;
+  const orgao = ai.orgao;
+  const objeto = ai.objeto;
+  const criterio_julgamento = ai.criterio_julgamento;
+  const sistema_licitacao = ai.sistema_licitacao;
+  const condicoes_habilitacao = ai.habilitacao;
+  const participacao = ai.participacao;
+  const unidade_disputa = ai.unidade_disputa;
 
   const score_complexidade = calcularComplexidade(text, {
     valor_estimado,
     criterio: criterio_julgamento,
     modalidade,
-  });
+  }, ai);
 
   const resumo_simples = gerarResumoSimples({
     numero_edital,
@@ -1984,6 +1242,17 @@ function analyzeEditalText(text: string) {
     _scoreFraseFaixa: score_complexidade.frase_faixa,
     _scoreFatoresElevaram: score_complexidade.fatores_elevaram.join("; "),
     _scoreFatoresImpediram: score_complexidade.fatores_impediram.join("; "),
+    // Pass AI truth checks
+    _ai_consorcio: ai.consorcio,
+    _ai_subcontratacao: ai.subcontratacao,
+    _ai_amostra: ai.amostra,
+    _ai_garantia: ai.garantia_execucao,
+    _ai_cooperativas_vedadas: String(ai.cooperativas_vedadas),
+    _ai_exclusividade_meepp: String(ai.exclusividade_meepp),
+    _ai_srp: String(ai.is_srp),
+    _ai_preco_maximo: String(ai.preco_maximo),
+    _ai_catalogo: String(ai.catalogo_exigido),
+    _ai_marca_modelo: String(ai.marca_modelo_exigido),
   }, timeline);
 
   return {
@@ -2050,7 +1319,7 @@ async function handleAnalyzeEdital(req: Request): Promise<Response> {
       );
     }
 
-    const result = analyzeEditalText(text);
+    const result = await analyzeEditalText(text);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -2068,4 +1337,4 @@ if (import.meta.main) {
   Deno.serve(handleAnalyzeEdital);
 }
 
-export { analyzeEditalText, extractCriterio, extractOrgao, gerarResumoSimples };
+export { analyzeEditalText, gerarResumoSimples };

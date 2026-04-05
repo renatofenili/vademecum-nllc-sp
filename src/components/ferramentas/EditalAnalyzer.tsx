@@ -3,42 +3,7 @@ import { Upload, FileText, Loader2, ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import EditalPresentationView from "./EditalPresentationView";
-
-export interface EditalTimeline {
-  data_publicacao: string | null;
-  prazo_impugnacao: string | null;
-  prazo_esclarecimento: string | null;
-  data_abertura: string | null;
-}
-
-export interface EditalScoreComplexidade {
-  valor: number;
-  faixa: string;
-  justificativa: string;
-  fatores_elevaram: string[];
-  fatores_impediram: string[];
-  frase_faixa: string;
-}
-
-export interface EditalAnalysis {
-  objeto: string;
-  valor_estimado: string;
-  planilha_estimada: unknown;
-  criterio_julgamento: string;
-  data_sessao: string;
-  condicoes_habilitacao: string;
-  sistema_licitacao: string;
-  modalidade: string;
-  numero_edital: string;
-  orgao: string;
-  resumo_simples: string;
-  participacao?: string;
-  unidade_disputa?: string;
-  timeline?: EditalTimeline;
-  score_complexidade?: EditalScoreComplexidade;
-  fontes?: Record<string, string>;
-}
+import EditalPresentationView, { type EditalAnalysisResult } from "./EditalPresentationView";
 
 interface EditalAnalyzerProps {
   onBack: () => void;
@@ -47,7 +12,7 @@ interface EditalAnalyzerProps {
 const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<EditalAnalysis | null>(null);
+  const [result, setResult] = useState<EditalAnalysisResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const { toast } = useToast();
 
@@ -78,14 +43,11 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      // Step 1: Submit PDF and get job_id
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-edital`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
+          headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
           body: formData,
         }
       );
@@ -98,51 +60,35 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
       const { job_id } = await response.json();
       if (!job_id) throw new Error("Não foi possível iniciar a análise");
 
-      // Step 2: Poll for result
+      // Poll for result
       const pollInterval = 2500;
-      const maxPolls = 120; // 5 minutes max
+      const maxPolls = 120;
       let polls = 0;
       let stagnantPolls = 0;
       let lastProgress = -1;
 
-      const poll = async (): Promise<EditalAnalysis> => {
+      const poll = async (): Promise<EditalAnalysisResult> => {
         polls++;
-        if (polls > maxPolls) throw new Error("Tempo limite de análise excedido. Tente novamente.");
+        if (polls > maxPolls) throw new Error("Tempo limite excedido. Tente novamente.");
 
         const pollResp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-edital?job_id=${job_id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-          }
+          { headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` } }
         );
 
-        if (!pollResp.ok) throw new Error("Erro ao verificar status da análise");
+        if (!pollResp.ok) throw new Error("Erro ao verificar status");
 
         const job = await pollResp.json();
 
         if (typeof job.progress === "number") {
-          if (job.progress === lastProgress) stagnantPolls += 1;
-          else {
-            lastProgress = job.progress;
-            stagnantPolls = 0;
-          }
+          if (job.progress === lastProgress) stagnantPolls++;
+          else { lastProgress = job.progress; stagnantPolls = 0; }
         }
 
-        if (job.status === "completed" && job.result) {
-          return job.result as EditalAnalysis;
-        }
+        if (job.status === "completed" && job.result) return job.result as EditalAnalysisResult;
+        if (job.status === "failed") throw new Error(job.error || "Falha na análise");
+        if (stagnantPolls >= 24) throw new Error("A análise travou. Tente novamente.");
 
-        if (job.status === "failed") {
-          throw new Error(job.error || "Falha na análise do edital");
-        }
-
-        if (stagnantPolls >= 24) {
-          throw new Error("A análise travou sem concluir. Tente novamente.");
-        }
-
-        // Still processing — wait and poll again
         await new Promise((r) => setTimeout(r, pollInterval));
         return poll();
       };
@@ -166,10 +112,7 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
         analysis={result}
         fileName={file?.name || ""}
         onBack={() => setResult(null)}
-        onNewAnalysis={() => {
-          setFile(null);
-          setResult(null);
-        }}
+        onNewAnalysis={() => { setFile(null); setResult(null); }}
       />
     );
   }
@@ -182,20 +125,16 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
         </Button>
         <div>
           <h2 className="text-xl font-bold text-foreground">Analisador de Edital</h2>
-          <p className="text-sm text-muted-foreground">
-            Envie o PDF do edital para uma análise em linguagem simples
-          </p>
+          <p className="text-sm text-muted-foreground">Envie o PDF do edital para uma análise em linguagem simples</p>
         </div>
       </div>
 
       {/* Upload area */}
       <Card
         className={`border-2 border-dashed transition-all ${
-          dragOver
-            ? "border-primary bg-primary/5 scale-[1.01]"
-            : file
-            ? "border-primary/50 bg-primary/5"
-            : "border-muted-foreground/25 hover:border-primary/40"
+          dragOver ? "border-primary bg-primary/5 scale-[1.01]"
+          : file ? "border-primary/50 bg-primary/5"
+          : "border-muted-foreground/25 hover:border-primary/40"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -209,19 +148,11 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
               </div>
               <div className="text-center">
                 <p className="font-medium text-foreground">{file.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                <p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setFile(null); setResult(null); }}
-                >
-                  Trocar arquivo
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" onClick={() => { setFile(null); setResult(null); }}>
+                Trocar arquivo
+              </Button>
             </>
           ) : (
             <>
@@ -229,9 +160,7 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
                 <Upload className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="text-center">
-                <p className="font-medium text-foreground">
-                  Arraste o edital aqui ou clique para selecionar
-                </p>
+                <p className="font-medium text-foreground">Arraste o edital aqui ou clique para selecionar</p>
                 <p className="text-sm text-muted-foreground">PDF até 20 MB</p>
               </div>
               <Button
@@ -254,17 +183,12 @@ const EditalAnalyzer = ({ onBack }: EditalAnalyzerProps) => {
         </CardContent>
       </Card>
 
-      {/* Analyze button */}
       {file && (
-        <Button
-          className="w-full h-12 text-base gap-2"
-          onClick={handleAnalyze}
-          disabled={analyzing}
-        >
+        <Button className="w-full h-12 text-base gap-2" onClick={handleAnalyze} disabled={analyzing}>
           {analyzing ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
-              Analisando edital... Isso pode levar alguns segundos
+              Analisando edital...
             </>
           ) : (
             <>

@@ -174,7 +174,7 @@ interface AIExtractionResult {
   modo_disputa: "aberto" | "fechado" | "aberto e fechado" | "nao_identificado";
   habilitacao: string;
   consorcio: "sim" | "nao" | "nao_identificado";
-  cooperativas_vedadas: boolean;
+  cooperativas_vedacao: "todas" | "trabalho" | "nao" | "nao_identificado";
   subcontratacao: "sim" | "nao" | "nao_identificado";
   amostra: "sim" | "nao" | "nao_identificado";
   garantia_execucao: "sim" | "nao" | "nao_identificado";
@@ -204,7 +204,7 @@ function defaultAIResult(): AIExtractionResult {
     modo_disputa: "nao_identificado",
     habilitacao: "Consultar seção de habilitação no edital",
     consorcio: "nao_identificado",
-    cooperativas_vedadas: false,
+    cooperativas_vedacao: "nao_identificado",
     subcontratacao: "nao_identificado",
     amostra: "nao_identificado",
     garantia_execucao: "nao_identificado",
@@ -240,7 +240,7 @@ const EXTRACTION_TOOL = {
         modo_disputa: { type: "string", enum: ["aberto", "fechado", "aberto e fechado", "nao_identificado"], description: "Modo de disputa EXPRESSAMENTE previsto no edital. Se houver 'modo de disputa: aberto', retorne 'aberto'. Se houver 'aberto e fechado', retorne exatamente isso. Se não houver declaração clara, retorne 'nao_identificado'." },
         habilitacao: { type: "string", description: "Resumo dos documentos de habilitação por categoria com emojis: 📜 Hab. Jurídica: docs...\n🏦 Regularidade Fiscal/Trabalhista: docs...\n🔧 Qualificação Técnica: docs...\n📊 Qualificação Econômico-Financeira: docs...\n📝 Declarações: docs... Separe categorias com \\n." },
         consorcio: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Consórcio EXPRESSAMENTE admitido ou vedado no texto?" },
-        cooperativas_vedadas: { type: "boolean", description: "Cooperativas EXPRESSAMENTE vedadas?" },
+        cooperativas_vedacao: { type: "string", enum: ["todas", "trabalho", "nao", "nao_identificado"], description: "Vedação a cooperativas: 'trabalho' se o edital veda APENAS cooperativas de trabalho (ex: 'Cooperativas de Trabalho não poderão participar'), 'todas' se veda TODAS as cooperativas sem distinção, 'nao' se expressamente permite cooperativas, 'nao_identificado' se omisso. ATENÇÃO: 'Cooperativas de Trabalho' é diferente de 'cooperativas' em geral." },
         subcontratacao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Subcontratação EXPRESSAMENTE admitida ou vedada?" },
         amostra: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Amostra OBRIGATORIAMENTE exigida='sim', EXPRESSAMENTE dispensada='nao', ou inconclusiva/não mencionada='nao_identificado'?" },
         garantia_execucao: { type: "string", enum: ["sim", "nao", "nao_identificado"], description: "Garantia de execução/contratual EXPRESSAMENTE exigida ou dispensada?" },
@@ -273,7 +273,7 @@ const EXTRACTION_TOOL = {
         prazo_impugnacao: { type: ["string", "null"], description: "Data-limite para impugnação do edital. Ex: '10/07/2025'. Null se não encontrada." },
         prazo_esclarecimento: { type: ["string", "null"], description: "Data-limite para pedido de esclarecimento. Ex: '08/07/2025'. Null se não encontrada." },
       },
-      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "modo_disputa", "habilitacao", "consorcio", "cooperativas_vedadas", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
+      required: ["objeto", "orgao", "modalidade", "criterio_julgamento", "sistema_licitacao", "participacao", "unidade_disputa", "modo_disputa", "habilitacao", "consorcio", "cooperativas_vedacao", "subcontratacao", "amostra", "garantia_execucao", "is_srp", "preco_maximo", "exclusividade_meepp", "catalogo_exigido", "marca_modelo_exigido", "numero_edital", "valor_estimado", "data_sessao", "data_publicacao", "prazo_impugnacao", "prazo_esclarecimento", "planilha_itens"],
       additionalProperties: false,
     },
   },

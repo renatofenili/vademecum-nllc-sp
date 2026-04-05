@@ -66,9 +66,28 @@ const formatBulletLines = (text: string, maxLines?: number) => {
   return `${bulletLines.slice(0, maxLines).join("\n")}\n…`;
 };
 
-const renderWithBullets = (text: string, maxLines?: number) => (
-  <div className="whitespace-pre-line">{formatBulletLines(text, maxLines)}</div>
-);
+const renderWithBullets = (text: string, maxLines?: number) => {
+  const formatted = formatBulletLines(text, maxLines);
+  const lines = formatted
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length > 1 && lines.every((line) => line.startsWith("□ "))) {
+    return (
+      <div className="space-y-2">
+        {lines.map((line, index) => (
+          <div key={`${line}-${index}`} className="flex items-start gap-2">
+            <span className="shrink-0 leading-relaxed">□</span>
+            <span className="flex-1 leading-relaxed">{line.replace(/^□\s*/, "")}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <div className="whitespace-pre-line">{formatted}</div>;
+};
 
 /* ────────────────────────────────────────────
    Section parser – extracts numbered sections
@@ -417,7 +436,7 @@ const RichText = ({ text }: { text: string }) => {
         }
 
         // Bullet list (emoji bullets)
-        if (/^[•✅⚠️❌📌🔒💳📈🏗️📜🏦🔧📊📝⚡🤝🔄🌱🔎🏆🚫📍⏰📐🧪💻💡📋📦🖥️📑📅🚨🎯🏁❓⏱️🔗]/.test(trimmed)) {
+        if (/^[□☐☑✅✔✓■◻◾▪▸►●◦•⚠️❌📌🔒💳📈🏗️📜🏦🔧📊📝⚡🤝🔄🌱🔎🏆🚫📍⏰📐🧪💻💡📋📦🖥️📑📅🚨🎯🏁❓⏱️🔗]/.test(trimmed)) {
           return (
             <ul key={i} className="space-y-2 pl-1">
               {trimmed.split("\n").filter(Boolean).map((item, j) => {

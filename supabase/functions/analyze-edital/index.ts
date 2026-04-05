@@ -313,9 +313,10 @@ REGRAS OBRIGATÓRIAS:
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
+        max_tokens: 16384,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Analise este edital e extraia os metadados estruturados:\n\n${truncated}` },
+          { role: "user", content: `Analise este edital e extraia os metadados estruturados. IMPORTANTE: extraia TODOS os itens da planilha/quadro de preços se existir.\n\n${truncated}` },
         ],
         tools: [EXTRACTION_TOOL],
         tool_choice: { type: "function", function: { name: "extract_edital_metadata" } },

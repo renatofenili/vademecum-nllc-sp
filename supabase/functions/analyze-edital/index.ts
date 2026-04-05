@@ -817,7 +817,10 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     precoMaximoStatus = "sim";
   }
   // Override detectFeatures with AI results where available
-  if (dados._ai_cooperativas_vedadas === "true") feat.vedacaoCooperativas = true;
+  // Cooperativas: use AI nuanced result
+  const cooperativasVedacao = dados._ai_cooperativas_vedacao || "nao_identificado";
+  if (cooperativasVedacao === "trabalho") { feat.vedacaoCooperativas = true; }
+  else if (cooperativasVedacao === "todas") { feat.vedacaoCooperativas = true; }
   if (dados._ai_subcontratacao === "sim") { feat.subcontratacaoPermitida = true; feat.subcontratacaoVedada = false; }
   if (dados._ai_subcontratacao === "nao") { feat.subcontratacaoVedada = true; feat.subcontratacaoPermitida = false; }
   const prazoAssinaturaVal = feat.prazoAssinatura || null;
@@ -1000,7 +1003,9 @@ function gerarResumoSimples(dados: Record<string, string>, timeline: Record<stri
     if (feat.hasCredenciamento) part.push("• É necessário credenciamento prévio na plataforma de disputa.");
     if (feat.hasImpedimentoSancao) part.push("• Empresas impedidas de licitar, suspensas ou declaradas inidôneas estão vedadas.");
     if (feat.hasCotaReservada) part.push("• Há cota reservada para ME/EPP.");
-    if (feat.vedacaoCooperativas) part.push("• Cooperativas: vedadas expressamente pelo edital.");
+    if (cooperativasVedacao === "trabalho") part.push("• Cooperativas de trabalho: vedadas expressamente pelo edital.");
+    else if (cooperativasVedacao === "todas") part.push("• Cooperativas: vedadas expressamente pelo edital.");
+    else if (feat.vedacaoCooperativas) part.push("• Cooperativas: vedadas expressamente pelo edital.");
     if (subcontratacaoStatus === "nao") part.push("• Subcontratação: vedada expressamente pelo edital.");
     else if (subcontratacaoStatus === "sim") part.push("• Subcontratação: admitida pelo edital.");
     else if (feat.hasSubcontratacao) part.push("• Subcontratação: ponto que exige conferência no edital.");

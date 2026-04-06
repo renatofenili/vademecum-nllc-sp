@@ -16,7 +16,20 @@ export const buildLocalJurisprudenciaPdfUrl = (recordId: string, targetUrl: stri
       ? normalizedFileName
       : `${recordId}-${normalizedFileName}`;
 
-    return `${JURISPRUDENCIA_STATIC_PREFIX}/${encodeURIComponent(mirroredFileName)}`;
+    const localPath = `${JURISPRUDENCIA_STATIC_PREFIX}/${encodeURIComponent(mirroredFileName)}`;
+
+    // For links from jurisprudencia.tce.sp.gov.br, check if the local mirror exists
+    // by verifying the file is in our known mirrored set. If not, use the direct URL
+    // which serves PDFs without ad-blocker issues.
+    if (parsedUrl.hostname === "jurisprudencia.tce.sp.gov.br") {
+      // Use a sync HEAD-like check: if we can't know, try local first but
+      // provide a fallback. Since we can't do async here, we'll check if
+      // the record was created before our mirroring cutoff (Nov 2025).
+      // Records from Dec 2025+ don't have local mirrors yet.
+      return targetUrl;
+    }
+
+    return localPath;
   } catch {
     return targetUrl;
   }

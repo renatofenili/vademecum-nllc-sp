@@ -227,7 +227,7 @@ const TemaFilter = ({ temas, featuredTemas, categories, selectedTemas, activeSea
               <p className="text-sm text-muted-foreground">
                 {activeThemes.length === 0
                   ? "Nenhum tema encontrado para este filtro."
-                  : `${activeThemes.length} tema${activeThemes.length > 1 ? "s" : ""} disponível${activeThemes.length > 1 ? "eis" : ""} nesta visão.`}
+                  : `${activeThemes.length} tema${activeThemes.length > 1 ? "s" : ""} disponível(eis) nesta visão.`}
               </p>
             </div>
           </div>

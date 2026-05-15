@@ -247,8 +247,8 @@ const JurisprudenciaTab = () => {
             <p className="text-sm text-muted-foreground">
               {loading ? "Carregando..." : (
                 <>
-                  <span className="font-semibold text-foreground">{filtered.length}</span>
-                  {" "}decisão{filtered.length !== 1 ? "ões" : ""} encontrada{filtered.length !== 1 ? "s" : ""}
+                  <span className="font-semibold text-foreground">{filtered.length}</span>{" "}
+                  decisão(ões) encontradas
                 </>
               )}
             </p>

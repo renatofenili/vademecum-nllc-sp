@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { FileText, ChevronRight, Filter } from "lucide-react";
-import logoLaboratorio from "@/assets/logo-laboratorio.png";
+import logoSP from "@/assets/logo-sp-governo.png.asset.json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -312,7 +312,7 @@ const NormasTab = ({ initialSearch = "", selectedNormaId }: NormasTabProps) => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Consulta de Normas
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+            <img src={logoSP.url} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Acesse o texto completo das leis, decretos, resoluções e portarias que regulamentam as licitações

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, FileText, Loader2, ExternalLink } from "lucide-react";
-import logoLaboratorio from "@/assets/logo-laboratorio.png";
+import logoSP from "@/assets/logo-sp-governo.png.asset.json";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,7 +194,7 @@ const ConsultasTab = ({ onNavigateToNorma }: ConsultasTabProps) => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Busca por Dispositivo
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+            <img src={logoSP.url} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Pesquise por artigo, parágrafo, inciso ou texto de qualquer norma cadastrada

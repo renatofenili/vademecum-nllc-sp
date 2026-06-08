@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { TreeDeciduous, Maximize2, Minimize2 } from "lucide-react";
-import logoLaboratorio from "@/assets/logo-laboratorio.png";
+import logoSP from "@/assets/logo-sp-governo.png.asset.json";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -154,7 +154,7 @@ const MapasTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Mapa Conceitual Normativo
             </h1>
-            <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+            <img src={logoSP.url} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">Hierarquia normativa em anéis concêntricos</p>
         </div>

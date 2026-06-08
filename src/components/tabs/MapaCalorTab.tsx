@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Flame, Info, Scale, BookOpen } from "lucide-react";
-import logoLaboratorio from "@/assets/logo-laboratorio.png";
+import logoSP from "@/assets/logo-sp-governo.png.asset.json";
 import logoTCESP from "@/assets/logo-tcesp.png";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
@@ -472,7 +472,7 @@ const MapaCalorTab = () => {
               Mapa de Calor Temático
             </h1>
             {isNormativo ? (
-              <img src={logoLaboratorio} alt="Laboratório de Inovação em Logística Pública" className="h-12 md:h-14 w-auto object-contain" />
+              <img src={logoSP.url} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
             ) : (
               <img src={logoTCESP} alt="Tribunal de Contas do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
             )}

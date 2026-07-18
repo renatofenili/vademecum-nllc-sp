@@ -6,25 +6,25 @@ const corsHeaders = {
 };
 
 const SYSTEM_PROMPT = `Você é um analista jurídico sênior especializado em jurisprudência do TCE/SP sobre licitações (Lei 14.133/2021).
-Sua tarefa é ATUALIZAR uma síntese temática existente, incorporando as novas decisões do boletim de ABRIL DE 2026.
+Sua tarefa é ATUALIZAR uma síntese temática existente, incorporando as novas decisões dos boletins fornecidos.
 
 REGRAS RÍGIDAS:
 1. Preserve INTEGRALMENTE a estrutura Markdown existente (mesmos títulos: "## Tema:" ou "## Síntese...", "### 1. Panorama", "### 2. Principais Apontamentos", "### 3. Convergência de Entendimento", "### 4. Problemas Mais Frequentes", "### 5. Recomendações Práticas").
 2. Atualize o número total de ocorrências no Panorama para o valor fornecido.
-3. Atualize a janela temporal mencionada (ex.: "Mai/2024 a Abr/2026").
-4. Em "Principais Apontamentos", adicione 1 a 3 novos itens refletindo as decisões de abril, citando os números TC EXATAMENTE como aparecem nos dados (ex.: "TC 005123.989.26"). NÃO invente números TC.
-5. Em "Convergência", "Problemas Mais Frequentes" e "Recomendações", incorpore ajustes APENAS se as decisões de abril trouxerem nova nuance relevante. Caso contrário, mantenha o texto original.
+3. Atualize a janela temporal mencionada para a janela fornecida.
+4. Em "Principais Apontamentos", adicione 1 a 4 novos itens refletindo as decisões novas fornecidas, citando os números TC EXATAMENTE como aparecem nos dados (ex.: "TC 005123.989.26"). NÃO invente números TC.
+5. Em "Convergência", "Problemas Mais Frequentes" e "Recomendações", incorpore ajustes APENAS se as decisões novas trouxerem nova nuance relevante. Caso contrário, mantenha o texto original.
 6. Mantenha o tom técnico-pedagógico em "Linguagem Simples". Evite termos negativos como "risco" — use "atenção".
 7. Não remova apontamentos antigos válidos. Apenas adicione/refine.
-8. NÃO invente jurisprudência. Use APENAS os TCs fornecidos no bloco de decisões de abril.
+8. NÃO invente jurisprudência. Use APENAS os TCs fornecidos no bloco de decisões novas.
 9. Retorne APENAS o Markdown atualizado, sem cercas de código, sem comentários.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { theme, existing_content, total_count } = await req.json();
-    if (!theme || !existing_content || typeof total_count !== "number") {
+    const { theme, existing_content, total_count, boletim_refs, janela } = await req.json();
+    if (!theme || !existing_content || typeof total_count !== "number" || !Array.isArray(boletim_refs) || !janela) {
       return new Response(JSON.stringify({ error: "Missing fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -35,28 +35,29 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Pull April 2026 boletim decisions for this theme
-    const { data: aprilDecisions, error: dbErr } = await supabase
+    // Pull decisions of the given boletins for this theme
+    const { data: newDecisions, error: dbErr } = await supabase
       .from("jurisprudencia")
-      .select("numero_tc, materia, objeto, resumo, temas, sessao_data")
-      .eq("boletim_referencia", "Abril de 2026")
+      .select("numero_tc, materia, objeto, resumo, temas, sessao_data, boletim_referencia")
+      .in("boletim_referencia", boletim_refs)
       .contains("temas", [theme])
       .order("sessao_data", { ascending: true });
 
     if (dbErr) throw new Error("DB error: " + dbErr.message);
 
-    const decisionsBlock = (aprilDecisions ?? []).map((d, i) =>
-      `### Decisão ${i + 1} — ${d.numero_tc} (${d.sessao_data})\n` +
+    const decisionsBlock = (newDecisions ?? []).map((d, i) =>
+      `### Decisão ${i + 1} — ${d.numero_tc} (${d.sessao_data} / ${d.boletim_referencia})\n` +
       `- Matéria: ${d.materia ?? "—"}\n` +
       `- Objeto: ${d.objeto ?? "—"}\n` +
       `- Temas: ${(d.temas ?? []).join(", ")}\n` +
       `- Resumo: ${d.resumo ?? "—"}`
-    ).join("\n\n") || "(Nenhuma decisão nova de abril vinculada a este tema — atualize APENAS o número de ocorrências e a janela temporal, mantendo o restante intacto.)";
+    ).join("\n\n") || "(Nenhuma decisão nova vinculada a este tema nos boletins fornecidos — atualize APENAS o número de ocorrências e a janela temporal, mantendo o restante intacto.)";
 
     const userPrompt = `# TEMA: ${theme}
 # NOVO TOTAL DE OCORRÊNCIAS: ${total_count}
-# JANELA TEMPORAL ATUALIZADA: Mai/2024 a Abr/2026
-# DECISÕES NOVAS DE ABRIL DE 2026 (${(aprilDecisions ?? []).length} para este tema):
+# JANELA TEMPORAL ATUALIZADA: ${janela}
+# BOLETINS NOVOS: ${boletim_refs.join(", ")}
+# DECISÕES NOVAS (${(newDecisions ?? []).length} para este tema):
 
 ${decisionsBlock}
 
@@ -95,7 +96,7 @@ Retorne a síntese atualizada em Markdown, seguindo todas as regras.`;
     return new Response(JSON.stringify({
       theme,
       content,
-      april_count: (aprilDecisions ?? []).length,
+      new_count: (newDecisions ?? []).length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {

@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { theme, existing_content, total_count, boletim_refs, janela } = await req.json();
+    const { theme, existing_content, total_count, boletim_refs, janela, alias_terms } = await req.json();
     if (!theme || !existing_content || typeof total_count !== "number" || !Array.isArray(boletim_refs) || !janela) {
       return new Response(JSON.stringify({ error: "Missing fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -35,12 +35,15 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Pull decisions of the given boletins for this theme
+    // Pull decisions of the given boletins for this theme (or its aliases)
+    const themeFilterTerms = Array.isArray(alias_terms) && alias_terms.length > 0
+      ? alias_terms
+      : [theme];
     const { data: newDecisions, error: dbErr } = await supabase
       .from("jurisprudencia")
       .select("numero_tc, materia, objeto, resumo, temas, sessao_data, boletim_referencia")
       .in("boletim_referencia", boletim_refs)
-      .contains("temas", [theme])
+      .overlaps("temas", themeFilterTerms)
       .order("sessao_data", { ascending: true });
 
     if (dbErr) throw new Error("DB error: " + dbErr.message);

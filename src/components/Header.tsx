@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { FileText, FileBarChart, Search, Network, Flame, Scale, Wrench } from "lucide-react";
-import logoSGGD from "@/assets/logo-sp-governo.png.asset.json";
+import logoSGGD from "@/assets/logo-sggd.jpg";
 import logoTCESP from "@/assets/logo-tcesp.png";
 
 export type TabType = "home" | "normas" | "relatorios" | "consultas" | "jurisprudencia" | "mapas" | "mapacalor" | "ferramentas";
@@ -29,8 +29,8 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
           className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
         >
           <img 
-            src={logoSGGD.url} 
-            alt="Governo do Estado de São Paulo" 
+            src={logoSGGD} 
+            alt="SGGD - Gestão e Governo Digital" 
             className="h-10 w-auto object-contain"
           />
           <span 

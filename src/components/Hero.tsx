@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { TabType } from "./Header";
-import logoSP from "@/assets/logo-sp-governo.png.asset.json";
+import logoSP from "@/assets/logo-sggd.jpg";
 
 interface HeroProps {
   onNavigate: (tab: TabType) => void;
@@ -14,8 +14,8 @@ const Hero = ({ onNavigate }: HeroProps) => {
         {/* Logo SGGD centralizado com destaque */}
         <div className="mb-8 flex items-center justify-center">
           <img 
-            src={logoSP.url} 
-            alt="Governo do Estado de São Paulo" 
+            src={logoSP} 
+            alt="SGGD - Gestão e Governo Digital" 
             className="h-24 md:h-32 lg:h-40 w-auto object-contain"
           />
         </div>

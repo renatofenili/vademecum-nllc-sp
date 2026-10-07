@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Sparkles, BookOpen, ChevronRight, FileText, Calendar, Building2, X, Play, ExternalLink } from "lucide-react";
-import logoSP from "@/assets/logo-sp-governo.png.asset.json";
+import logoSP from "@/assets/logo-sggd.jpg";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -129,7 +129,7 @@ const RelatoriosTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Linguagem Simples!
             </h1>
-            <img src={logoSP.url} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
+            <img src={logoSP} alt="SGGD - Gestão e Governo Digital" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Normas jurídicas traduzidas para uma linguagem clara e objetiva. 

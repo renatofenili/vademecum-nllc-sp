@@ -30,7 +30,7 @@ const Header = ({ activeTab = "home", onTabChange }: HeaderProps) => {
         >
           <img 
             src={logoSGGD} 
-            alt="Governo do Estado de São Paulo" 
+            alt="SGGD - Gestão e Governo Digital" 
             className="h-10 w-auto object-contain"
           />
           <span 

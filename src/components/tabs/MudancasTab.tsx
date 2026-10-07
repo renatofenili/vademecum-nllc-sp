@@ -51,7 +51,7 @@ const MudancasTab = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               O que Mudou
             </h1>
-            <img src={logoSP} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
+            <img src={logoSP} alt="SGGD - Gestão e Governo Digital" className="h-12 md:h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-lg">
             Acompanhe alterações normativas e impactos no sistema jurídico

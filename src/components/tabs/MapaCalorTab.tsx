@@ -472,7 +472,7 @@ const MapaCalorTab = () => {
               Mapa de Calor Temático
             </h1>
             {isNormativo ? (
-              <img src={logoSP} alt="Governo do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
+              <img src={logoSP} alt="SGGD - Gestão e Governo Digital" className="h-12 md:h-14 w-auto object-contain" />
             ) : (
               <img src={logoTCESP} alt="Tribunal de Contas do Estado de São Paulo" className="h-12 md:h-14 w-auto object-contain" />
             )}

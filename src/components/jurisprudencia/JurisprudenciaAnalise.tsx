@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine } from "recharts";
-import { TrendingUp, Flame, BarChart3, Scale, ClipboardList, Award, UserCheck, FlaskConical, Layers, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
+import { TrendingUp, Flame, BarChart3, Scale, ClipboardList, Award, UserCheck, FlaskConical, Layers, ChevronDown, ChevronUp, BookOpen, Info } from "lucide-react";
 import { buildThemeIntelligence } from "./theme-intelligence";
 import { THEME_SYNTHESES } from "./theme-syntheses";
 
@@ -245,7 +245,7 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
                     strokeOpacity={0.6}
                     label={{
                       value: `média ${monthlyStats.avg.toFixed(1)}`,
-                      position: "insideTopRight",
+                      position: "insideTopLeft",
                       fontSize: 10,
                       fill: "hsl(var(--muted-foreground))",
                     }}
@@ -263,6 +263,16 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2.5">
+            <Info className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">Como ler este gráfico:</span>{" "}
+              as decisões são posicionadas no mês da <span className="font-medium text-foreground">sessão de julgamento</span>, e não no mês de publicação do boletim.
+              O boletim de Out/26, por exemplo, reúne sessões realizadas entre 05/08 e 07/10 — por isso a maior parte dele aparece nas barras de ago e set,
+              e a barra de Out/26 fica mais baixa do que o volume real do boletim.
+            </p>
           </div>
         </CardContent>
       </Card>

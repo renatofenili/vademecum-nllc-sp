@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine } from "recharts";
 import { TrendingUp, Flame, BarChart3, Scale, ClipboardList, Award, UserCheck, FlaskConical, Layers, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
 import { buildThemeIntelligence } from "./theme-intelligence";
 import { THEME_SYNTHESES } from "./theme-syntheses";
@@ -57,7 +57,7 @@ const PIE_COLORS = [
 const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
   const themeIntelligence = useMemo(() => buildThemeIntelligence(dados), [dados]);
 
-  // 1) Decisions per month since 2024
+  // 1) Decisions per month since 2024 (continuous chronology, gaps filled with 0)
   const monthlyData = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -69,17 +69,39 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
 
-    return Array.from(counts.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, count]) => {
-        const [year, month] = key.split("-");
-        return {
-          key,
-          label: `${MONTH_LABELS[month]}/${year.slice(2)}`,
-          count,
-        };
+    if (counts.size === 0) return [];
+
+    const keys = Array.from(counts.keys()).sort();
+    const [startY, startM] = keys[0].split("-").map(Number);
+    const [endY, endM] = keys[keys.length - 1].split("-").map(Number);
+
+    const result: { key: string; label: string; count: number; isPeak: boolean }[] = [];
+    let y = startY;
+    let m = startM;
+    while (y < endY || (y === endY && m <= endM)) {
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      result.push({
+        key,
+        label: `${MONTH_LABELS[key.slice(5)]}/${key.slice(2, 4)}`,
+        count: counts.get(key) ?? 0,
+        isPeak: false,
       });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+
+    const max = Math.max(...result.map((r) => r.count));
+    result.forEach((r) => { if (r.count === max && max > 0) r.isPeak = true; });
+    return result;
   }, [dados]);
+
+  const monthlyStats = useMemo(() => {
+    if (monthlyData.length === 0) return null;
+    const total = monthlyData.reduce((sum, d) => sum + d.count, 0);
+    const avg = total / monthlyData.length;
+    const peak = monthlyData.find((d) => d.isPeak) ?? monthlyData[0];
+    return { total, avg, peak };
+  }, [monthlyData]);
 
   // 2) Top themes for thematic analysis
   const topThemes = useMemo(() => {
@@ -142,43 +164,101 @@ const JurisprudenciaAnalise = ({ dados, loading }: Props) => {
         ))}
       </div>
 
-      {/* 1) Monthly decisions chart */}
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Decisões por Mês
-          </CardTitle>
-          <CardDescription>Volume de decisões publicadas desde 2024</CardDescription>
+      {/* 1) Monthly decisions chart — premium chronology */}
+      <Card className="rounded-xl border-2 border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 overflow-hidden">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Cronologia das Decisões
+              </CardTitle>
+              <CardDescription>
+                Volume mensal de decisões do TCE/SP no acervo — {monthlyData[0]?.label} a {monthlyData[monthlyData.length - 1]?.label}
+              </CardDescription>
+            </div>
+            {monthlyStats && (
+              <div className="flex gap-2 flex-wrap">
+                <Badge variant="secondary" className="rounded-md font-medium">
+                  Média: {monthlyStats.avg.toFixed(1)}/mês
+                </Badge>
+                <Badge className="rounded-md font-medium bg-primary text-primary-foreground border-0">
+                  Pico: {monthlyStats.peak.label} ({monthlyStats.peak.count})
+                </Badge>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="h-[320px]">
+          <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <BarChart data={monthlyData} margin={{ top: 24, right: 16, left: -12, bottom: 0 }} barCategoryGap="22%">
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                  </linearGradient>
+                  <linearGradient id="barGradientPeak" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.65} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  fontSize={12}
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={{ stroke: "hsl(var(--border))" }}
                   tick={{ fill: "hsl(var(--muted-foreground))" }}
+                  interval={monthlyData.length > 20 ? 1 : 0}
                 />
                 <YAxis
-                  fontSize={12}
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
                   tick={{ fill: "hsl(var(--muted-foreground))" }}
                   allowDecimals={false}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "13px",
+                  cursor={{ fill: "hsl(var(--primary))", fillOpacity: 0.06 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const item = payload[0].payload as (typeof monthlyData)[number];
+                    return (
+                      <div className="rounded-lg border bg-card px-3 py-2 shadow-lg">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {item.label}
+                        </p>
+                        <p className="text-lg font-bold text-primary">
+                          {item.count} {item.count === 1 ? "decisão" : "decisões"}
+                          {item.isPeak && <span className="ml-2 text-[10px] font-bold uppercase">★ pico</span>}
+                        </p>
+                      </div>
+                    );
                   }}
-                  labelFormatter={(label) => `Período: ${label}`}
-                  formatter={(value: number) => [`${value} decisões`, "Quantidade"]}
                 />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                  {monthlyData.map((_, index) => (
-                    <Cell key={index} fill="hsl(var(--primary))" fillOpacity={0.85} />
+                {monthlyStats && (
+                  <ReferenceLine
+                    y={monthlyStats.avg}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="6 4"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: `média ${monthlyStats.avg.toFixed(1)}`,
+                      position: "insideTopRight",
+                      fontSize: 10,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
+                  />
+                )}
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} maxBarSize={40} animationDuration={900}>
+                  {monthlyData.map((entry, index) => (
+                    <Cell
+                      key={index}
+                      fill={entry.isPeak ? "url(#barGradientPeak)" : "url(#barGradient)"}
+                      stroke={entry.isPeak ? "hsl(var(--primary))" : "none"}
+                      strokeWidth={entry.isPeak ? 1.5 : 0}
+                    />
                   ))}
                 </Bar>
               </BarChart>
